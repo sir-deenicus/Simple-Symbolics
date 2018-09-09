@@ -6,20 +6,16 @@
 #r @"..\fparsec\net40-client\fparsec.dll"
 #r @".\symbolics\net40\mathnet.symbolics.dll"
 
-open MathNet.Symbolics
-open System.Numerics
-open MathNet.Numerics
-open MathNet
-open Operators
-open MathNet.Symbolics
-open MathNet.Symbolics
-open MathNet.Symbolics
+open MathNet.Symbolics  
+open Operators 
 
 let flip f a b = f b a
 
+let standardSymbols = Map ["π", FloatingPoint.Real System.Math.PI]
+
 type Expression with
    member t.ToFormattedString() = Infix.format t 
-   member t.ToFloat() = (Evaluate.evaluate Map.empty t).RealValue
+   member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
 
 type Complex(r:Expression,i:Expression) =  
   member __.Real = r

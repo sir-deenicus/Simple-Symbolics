@@ -4,9 +4,11 @@ open MathNet.Symbolics.Operators
 
 let flip f a b = f b a
 
+let standardSymbols = Map ["π", FloatingPoint.Real System.Math.PI]
+
 type Expression with
    member t.ToFormattedString() = Infix.format t 
-   member t.ToFloat() = (Evaluate.evaluate Map.empty t).RealValue
+   member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
    static member toFloat (e:Expression) = e.ToFloat()
 
 type Complex(r:Expression,i:Expression) =

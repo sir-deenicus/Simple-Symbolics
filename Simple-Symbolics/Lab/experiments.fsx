@@ -6,12 +6,18 @@ open Core
 
 let sq = sqrt 2Q / 2
 
-let a1 = Complex(2Q, 5Q)
+sq.ToFloat()
+
+let a1 = Complex(-2Q, sqrt 5Q)
 
 let b1 = Complex(3Q, 2Q)
 
-let za = System.Numerics.Complex(2.,5.)
+let za = System.Numerics.Complex(-2.,System.Math.Sqrt 5.)
 let zb = System.Numerics.Complex(3.,2.)
+
+za.Phase
+a1.Phase.ToFormattedString()
+a1.Phase.ToFloat()
 
 a1*b1
 za * zb
@@ -22,7 +28,7 @@ a1 - b1
 
 a1 * a1.Conjugate
 a1.Magnitude.ToFormattedString()
-Evaluate.evaluate Map.empty a1.Magnitude
+a1.Magnitude.ToFloat()
 za.Magnitude
 
 MathNet.Numerics.Complex.conjugate za

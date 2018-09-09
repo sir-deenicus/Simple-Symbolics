@@ -1,10 +1,12 @@
 ﻿module MathNet.Symbolics.Extras
 
+open MathNet.Symbolics.Operators
+
 let flip f a b = f b a
 
 type Expression with
    member t.ToFormattedString() = Infix.format t 
-
+   member t.ToFloat() = (Evaluate.evaluate Map.empty t).RealValue
 
 type Complex(r:Expression,i:Expression) =
   member __.Real = r
@@ -12,7 +14,16 @@ type Complex(r:Expression,i:Expression) =
 
   member __.Conjugate = Complex(r, -i)
 
-  member t.Magnitude = sqrt (r**2 + i**2)
+  member __.Magnitude = sqrt (r**2 + i**2)
+
+  member __.Phase =
+     let x,y = r.ToFloat(), i.ToFloat()
+     if  x > 0. then arctan (i/r) 
+     elif x < 0. && y >= 0. then Trigonometric.simplify (arctan (i/r) + pi)
+     elif x < 0. && y < 0. then Trigonometric.simplify (arctan (i/r) - pi)
+     elif x = 0. && y > 0. then pi/2
+     elif x = 0. && y < 0. then -pi/2
+     else Undefined
 
   static member (+) (a:Complex,b:Complex) = Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
 
@@ -24,6 +35,7 @@ type Complex(r:Expression,i:Expression) =
   new(r) = Complex(r, 0Q)
 
   override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Real) (Infix.format t.Imaginary)  
+
 
 let rec containsVar x = function
    | Identifier _ as sy when sy = x -> true
@@ -39,8 +51,6 @@ let rec containsVar x = function
 
 
 module Vars =
-  open MathNet.Symbolics.Operators
-
   let a = symbol "a"
   let b = symbol "b"
   let c = symbol "c"

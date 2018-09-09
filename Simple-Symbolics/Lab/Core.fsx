@@ -17,6 +17,28 @@ open MathNet.Symbolics
 
 let flip f a b = f b a
 
+type Expression with
+   member t.ToFormattedString() = Infix.format t 
+
+type Complex(r:Expression,i:Expression) =
+  member __.Real = r
+  member __.Imaginary = i
+
+  member __.Conjugate = Complex(r, -i)
+
+  member t.Magnitude = sqrt (r**2 + i**2)
+
+  static member (+) (a:Complex,b:Complex) = Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
+
+  static member (-) (a:Complex,b:Complex) = Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
+
+  static member (*) (a:Complex,b:Complex) = 
+    Complex(a.Real * b.Real - a.Imaginary * b.Imaginary, a.Imaginary * b.Real + a.Real * b.Imaginary)
+
+  new(r) = Complex(r, 0Q)
+
+  override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Real) (Infix.format t.Imaginary)  
+
 
 let rec containsVar x = function
    | Identifier _ as sy when sy = x -> true
@@ -37,6 +59,7 @@ module Vars =
   let c = symbol "c"
   let d = symbol "d"
   let r = symbol "r"
+  let u = symbol "u"
   let v = symbol "v"
   let x = symbol "x"
   let y = symbol "y"

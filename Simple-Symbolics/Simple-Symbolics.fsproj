@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="Lab\linear-algebra.fsx" />
+    <None Include="Lab\lin-alg-tests.fsx" />
+    <None Include="Lab\Core.fsx" />
+    <None Include="Lab\differential-calculus.fsx" />
+    <None Include="Lab\integration.fsx" />
+    <None Include="Lab\solving.fsx" />
+    <None Include="Lab\experiments.fsx" />
+    <Compile Include="Core.fs" />
+    <Compile Include="Matrices.fs" />
+    <Compile Include="LinearAlgebra.fs" />
+  </ItemGroup>
+
+</Project>

@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <None Include="Lab\linear-algebra.fsx" />
-    <None Include="Lab\lin-alg-tests.fsx" />
+    <None Include="Lab\linalg-tests.fsx" />
     <None Include="Lab\Core.fsx" />
     <None Include="Lab\differential-calculus.fsx" />
     <None Include="Lab\integration.fsx" />

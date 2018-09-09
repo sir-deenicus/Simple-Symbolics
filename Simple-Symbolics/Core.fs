@@ -7,15 +7,13 @@ let flip f a b = f b a
 type Expression with
    member t.ToFormattedString() = Infix.format t 
    member t.ToFloat() = (Evaluate.evaluate Map.empty t).RealValue
+   static member toFloat (e:Expression) = e.ToFloat()
 
 type Complex(r:Expression,i:Expression) =
   member __.Real = r
   member __.Imaginary = i
-
-  member __.Conjugate = Complex(r, -i)
-
+  member __.Conjugate = Complex(r, -i)  
   member __.Magnitude = sqrt (r**2 + i**2)
-
   member __.Phase =
      let x,y = r.ToFloat(), i.ToFloat()
      if  x > 0. then arctan (i/r) 
@@ -25,12 +23,28 @@ type Complex(r:Expression,i:Expression) =
      elif x = 0. && y < 0. then -pi/2
      else Undefined
 
+  static member Zero = Complex(0Q, 0Q)
+
   static member (+) (a:Complex,b:Complex) = Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
 
   static member (-) (a:Complex,b:Complex) = Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
 
   static member (*) (a:Complex,b:Complex) = 
     Complex(a.Real * b.Real - a.Imaginary * b.Imaginary, a.Imaginary * b.Real + a.Real * b.Imaginary)
+
+  static member (*) (a:Complex,b:Expression) = 
+    Complex(a.Real * b, a.Imaginary * b)
+
+  static member (*) (a:Expression,b:Complex) = 
+    Complex(a * b.Real, a * b.Imaginary)
+
+  static member (/) (a:Complex, b:Expression) = Complex( a.Real / b, a.Imaginary / b)
+
+  static member (/) (a:Complex, b:Complex) = let conj = b.Conjugate in (a * conj) / (b * conj).Real
+
+  static member (/) (a:Expression, b:Complex) = (Complex a) / b
+
+  static member magnitude (c:Complex) = c.Magnitude
 
   new(r) = Complex(r, 0Q)
 

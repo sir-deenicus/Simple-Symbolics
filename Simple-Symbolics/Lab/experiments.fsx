@@ -26,6 +26,19 @@ za + zb
 za - zb
 a1 - b1
 
+5. * za
+5Q * a1
+
+Complex(5Q, 7Q) * -5Q  
+Complex(5Q, 7Q) * Complex -5Q  
+
+
+System.Numerics.Complex(5.,7.) * System.Numerics.Complex(-5.,0.)
+
+List.sum [Complex 5Q ; Complex 3Q]
+
+Complex(a, b) * Complex(c, 0Q)
+Complex(a, b) * c
 a1 * a1.Conjugate
 a1.Magnitude.ToFormattedString()
 a1.Magnitude.ToFloat()

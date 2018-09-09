@@ -1,7 +1,6 @@
 ﻿#load "Core.fsx"
 
-open MathNet.Symbolics
-open Core.Vars
+open MathNet.Symbolics 
 
 let inline dot a b =
     List.map2 (*) a b |> List.sum

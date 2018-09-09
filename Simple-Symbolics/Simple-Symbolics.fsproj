@@ -13,8 +13,13 @@
     <None Include="Lab\solving.fsx" />
     <None Include="Lab\experiments.fsx" />
     <Compile Include="Core.fs" />
-    <Compile Include="Matrices.fs" />
     <Compile Include="LinearAlgebra.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FParsec" Version="1.0.3" />
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="4.5.1" />
+    <PackageReference Include="MathNet.Symbolics" Version="0.18.1" />
   </ItemGroup>
 
 </Project>

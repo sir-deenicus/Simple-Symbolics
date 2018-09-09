@@ -1,2 +1,0 @@
-﻿module MathNet.Symbolics.LinearAlgebr
-

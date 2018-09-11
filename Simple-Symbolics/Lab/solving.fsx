@@ -74,6 +74,15 @@ containsVar x (eq3)
 
 let eq2 = 3Q/4Q * π * r ** 3
 
+let pn = 1/2Q * a * t**2 
+
+
 Evaluate.evaluate symbols eq2
 
 Infix.format eq2
+
+let eqt,eqt2 = rinverseAndPartitionVar t pn
+
+eqt2.Value |> snd |> Infix.format
+eqt.Value |> Infix.format
+

@@ -3,8 +3,7 @@
 open MathNet.Symbolics 
 open Core
 
-let inline dot a b =
-    List.map2 (*) a b |> List.sum
+let inline dot a b = List.map2 (*) a b |> List.sum
 
 let inline vecmatrixmult (v:_ list) (m:_ list list) =
    [for r in List.transpose m -> dot v r] 

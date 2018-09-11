@@ -50,6 +50,8 @@ let rr = integrateSimple x ( (x ** 2 + 3 ) ** 2 )
 
 integrateSimple x (5 * x) |> Infix.format
 
+integrateSimple t (a) |> integrateSimple t |> Infix.format
+
 rr |> Infix.format  
      
      

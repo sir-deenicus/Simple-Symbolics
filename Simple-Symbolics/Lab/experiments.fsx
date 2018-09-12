@@ -4,6 +4,7 @@ open MathNet.Symbolics
 open Core.Vars
 open Core
 
+ 
 let sq = sqrt 2Q / 2
 
 sq.ToFloat()
@@ -60,9 +61,11 @@ Algebraic.expand ((x+1) **4 / (4)) |> Infix.format
 
 Polynomial.factorSquareFree b (a ** 2 + 2 * a * b + b ** 2) |>  (Infix.format)
 
-
 open Units
 
+Units.ToUnit(btu / ft ** 3, mega * J / meter ** 3).Value.Evaluate()
+(btu / ft ** 3).Evaluate(false)
+ 
 Units.To (1 * tera * flops, giga * flops)
 Units.To(5 * mega * bytes, mega * bytes)
 
@@ -78,7 +81,7 @@ Units.To (List.sum  [5Q * hr; 2Q * hr], hr)
 Units.To (5Q * km, km )
 Units.simplifyUnits (5 * kilo * meter)
 Units.simplifyUnits(List.sum  [5Q * hr; 2Q * hr])
-5Q * meter  + 5Q * km
+5Q * meter + 5Q * km
 
 Units.To (10 * kilo * W * hr, kilo * W * hr)
 Units.To (10 * kilo * W * hr, J )

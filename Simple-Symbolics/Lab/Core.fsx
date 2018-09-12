@@ -5,7 +5,7 @@
 #r @"..\fparsec\net40-client\fparsecCs.dll"
 #r @"..\fparsec\net40-client\fparsec.dll"
 #r @".\symbolics\net40\mathnet.symbolics.dll"
-
+log10 
 open MathNet.Symbolics  
 open Operators 
 open MathNet.Numerics
@@ -14,13 +14,27 @@ let flip f a b = f b a
 
 let standardSymbols = Map ["π", FloatingPoint.Real System.Math.PI]
 
+module BigRational =    
+  open Microsoft.FSharp.Core.Operators
+  let fromFloat f =
+      let df = decimal f
+      let s = string (df - floor df)
+      let pow10 = 10. ** (float s.Length - 2.)
+      BigRational.FromIntFraction(int(f * pow10), int pow10)
+  let fromFloatRepeating (f:float) =
+      let df = decimal f
+      let len = float((string (df - floor df)).Length - 2)
+      let pow10 = decimal (10. ** len)
+      if abs f < 1. then
+        BigRational.FromIntFraction(int (df * pow10), int (floor (pow10 - df)))
+      else BigRational.FromIntFraction(int (df * pow10 - floor df), int (pow10 - 1M))
+
 module Algebraic =
   let rec simplify = function 
      | Power (Power (x, a), b) -> simplify(Power(simplify x, simplify (a * b)))
      | Power (x, a) when a = 1Q -> x
      | x -> x
-
-
+     
 type Expression with
    member t.ToFormattedString() = Infix.format t 
    member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
@@ -78,6 +92,9 @@ type Units(q:Expression,u:Expression, ?altUnit) =
   member __.Quantity = q
   member __.Unit = u 
   member __.AltUnit with get() = altunit and set u = altunit <- u
+  member t.Evaluate (m,?usealt) = Evaluate.evaluate m q, match usealt with Some false -> Infix.format u | _ -> t.AltUnit 
+  member t.Evaluate ?usealt = q.ToFloat(), match usealt with Some false -> Infix.format u | _ -> t.AltUnit 
+  member __.ToAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
   static member Zero = Units(0Q, 0Q)
   static member (+) (a:Units,b:Units) = 
     if a.Unit = b.Unit then
@@ -101,6 +118,13 @@ type Units(q:Expression,u:Expression, ?altUnit) =
   static member (/) (a:Units, b:Expression) = Units( a.Quantity / b, a.Unit, a.AltUnit)
   static member (/) (a:Units, b:Units) = Units(a.Quantity / b.Quantity, a.Unit / b.Unit, a.AltUnit + "/" + b.AltUnit)
   static member (/) (a:Expression, b:Units) = Units(a / b.Quantity, 1 / b.Unit, b.AltUnit + "^-1") 
+  static member ToUnit (a:Units, b:Units) = 
+      if a.Unit = b.Unit then 
+         let altunit = if b.AltUnit = "" then 
+                         Units.numstr b.Quantity + " " + b.Unit.ToFormattedString() 
+                       else b.AltUnit
+         Some ( Units((a / b).Quantity,b.Unit, altunit) ) 
+      else None 
   static member To (a:Units, b:Units) = 
       if a.Unit = b.Unit then 
          let altunit = if b.AltUnit = "" then 
@@ -111,11 +135,11 @@ type Units(q:Expression,u:Expression, ?altUnit) =
   static member To (a:Units, b:Units,unitstr) = if a.Unit = b.Unit then Some (sprintf "%s %s" ((a / b).Quantity.ToFormattedString()) unitstr ) else None 
 
   override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Quantity) (Infix.format t.Unit)  
+  
 
 module Units =
   let (^) a b = Units(a,b)
-  let setAlt alt (u:Units) = u.AltUnit <- alt; u
-   
+  let setAlt alt (u:Units) = u.AltUnit <- alt; u   
 
   let kg = Units(1Q, Operators.symbol "kg", "kg")
   let meter = Units(1Q, Operators.symbol "meters", "meter")
@@ -125,18 +149,19 @@ module Units =
   let bits = Units(1Q, Operators.symbol "bits")
   let bytes = 8Q * bits |> setAlt "bytes"
    
-  let N = kg * meter / sec ** 2 |> setAlt "N" 
+  let N = kg * meter / sec ** 2       |> setAlt "N" 
   let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"   
   let km = 1000Q * meter
-
-  let W = J / sec  |> setAlt "W"
+  let ft = Expression.FromRational (BigRational.fromFloat 0.3048) * meter
+  let btu = Expression.FromRational (BigRational.fromFloat 1055.06) * J
+  let W = J / sec |> setAlt "W"
   let kilo = 1000Q
   let mega = 1_000_000Q
   let giga = 1_000_000_000Q
   let tera = 1_000_000_000_000Q
   let minute = 60Q * sec |> setAlt "minute"
-  let hr = 60Q * minute |> setAlt "hr"
-  
+  let hr = 60Q * minute  |> setAlt "hr" 
+   
   let differentiate (dy:Units) (dx:Units) =
       Units(Calculus.differentiate dy.Quantity dx.Quantity, dx.Unit/dy.Unit, dx.AltUnit+"/"+dy.AltUnit)
 
@@ -166,6 +191,7 @@ module Vars =
   let b = symbol "b"
   let c = symbol "c"
   let d = symbol "d"
+  let n = symbol "n"
   let r = symbol "r"
   let t = symbol "t"
   let u = symbol "u"
@@ -174,11 +200,13 @@ module Vars =
   let y = symbol "y"
   let z = symbol "z"
 
-  let y1 = symbol "y₁"
-  let y2 = symbol "y₂"
+  let x0 = symbol "x₀"
   let x1 = symbol "x₁"
   let x2 = symbol "x₂"
   let x3 = symbol "x₃"
+  let v0 = symbol "v₀"
+  let y1 = symbol "y₁"
+  let y2 = symbol "y₂"
 
   let phi = symbol "φ"  
   let pi = symbol "π"

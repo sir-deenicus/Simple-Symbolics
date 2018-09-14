@@ -3,6 +3,12 @@
 open MathNet.Symbolics 
 open Core
 
+    
+let formatGeneric (e:obj) = 
+    match e with
+     | :? Expression as ex -> Infix.format ex 
+     | _ -> string e
+
 let inline dot a b = List.map2 (*) a b |> List.sum
 
 let inline vecmatrixmult (v:_ list) (m:_ list list) =
@@ -11,10 +17,65 @@ let inline vecmatrixmult (v:_ list) (m:_ list list) =
 let inline matrixvecmult (m:_ list list) (v:_ list) =
    [for r in m -> dot v r] 
 
-let formatGeneric (e:obj) = 
-    match e with
-     | :? Expression as ex -> Infix.format ex 
-     | _ -> string e
+let inline matrixmatrixmult (m1:_ list list) (m2:_ list list) =
+   let m2T = List.transpose m2 
+   [for r in m1 ->
+      [for c in m2T -> dot r c]] 
+
+let identity n = 
+     [for r in 1..n -> 
+        [for c in 1..n -> if r = c then 1Q else 0Q]]
+
+
+let removeRow i (m: 'a list list) =
+    [for r in 0..m.Length - 1 do if r <> i then yield m.[r]]
+     
+let removeCol i (m: 'a list list) =
+    [for r in 0..m.Length - 1 ->
+       [for c in 0..m.[r].Length - 1 do
+          if c <> i then yield m.[r].[c]]]
+     
+
+let inline det2 (a:'a list list) = a.[0].[0] * a.[1].[1] - a.[0].[1] * a.[1].[0]      
+
+let inline det3 (m: 'a list list) =
+    let a = m.[0].[0]
+    let b = m.[0].[1]
+    let c = m.[0].[2]
+    let d = m.[1].[0]
+    let e = m.[1].[1]
+    let f = m.[1].[2]
+    let g = m.[2].[0]
+    let h = m.[2].[1]
+    let i = m.[2].[2]
+    a*e*i+b*f*g+c*d*h-c*e*g-b*d*i-a*f*h 
+
+let rec det (m: _ list list) =
+    let i = m.Length
+    if i = 1 then m.[0].[0]
+    elif i = 2 then det2 m 
+    else let m' = removeRow 0 m  
+         let detf = if i = 3 then det2 else det  
+         [for c in 0..m.[0].Length - 1 -> 
+            let var = m.[0].[c] 
+            let det = var * detf (removeCol c m')
+            if c % 2 = 0 then det else -1Q * det] |> List.sum 
+
+let minor r c (m: Expression list list) =    
+    let m' = removeRow (r-1) m |> removeCol (c-1)
+    -1Q ** (Expression.FromInt32 r + Expression.FromInt32 c) * det m'  
+
+let cofactor (m:_ list) =
+    let n = m.Length
+    [for r in 1..n ->
+      [for c in 1..n-> minor r c m]]
+
+let adjugate = cofactor >> List.transpose
+
+let inverse m =  
+    let cT = adjugate m
+    List.map (List.map ((*) (1Q/det m))) cT 
+
 
 type Vector< 'a >(l : 'a list) =
     member __.AsList = l
@@ -35,12 +96,9 @@ type Matrix<'a>(l : 'a list list) =
     static member inline (*) (a:Matrix<_>,b : Expression) = Matrix(List.map (List.map ((*) b)) a.AsList)
     static member inline (*) (a:Vector<_>,b : Matrix<_>) = Vector(vecmatrixmult a.AsList b.AsList)
     static member inline (*) (a:Matrix<_>,b : Vector<_>) = Vector(matrixvecmult a.AsList b.AsList)
+    static member inline (*) (a:Matrix<_>,b : Matrix<_>) = Matrix(matrixmatrixmult a.AsList b.AsList)
     override t.ToString() = sprintf "\n%s" (String.concat "\n" (List.map (List.map formatGeneric >> String.concat ", ") t.AsList))
 
 module Matrix =
  let toList (m:Matrix<_>) = m.AsList
-
-    
-let det2 (a:Expression list list) = a.[0].[0] * a.[1].[1] - a.[0].[1] * a.[1].[0]      
-
- 
+ let map f (m:Matrix<_>) = Matrix(List.map (List.map f) m.AsList)

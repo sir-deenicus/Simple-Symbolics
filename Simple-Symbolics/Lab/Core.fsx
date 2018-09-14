@@ -5,7 +5,7 @@
 #r @"..\fparsec\net40-client\fparsecCs.dll"
 #r @"..\fparsec\net40-client\fparsec.dll"
 #r @".\symbolics\net40\mathnet.symbolics.dll"
-log10 
+
 open MathNet.Symbolics  
 open Operators 
 open MathNet.Numerics
@@ -32,7 +32,15 @@ module BigRational =
 module Algebraic =
   let rec simplify = function 
      | Power (Power (x, a), b) -> simplify(Power(simplify x, simplify (a * b)))
-     | Power (x, a) when a = 1Q -> x
+     | Power (x, a) when a = 1Q -> simplify x
+     | Power (Product[x], n) 
+     | Power (Sum[x], n) -> simplify (Power(simplify x, n))
+     | Power(Number a, Number n) when n = 1N/2N && a = 1N -> 1Q 
+     | Function(f, x) -> Function(f, (simplify x)) 
+     | Sum     [x]  
+     | Product [x] -> simplify x
+     | Product l -> Product (List.map simplify l)
+     | Sum l -> Sum (List.map simplify l)
      | x -> x
      
 type Expression with
@@ -191,6 +199,11 @@ module Vars =
   let b = symbol "b"
   let c = symbol "c"
   let d = symbol "d"
+  let e = symbol "e"
+  let f = symbol "f"
+  let g = symbol "g"
+  let h = symbol "h"
+  let i = symbol "i"
   let n = symbol "n"
   let r = symbol "r"
   let t = symbol "t"

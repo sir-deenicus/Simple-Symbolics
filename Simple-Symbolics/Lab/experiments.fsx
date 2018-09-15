@@ -10,16 +10,22 @@ let sq = sqrt 2Q / 2
 sq.ToFloat()
 
 let a1 = Complex(-2Q, sqrt 5Q)
+-a1
 
 let b1 = Complex(3Q, 2Q)
 
+let ca = Complex(3Q, 3Q)
+
+ 
+(ca ** (5Q/1))//.ToComplex()
+ 
 let za = System.Numerics.Complex(-2.,System.Math.Sqrt 5.)
 let zb = System.Numerics.Complex(3.,2.)
-
+zb ** 3.5
 za.Phase
 a1.Phase.ToFormattedString()
 a1.Phase.ToFloat()
-
+-za
 a1*b1
 za * zb
 a1 + b1
@@ -93,3 +99,4 @@ Units.To(kilo * W / meter ** 2, W / meter ** 2)
 let pn = 1/2Q * (a * meter / sec ** 2) * (t * sec) **2 
 
 Units.differentiate (t * sec) pn |> Units.differentiate (t * sec)
+

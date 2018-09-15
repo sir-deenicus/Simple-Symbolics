@@ -2,7 +2,6 @@
 
 open MathNet.Symbolics 
 open Core
-
     
 let formatGeneric (e:obj) = 
     match e with
@@ -22,10 +21,9 @@ let inline matrixmatrixmult (m1:_ list list) (m2:_ list list) =
    [for r in m1 ->
       [for c in m2T -> dot r c]] 
 
-let identity n = 
+let identityM zero one n = 
      [for r in 1..n -> 
-        [for c in 1..n -> if r = c then 1Q else 0Q]]
-
+        [for c in 1..n -> if r = c then one else zero]]
 
 let removeRow i (m: 'a list list) =
     [for r in 0..m.Length - 1 do if r <> i then yield m.[r]]
@@ -33,8 +31,7 @@ let removeRow i (m: 'a list list) =
 let removeCol i (m: 'a list list) =
     [for r in 0..m.Length - 1 ->
        [for c in 0..m.[r].Length - 1 do
-          if c <> i then yield m.[r].[c]]]
-     
+          if c <> i then yield m.[r].[c]]]     
 
 let inline det2 (a:'a list list) = a.[0].[0] * a.[1].[1] - a.[0].[1] * a.[1].[0]      
 
@@ -50,31 +47,33 @@ let inline det3 (m: 'a list list) =
     let i = m.[2].[2]
     a*e*i+b*f*g+c*d*h-c*e*g-b*d*i-a*f*h 
 
-let rec det (m: _ list list) =
-    let i = m.Length
-    if i = 1 then m.[0].[0]
-    elif i = 2 then det2 m 
-    else let m' = removeRow 0 m  
-         let detf = if i = 3 then det2 else det  
-         [for c in 0..m.[0].Length - 1 -> 
-            let var = m.[0].[c] 
-            let det = var * detf (removeCol c m')
-            if c % 2 = 0 then det else -1Q * det] |> List.sum 
+let inline det (m: ^a list list) =
+    let rec loop (m: ^a list list)  =
+        let i = m.Length
+        if i = 1 then m.[0].[0]
+        elif i = 2 then det2 m 
+        else let m' = removeRow 0 m  
+             let detf = if i = 3 then det2 else loop
+             [for c in 0..m.[0].Length - 1 -> 
+                let var = m.[0].[c] 
+                let detm = var * detf (removeCol c m')
+                if c % 2 = 0 then detm else -detm] |> List.sum 
+    loop m 
 
-let minor r c (m: Expression list list) =    
+let inline minor r c (m: ^a list list) =    
     let m' = removeRow (r-1) m |> removeCol (c-1)
-    -1Q ** (Expression.FromInt32 r + Expression.FromInt32 c) * det m'  
+    if (r + c) % 2 = 0 then det m' else -(det m')  
 
-let cofactor (m:_ list) =
+let inline cofactor (m:_ list) =
     let n = m.Length
     [for r in 1..n ->
       [for c in 1..n-> minor r c m]]
 
-let adjugate = cofactor >> List.transpose
+let inline adjugate l = l |> cofactor |> List.transpose 
 
-let inverse m =  
+let inline inverse m =  
     let cT = adjugate m
-    List.map (List.map ((*) (1Q/det m))) cT 
+    List.map (List.map ((*) (1Q/(det m)))) cT 
 
 
 type Vector< 'a >(l : 'a list) =
@@ -102,3 +101,8 @@ type Matrix<'a>(l : 'a list list) =
 module Matrix =
  let toList (m:Matrix<_>) = m.AsList
  let map f (m:Matrix<_>) = Matrix(List.map (List.map f) m.AsList)
+ let inline determinant (m:Matrix<_>) = det m.AsList
+ let inline inverse (m:Matrix<_>) = Matrix(inverse m.AsList)
+ let inline identity n = Matrix (identityM 0Q 1Q n)
+ let inline identity2 zero one n = Matrix (identityM zero one n)
+ 

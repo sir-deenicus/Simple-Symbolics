@@ -16,11 +16,11 @@ let standardSymbols = Map ["π", FloatingPoint.Real System.Math.PI]
 
 module BigRational =    
   open Microsoft.FSharp.Core.Operators
-  let fromFloat f =
+  let fromFloat (f:float) =
       let df = decimal f
       let s = string (df - floor df)
-      let pow10 = 10. ** (float s.Length - 2.)
-      BigRational.FromIntFraction(int(f * pow10), int pow10)
+      let pow10 = decimal (10. ** (float s.Length - 2.))
+      BigRational.FromIntFraction(int(df * pow10), int pow10)
   let fromFloatRepeating (f:float) =
       let df = decimal f
       let len = float((string (df - floor df)).Length - 2)
@@ -28,14 +28,24 @@ module BigRational =
       if abs f < 1. then
         BigRational.FromIntFraction(int (df * pow10), int (floor (pow10 - df)))
       else BigRational.FromIntFraction(int (df * pow10 - floor df), int (pow10 - 1M))
+ 
+type Expression with
+   member t.ToFormattedString() = Infix.format t 
+   member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
+   member t.ToComplex() = (Evaluate.evaluate standardSymbols t).ComplexValue
+   member t.ToInt() = match t with Number n -> int n | _ -> failwith "not a number"
+   member t.Rational() = match t with Number n -> n | _ -> failwith "not a number"
 
 module Algebraic =
+  let isSquareHacky (x:Expression) = let asint = int(System.Math.Sqrt(x.ToFloat()) + 0.5) in asint * asint = x.ToInt() 
   let rec simplify = function 
      | Power (Power (x, a), b) -> simplify(Power(simplify x, simplify (a * b)))
      | Power (x, a) when a = 1Q -> simplify x
      | Power (Product[x], n) 
      | Power (Sum[x], n) -> simplify (Power(simplify x, n))
      | Power(Number a, Number n) when n = 1N/2N && a = 1N -> 1Q 
+     | Function(Atan, Number n) when n = 1N -> pi/4 
+     | Function(Atan, Number n) when n = 0N -> 0Q 
      | Function(f, x) -> Function(f, (simplify x)) 
      | Sum     [x]  
      | Product [x] -> simplify x
@@ -43,18 +53,13 @@ module Algebraic =
      | Sum l -> Sum (List.map simplify l)
      | x -> x
      
-type Expression with
-   member t.ToFormattedString() = Infix.format t 
-   member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
 
 type Complex(r:Expression,i:Expression) =  
   member __.Real = r
   member __.Imaginary = i
-
   member __.Conjugate = Complex(r, -i)
-
   member __.Magnitude = sqrt (r**2 + i**2)
-
+  member __.ToComplex() = System.Numerics.Complex(r.ToFloat(), i.ToFloat())
   member __.Phase =
      let x,y = r.ToFloat(), i.ToFloat()
      if  x > 0. then arctan (i/r) 
@@ -65,27 +70,29 @@ type Complex(r:Expression,i:Expression) =
      else Undefined
 
   static member Zero = Complex(0Q, 0Q)
-
+  static member (~-) (a:Complex) = Complex(-a.Real, -a.Imaginary)
+  member c.Pow(n:Expression, phase) = 
+         let r = c.Magnitude
+         let angle = c.Phase
+         r ** n * Complex(cos (n * (angle + phase)) |> Algebraic.simplify |> Trigonometric.simplify, 
+                          sin (n * (angle + phase)) |> Algebraic.simplify |> Trigonometric.simplify) 
+  static member Pow (c:Complex, n:int) = c ** (Expression.FromInt32 n) 
+  static member Pow (c:Complex, n:Expression) = 
+              let r = c.Magnitude
+              let angle = c.Phase
+              r ** n * Complex(cos (n * angle) |> Algebraic.simplify |> Trigonometric.simplify, sin (n * angle) |> Algebraic.simplify |> Trigonometric.simplify) 
   static member (+) (a:Complex,b:Complex) = Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
-
   static member (-) (a:Complex,b:Complex) = Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
-
   static member (*) (a:Complex,b:Complex) = 
     Complex(a.Real * b.Real - a.Imaginary * b.Imaginary, a.Imaginary * b.Real + a.Real * b.Imaginary)
-
   static member (*) (a:Complex,b:Expression) = 
     Complex(a.Real * b, a.Imaginary * b)
-
   static member (*) (a:Expression,b:Complex) = 
     Complex(a * b.Real, a * b.Imaginary)
   static member (/) (a:Complex, b:Expression) = Complex( a.Real / b, a.Imaginary / b)
-
   static member (/) (a:Complex, b:Complex) = let conj = b.Conjugate in (a * conj) / (b * conj).Real 
-
   static member (/) (a:Expression, b:Complex) = (Complex a) / b
-
   new(r) = Complex(r, 0Q)
-
   override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Real) (Infix.format t.Imaginary)  
 
 
@@ -110,6 +117,7 @@ type Units(q:Expression,u:Expression, ?altUnit) =
     elif b.Unit = 0Q then Units(a.Quantity, a.Unit, a.AltUnit)
     elif a.Unit = 0Q then Units(b.Quantity, b.Unit, b.AltUnit)
     else failwith "Units don't match"
+  static member (~-) (a:Units) = (-a.Quantity, a.Unit, a.AltUnit) 
   static member (-) (a:Units,b:Units) = a + -1 * b   
   static member (*) (a:Units,b:Units) =  
     Units(a.Quantity * b.Quantity, a.Unit * b.Unit, a.AltUnit + " " + b.AltUnit)

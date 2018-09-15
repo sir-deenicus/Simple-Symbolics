@@ -139,7 +139,22 @@ let cubic2 a b c d =
 
     //fm (fsolve sa),fm (fsolve sb), (A ** 3 / 27Q)
     [A; B;s; sv;tv;sv - tv] |> List.map (fun f -> f.ToFloat())// Infix.format f )
- 
+
+let cubic4 a b c d =
+    let Q : Expression = (3Q * a * c - b ** 2Q)/ (9 * a ** 2Q)
+    let R : Expression = (9 * a * b * c - 27 *  a ** 2Q * d - 2*b ** 3Q)/(54 * a ** 3Q)
+    let S : Expression = ( R + sqrt( Q ** 3Q + R ** 2Q ) ) ** (1/3Q)
+    let T : Expression = ( R - sqrt( Q ** 3Q + R ** 2Q ) ) ** (1/3Q)
+    printfn "%A" (Q.ToFormattedString(),R.ToFormattedString(),S.ToFormattedString(),T.ToFormattedString())
+    printfn "%A" ((R ** 2).ToFormattedString(), S.ToFloat(), (T.ToComplex().Magnitude) **(1./3.) * )
+    S + T - (b/(3Q * a))
+0.4011 + -1.385 - (2./3.)
+let zzq = cubic4 1Q 2Q 3Q 4Q //#2Q -30Q 162Q -350Q 
+(-35./27. - sqrt(50./27.)) ** (1./3.)
+(pi/3).ToFloat()
+zzq|> Infix.format
+zzq.ToComplex() * zzq.ToComplex().Conjugate()
+((-35. + 15. * sqrt 6.) ** (1./3.) - (35. + 15. * sqrt 6.) ** (1./3.) - 2.)/3.
 let zz = cubic2 2Q -30Q 162Q -350Q
 let zz2 = cubic2 1Q -4Q -7Q 10Q
 12. * sqrt 3.

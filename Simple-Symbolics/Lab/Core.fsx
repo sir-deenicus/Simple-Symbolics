@@ -6,8 +6,7 @@
 #r @"..\fparsec\net40-client\fparsec.dll"
 #r @".\symbolics\net40\mathnet.symbolics.dll"
 
-open MathNet.Symbolics  
-open Operators 
+open MathNet.Symbolics 
 open MathNet.Numerics
 open System
 
@@ -17,14 +16,18 @@ let pairmap f (x,y) = f x , f y
 
 let standardSymbols = Map []
 
+let mutable expressionFormater = Infix.format
+
 module BigRational =    
   open Microsoft.FSharp.Core.Operators
   ///limited by range of decimal (which is used as a less noisy alternative to floats)
   let fromFloat (f:float) =
       let df = decimal f
-      let s = string (df - floor df)
-      let pow10 = Numerics.BigInteger 10 ** (s.Length - 2)
-      BigRational.FromBigIntFraction(Numerics.BigInteger(df * decimal pow10), pow10)
+      if df = floor df then BigRational.FromBigInt (Numerics.BigInteger df)
+      else
+        let s = string (df - floor df)
+        let pow10 = Numerics.BigInteger 10 ** (s.Length - 2)
+        BigRational.FromBigIntFraction(Numerics.BigInteger(df * decimal pow10), pow10)
   let fromFloatRepeating (f:float) =
       let df = decimal f
       let len = float((string (df - floor df)).Length - 2)
@@ -34,33 +37,85 @@ module BigRational =
       else BigRational.FromIntFraction(int (df * pow10 - floor df), int (pow10 - 1M))
  
 type Expression with
-   member t.ToFormattedString() = Infix.format t 
+   member t.ToFormattedString() = expressionFormater t 
    member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
    member t.ToComplex() = (Evaluate.evaluate standardSymbols t).ComplexValue
    member t.ToInt() = match t with Number n -> int n | _ -> failwith "not a number"
    member t.Rational() = match t with Number n -> n | _ -> failwith "not a number"
+module Expression =
+   let toFloat (x:Expression) = x.ToFloat()
 
-module Algebraic =
-  let ``isSquare? (Hacky)`` (x:Expression) = let asint = int(System.Math.Sqrt(x.ToFloat()) + 0.5) in asint * asint = x.ToInt() 
-  let rec simplify = function      
-     | Power (x, a) when a = 1Q -> simplify x         
-     | Power (x, Number n) when n = 1N -> simplify x
-     | Power (Number a, _) when a = 1N -> 1Q 
-     | Power (a, _) when a = 1Q -> 1Q 
-     | Power (Product[x], n) 
-     | Power (Sum[x], n) -> simplify (Power(x, n))
-     | Power (Power (x, a), b) -> simplify(Power(x, (a * b)))
-     | Power (x,n) -> Power(simplify x, simplify n) 
-     | Function(Atan, Number n) when n = 1N -> pi/4 
-     | Function(Atan, Number n) when n = 0N -> 0Q 
-     | Function(f, x) -> Function(f, (simplify x)) 
-     | Sum     [x]  
-     | Product [x] -> simplify x
-     | Product l -> Product (List.map simplify l)
-     | Sum l -> Sum (List.map simplify l)
-     | x -> x
-     
+let inline factors toint f x = 
+    let x' = toint x 
+    let sqrtx = int(sqrt (float x'))
+    [for n in 1..sqrtx do 
+       let m = x' / n
+       if x' % n = 0 then yield f n; if m <> n then yield f m]
+    |> List.sortByDescending toint
 
+let factorsExpr = factors (fun (i:Expression) -> i.ToInt()) (Expression.FromInt32)
+
+let inline primefactors factor x =
+    let rec loop x =
+        match factor x with
+        | [one] -> [one]
+        | [x; _] -> [x]
+        | _::(tf::_) -> 
+            let r = x / tf
+            let f1, f2 = loop r, loop tf
+            f1 @ f2
+    loop x    
+
+let groupPowers pl =
+       List.groupBy id pl 
+    |> List.map (fun (x, l) -> 
+        if l.Length = 1 then x         
+        else Power(x , Expression.FromInt32 (List.length l)) )  
+
+let primeFactorsExpr = primefactors factorsExpr >> groupPowers >> Product
+
+let simplifySquareRoot (num:Expression) =
+    let n = abs num
+    let sqRootGrouping = 
+        function 
+        | (Power(x, Number n)) when n > 1N -> 
+            if (int n % 2 = 0) then x ** (Expression.FromRational (n/2N)), 1Q
+            elif n = 3N then x, x
+            else x, Power(x, Number (n - 2N)) 
+        | x -> 1Q, x  
+
+    let outr, inr =        
+        primefactors factorsExpr n 
+        |> groupPowers
+        |> List.map sqRootGrouping 
+        |> List.unzip
+
+    
+    let isneg = num.ToInt() < 0
+    List.fold (*) 1Q outr * sqrt(List.fold (*) (if isneg then -1Q else 1Q) inr)
+
+open Operators 
+ 
+module Algebraic = 
+  let simplify simplifysqrt fx =
+      let rec simplifyLoop = function               
+         | Power (x, Number n) when n = 1N -> simplifyLoop x
+         | Power (Number x, _) when x = 1N -> 1Q  
+         | Power (Product[x], n) 
+         | Power (Sum[x], n) -> simplifyLoop (Power(x, n))
+         | Power (Power (x, a), b) -> simplifyLoop(Power(x, (a * b)))
+         | Power (Number _ as x,n) when n = 1Q/2Q && simplifysqrt -> simplifySquareRoot x
+         | Power (x,n) -> Power(simplifyLoop x, simplifyLoop n) 
+         | Function(Atan, Number n) when n = 1N -> pi/4 
+         | Function(Atan, Number n) when n = 0N -> 0Q 
+         | Function(f, x) -> Function(f, (simplifyLoop x)) 
+         | Sum     [x]  
+         | Product [x] -> simplifyLoop x
+         | Product l -> Product (List.map simplifyLoop l)
+         | Sum l -> Sum (List.map simplifyLoop l)
+         | x -> x
+      simplifyLoop fx
+      
 type Complex(r:Expression,i:Expression) =  
   member __.Real = r
   member __.Imaginary = i
@@ -81,13 +136,13 @@ type Complex(r:Expression,i:Expression) =
   member c.Pow(n:Expression, phase) = 
          let r = c.Magnitude
          let angle = c.Phase
-         r ** n * Complex(cos (n * (angle + phase)) |> Algebraic.simplify |> Trigonometric.simplify, 
-                          sin (n * (angle + phase)) |> Algebraic.simplify |> Trigonometric.simplify) 
+         r ** n * Complex(cos (n * (angle + phase)) |> Algebraic.simplify false |> Trigonometric.simplify, 
+                          sin (n * (angle + phase)) |> Algebraic.simplify false |> Trigonometric.simplify) 
   static member Pow (c:Complex, n:int) = c ** (Expression.FromInt32 n) 
   static member Pow (c:Complex, n:Expression) = 
               let r = c.Magnitude
               let angle = c.Phase
-              r ** n * Complex(cos (n * angle) |> Algebraic.simplify |> Trigonometric.simplify, sin (n * angle) |> Algebraic.simplify |> Trigonometric.simplify) 
+              r ** n * Complex(cos (n * angle) |> Algebraic.simplify false |> Trigonometric.simplify, sin (n * angle) |> Algebraic.simplify false |> Trigonometric.simplify) 
   static member (+) (a:Complex,b:Complex) = Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
   static member (-) (a:Complex,b:Complex) = Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
   static member (*) (a:Complex,b:Complex) = 
@@ -100,7 +155,7 @@ type Complex(r:Expression,i:Expression) =
   static member (/) (a:Complex, b:Complex) = let conj = b.Conjugate in (a * conj) / (b * conj).Real 
   static member (/) (a:Expression, b:Complex) = (Complex a) / b
   new(r) = Complex(r, 0Q)
-  override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Real) (Infix.format t.Imaginary)  
+  override t.ToString() = sprintf "(%s, %s)" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())  
 
 
 type Units(q:Expression,u:Expression, ?altUnit) =
@@ -114,8 +169,8 @@ type Units(q:Expression,u:Expression, ?altUnit) =
   member __.Quantity = q
   member __.Unit = u 
   member __.AltUnit with get() = altunit and set u = altunit <- u
-  member t.Evaluate (m,?usealt) = Evaluate.evaluate m q, match usealt with Some false -> Infix.format u | _ -> t.AltUnit 
-  member t.Evaluate ?usealt = q.ToFloat(), match usealt with Some false -> Infix.format u | _ -> t.AltUnit 
+  member t.Evaluate (m,?usealt) = Evaluate.evaluate m q, match usealt with Some false -> u.ToFormattedString() | _ -> t.AltUnit 
+  member t.Evaluate ?usealt = q.ToFloat(), match usealt with Some false -> u.ToFormattedString() | _ -> t.AltUnit 
   member __.ToAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
   static member Zero = Units(0Q, 0Q)
   static member (+) (a:Units,b:Units) = 
@@ -137,7 +192,7 @@ type Units(q:Expression,u:Expression, ?altUnit) =
   static member Pow (a:Units,b:int) = 
     Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^"+string b )
   static member Pow (a:Units,b:Expression) = 
-    Units(Algebraic.simplify (a.Quantity ** b), Algebraic.simplify (a.Unit ** b))  
+    Units(Algebraic.simplify true (a.Quantity ** b), Algebraic.simplify true (a.Unit ** b))  
   static member (/) (a:Units, b:Expression) = Units( a.Quantity / b, a.Unit, a.AltUnit)
   static member (/) (a:Units, b:Units) = Units(a.Quantity / b.Quantity, a.Unit / b.Unit, a.AltUnit + "/" + b.AltUnit)
   static member (/) (a:Expression, b:Units) = Units(a / b.Quantity, 1 / b.Unit, b.AltUnit + "^-1") 
@@ -157,7 +212,7 @@ type Units(q:Expression,u:Expression, ?altUnit) =
       else None 
   static member To (a:Units, b:Units,unitstr) = if a.Unit = b.Unit then Some (sprintf "%s %s" ((a / b).Quantity.ToFormattedString()) unitstr ) else None 
 
-  override t.ToString() = sprintf "(%s, %s)" (Infix.format t.Quantity) (Infix.format t.Unit)  
+  override t.ToString() = sprintf "(%s, %s)" (t.Quantity.ToFormattedString()) (t.Unit.ToFormattedString())  
   
 
 module Units =
@@ -209,7 +264,7 @@ let rec containsVar x = function
    | _ -> false
 
 
-module Vars =
+module Vars = 
   let a = symbol "a"
   let b = symbol "b"
   let c = symbol "c"

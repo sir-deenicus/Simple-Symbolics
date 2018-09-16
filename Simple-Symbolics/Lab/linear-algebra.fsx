@@ -5,10 +5,17 @@ open Core
     
 let formatGeneric (e:obj) = 
     match e with
-     | :? Expression as ex -> Infix.format ex 
+     | :? Expression as ex -> ex.ToFormattedString()
      | _ -> string e
 
 let inline dot a b = List.map2 (*) a b |> List.sum
+
+let parts = Array.map (flip (-) 1) [|2;3;3;2;3;1;1;3;1;2;2;1|]
+
+let inline crossproduct (v1:_[])  (v2:_[]) =
+            [for i in 0..4..parts.Length - 4 -> 
+                v1.[parts.[0+i]] * v2.[parts.[1+i]] - v1.[parts.[2+i]] * v2.[parts.[3+i]] ]
+
 
 let inline vecmatrixmult (v:_ list) (m:_ list list) =
    [for r in List.transpose m -> dot v r] 
@@ -88,6 +95,10 @@ type Vector< 'a >(l : 'a list) =
 module Vector = 
   let toList (v:Vector<_>) = v.AsList
   let map f (v:Vector<_>) = Vector(List.map f v.AsList)
+  let inline crossproduct (v1:Vector<_>) (v2 : Vector<_>) = 
+      if v1.AsList.Length <> 3 && v2.AsList.Length <> 3 then failwith "Must be a 3-vector"
+      else crossproduct (List.toArray v1.AsList) (List.toArray v2.AsList)
+           |> Vector
 
 type Matrix<'a>(l : 'a list list) = 
     member __.AsList = l

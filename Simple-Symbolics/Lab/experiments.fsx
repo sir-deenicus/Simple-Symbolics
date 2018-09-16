@@ -5,10 +5,6 @@ open Core.Vars
 open Core
 
  
-let sq = sqrt 2Q / 2
-
-sq.ToFloat()
-
 let a1 = Complex(-2Q, sqrt 5Q)
 -a1
 
@@ -16,31 +12,30 @@ let b1 = Complex(3Q, 2Q)
 
 let ca = Complex(3Q, 3Q)
 
- 
 (ca ** (5Q/1))//.ToComplex()
  
-let za = System.Numerics.Complex(-2.,System.Math.Sqrt 5.)
-let zb = System.Numerics.Complex(3.,2.)
-zb ** 3.5
-za.Phase
+let numericComplexA = System.Numerics.Complex(-2.,System.Math.Sqrt 5.)
+let numbericComplexB = System.Numerics.Complex(3.,2.)
+
+numbericComplexB ** 3.5
+numericComplexA.Phase
 a1.Phase.ToFormattedString()
 a1.Phase.ToFloat()
--za
+-numericComplexA
 a1*b1
-za * zb
+numericComplexA * numbericComplexB
 a1 + b1
-za + zb
-za - zb
+numericComplexA + numbericComplexB
+numericComplexA - numbericComplexB
 a1 - b1
-za ** (1./3.)
-za ** 2.
-za * za
-5. * za
+numericComplexA ** (1./3.)
+numericComplexA ** 2.
+numericComplexA * numericComplexA
+5. * numericComplexA
 5Q * a1
 
 Complex(5Q, 7Q) * -5Q  
 Complex(5Q, 7Q) * Complex -5Q  
-
 
 System.Numerics.Complex(5.,7.) * System.Numerics.Complex(-5.,0.)
 
@@ -51,13 +46,12 @@ Complex(a, b) * c
 a1 * a1.Conjugate
 a1.Magnitude.ToFormattedString()
 a1.Magnitude.ToFloat()
-za.Magnitude
+numericComplexA.Magnitude
 
-MathNet.Numerics.Complex.conjugate za
-za * MathNet.Numerics.Complex.conjugate za
+MathNet.Numerics.Complex.conjugate numericComplexA
+numericComplexA * MathNet.Numerics.Complex.conjugate numericComplexA
 a1.Conjugate 
-
-Infix.format sq
+ 
 
 Polynomial.factorSquareFree x (x ** 3 + 2 * x) |> Infix.format
 
@@ -100,3 +94,13 @@ let pn = 1/2Q * (a * meter / sec ** 2) * (t * sec) **2
 
 Units.differentiate (t * sec) pn |> Units.differentiate (t * sec)
 
+///////////
+BigRational.fromFloat (1e-26)
+
+[2. **3.; 2. ** 5.; 2. ** 4.; 5. **4.; 168.;144.;4. ;1048.; 25.; 100. ; 64.;1234212. ; -16.; -32.; -64.; -145.] 
+|> List.map (BigRational.fromFloat >> Expression.FromRational)
+|> List.map (fun x -> x.ToFormattedString() , let y = simplifySquareRoot x in y.ToFormattedString())//, y.ToFloat() ** 2.)
+ 
+simplifySquareRoot -145Q
+(primeFactorsExpr 5324Q).ToFormattedString()
+Core.expressionFormater <-Infix.format

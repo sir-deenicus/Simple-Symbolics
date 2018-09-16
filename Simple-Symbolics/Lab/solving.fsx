@@ -4,6 +4,7 @@ open MathNet.Symbolics
 open Core
 open Vars
 open MathNet.Numerics
+open MathNet.Symbolics
 
 type ExprType = IsSum | IsProduct | IsOther | Zero
 
@@ -84,25 +85,52 @@ let p1 = x ** 3 - 4 * x ** 2 - 7 * x + 10
 
 let p1' = x ** 3 - 4 * x ** 2 - 7 * x  
 
-let p2 = x ** 5 - 4*x**4 - 7 * x**3 + 14 * x **2 - 44 * x + 120
+let p2 = x ** 3 + 6 * x ** 2 + 5 * x - 12
 
-let inline factors toint f x = 
-    let x' = toint x 
-    [|for n in 1..x' / 2 do if x' % n = 0 then yield f n |]
+let p3 = x ** 5 - 4*x**4 - 7 * x**3 + 14 * x **2 - 44 * x + 120
  
-let quadratic p = 
+let quadraticSolve p = 
     if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
        let coeffs = Polynomial.coefficients x p
        let a,b,c = coeffs.[2], coeffs.[1], coeffs.[0]
        (-b + sqrt(b**2 - 4 * a * c)) / (2 * a), (-b - sqrt(b **2 - 4 * a * c)) / (2 * a)
     else failwith "Not quadratic"
  
-MathNet.Numerics.FindRoots.Cubic (10., -7., -4., 1.)
+factors id id 6
 
-BigRational.fromFloat (1e-26)
-
-let ac,bc = quadratic (x**2 + 53 * x + 12)
+let ac,bc = quadraticSolve (x**2 + 53 * x + 12)
 
 pairmap (Rational.reduce >> Infix.format) (ac,bc) 
 
-quadratic (a * x**2 + 1) |> pairmap Infix.format
+quadraticSolve (a * x**2 + b) |> pairmap Infix.format
+
+open System.Collections.Generic
+
+let rec tryFactorizePolynomial x fx =
+    let constant = Polynomial.coefficient x 0 fx 
+    let deg = Polynomial.degree x fx
+    if constant = 0Q && deg.ToInt() < 2 then [], []
+    elif deg.ToInt() = 1 then [-constant], []
+    elif constant = 0Q then 
+      let fx', _  = Polynomial.divide x fx x
+      let sols, eq = tryFactorizePolynomial x fx'  
+      0Q::sols, fx'::eq
+    else
+      let factors = factorsExpr (abs constant)
+      let r,s =
+         List.unzip
+           [for f in (List.map ((*) -1) factors) @ factors do
+                  let n = f.ToFloat()  
+                  let value = Evaluate.evaluate (Map ["x", FloatingPoint.Real n]) fx
+                  if value.RealValue = 0. then 
+                      yield (f, Polynomial.divide x fx (x - f) |> fst) ] 
+      let sols, eq = List.map (tryFactorizePolynomial x) s |> List.unzip
+      r @ List.concat sols |> HashSet |> Seq.toList, s @ List.concat eq |> HashSet |> Seq.toList
+   
+let res = tryFactorizePolynomial x p3
+
+res |> pairmap (List.map Infix.format)
+res |> snd |> List.filter (Polynomial.degree x >> ((=) 2Q)) |> List.map (quadraticSolve >> pairmap (Algebraic.simplify true >> Rational.simplify x >> Infix.format))
+
+
+

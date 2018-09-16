@@ -9,18 +9,22 @@
 open MathNet.Symbolics  
 open Operators 
 open MathNet.Numerics
+open System
 
 let flip f a b = f b a
 
-let standardSymbols = Map ["π", FloatingPoint.Real System.Math.PI]
+let pairmap f (x,y) = f x , f y
+
+let standardSymbols = Map []
 
 module BigRational =    
   open Microsoft.FSharp.Core.Operators
+  ///limited by range of decimal (which is used as a less noisy alternative to floats)
   let fromFloat (f:float) =
       let df = decimal f
       let s = string (df - floor df)
-      let pow10 = decimal (10. ** (float s.Length - 2.))
-      BigRational.FromIntFraction(int(df * pow10), int pow10)
+      let pow10 = Numerics.BigInteger 10 ** (s.Length - 2)
+      BigRational.FromBigIntFraction(Numerics.BigInteger(df * decimal pow10), pow10)
   let fromFloatRepeating (f:float) =
       let df = decimal f
       let len = float((string (df - floor df)).Length - 2)
@@ -37,13 +41,16 @@ type Expression with
    member t.Rational() = match t with Number n -> n | _ -> failwith "not a number"
 
 module Algebraic =
-  let isSquareHacky (x:Expression) = let asint = int(System.Math.Sqrt(x.ToFloat()) + 0.5) in asint * asint = x.ToInt() 
-  let rec simplify = function 
-     | Power (Power (x, a), b) -> simplify(Power(simplify x, simplify (a * b)))
-     | Power (x, a) when a = 1Q -> simplify x
+  let ``isSquare? (Hacky)`` (x:Expression) = let asint = int(System.Math.Sqrt(x.ToFloat()) + 0.5) in asint * asint = x.ToInt() 
+  let rec simplify = function      
+     | Power (x, a) when a = 1Q -> simplify x         
+     | Power (x, Number n) when n = 1N -> simplify x
+     | Power (Number a, _) when a = 1N -> 1Q 
+     | Power (a, _) when a = 1Q -> 1Q 
      | Power (Product[x], n) 
-     | Power (Sum[x], n) -> simplify (Power(simplify x, n))
-     | Power(Number a, Number n) when n = 1N/2N && a = 1N -> 1Q 
+     | Power (Sum[x], n) -> simplify (Power(x, n))
+     | Power (Power (x, a), b) -> simplify(Power(x, (a * b)))
+     | Power (x,n) -> Power(simplify x, simplify n) 
      | Function(Atan, Number n) when n = 1N -> pi/4 
      | Function(Atan, Number n) when n = 0N -> 0Q 
      | Function(f, x) -> Function(f, (simplify x)) 
@@ -229,6 +236,5 @@ module Vars =
   let y1 = symbol "y₁"
   let y2 = symbol "y₂"
 
-  let phi = symbol "φ"  
-  let pi = symbol "π"
-  let π = symbol "π"
+  let phi = symbol "φ"   
+  let π = pi

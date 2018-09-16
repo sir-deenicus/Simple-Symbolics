@@ -253,14 +253,13 @@ module Units =
 
 let rec containsVar x = function
    | Identifier _ as sy when sy = x -> true
-   | Power(Identifier (Symbol _) as sy, _) when sy = x -> true
-   | Function(_, (Identifier (Symbol _ ) as sy)) when sy = x -> true
+   | Power(Identifier (Symbol _) as sy, _) when sy = x -> true  
+   | Power(Sum     l, _)  -> List.exists (containsVar x) l
+   | Power(Product l, _)  -> List.exists (containsVar x) l  
    | Power(Function(_, (Identifier (Symbol _) as sy)), _) when sy = x -> true   
-   | Power(Identifier (Symbol _ ) as sy, _) when sy = x -> true
-   | Power(Sum l, _)  -> List.exists (containsVar x) l
-   | Power(Product l, _)  -> List.exists (containsVar x) l
+   |       Function(_, (Identifier (Symbol _) as sy))     when sy = x -> true
    | Product l -> List.exists (containsVar x) l
-   | Sum l -> List.exists (containsVar x) l
+   | Sum     l -> List.exists (containsVar x) l
    | _ -> false
 
 

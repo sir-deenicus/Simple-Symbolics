@@ -88,7 +88,11 @@ let p1' = x ** 3 - 4 * x ** 2 - 7 * x
 let p2 = x ** 3 + 6 * x ** 2 + 5 * x - 12
 
 let p3 = x ** 5 - 4*x**4 - 7 * x**3 + 14 * x **2 - 44 * x + 120
+
+let p4 = x ** 3 + x - 1
  
+let p5 = 3 * x ** 3 - 5 * x ** 2 + 5 * x - 2
+
 let quadraticSolve p = 
     if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
        let coeffs = Polynomial.coefficients x p
@@ -96,8 +100,6 @@ let quadraticSolve p =
        (-b + sqrt(b**2 - 4 * a * c)) / (2 * a), (-b - sqrt(b **2 - 4 * a * c)) / (2 * a)
     else failwith "Not quadratic"
  
-factors id id 6
-
 let ac,bc = quadraticSolve (x**2 + 53 * x + 12)
 
 pairmap (Rational.reduce >> Infix.format) (ac,bc) 
@@ -126,11 +128,28 @@ let rec tryFactorizePolynomial x fx =
                       yield (f, Polynomial.divide x fx (x - f) |> fst) ] 
       let sols, eq = List.map (tryFactorizePolynomial x) s |> List.unzip
       r @ List.concat sols |> HashSet |> Seq.toList, s @ List.concat eq |> HashSet |> Seq.toList
-   
-let res = tryFactorizePolynomial x p3
-
+  
+ 
+let res = tryFactorizePolynomial x p5
+let mm = Polynomial.divide x p5 3Q |> fst 
+//|> pairmap Infix.format
 res |> pairmap (List.map Infix.format)
 res |> snd |> List.filter (Polynomial.degree x >> ((=) 2Q)) |> List.map (quadraticSolve >> pairmap (Algebraic.simplify true >> Rational.simplify x >> Infix.format))
 
+Structure.substitute 1Q x p5  
 
+let rec replaceSymbol r x = function
+   | Identifier _ as sy when sy = x -> r
+   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
+   | Power(Sum l, n)      -> Power(Sum     (List.map (replaceSymbol r x) l), n)
+   | Power(Product l, n)  -> Power(Product (List.map (replaceSymbol r x) l), n)
+   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
+   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
+   | Product l -> Product (List.map (replaceSymbol r x) l)
+   | Sum     l -> Sum     (List.map (replaceSymbol r x) l)
+   | x -> x
 
+Structure.map (function | Identifier (Symbol "x") -> printfn "eg"; 1Q | x -> x) p5
+replaceSymbol (2Q/3Q) x p5 |> Rational.simplify x |> Infix.format
+p5.ToFormattedString()
+ 

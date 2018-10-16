@@ -138,17 +138,6 @@ res |> snd |> List.filter (Polynomial.degree x >> ((=) 2Q)) |> List.map (quadrat
 
 Structure.substitute 1Q x p5  
 
-let rec replaceSymbol r x = function
-   | Identifier _ as sy when sy = x -> r
-   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
-   | Power(Sum l, n)      -> Power(Sum     (List.map (replaceSymbol r x) l), n)
-   | Power(Product l, n)  -> Power(Product (List.map (replaceSymbol r x) l), n)
-   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
-   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
-   | Product l -> Product (List.map (replaceSymbol r x) l)
-   | Sum     l -> Sum     (List.map (replaceSymbol r x) l)
-   | x -> x
-
 Structure.map (function | Identifier (Symbol "x") -> printfn "eg"; 1Q | x -> x) p5
 replaceSymbol (2Q/3Q) x p5 |> Rational.simplify x |> Infix.format
 p5.ToFormattedString()

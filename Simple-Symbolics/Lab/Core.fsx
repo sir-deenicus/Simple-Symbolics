@@ -64,6 +64,7 @@ let inline primefactors factor x =
             let r = x / tf
             let f1, f2 = loop r, loop tf
             f1 @ f2
+        | _ -> failwith "unexpected error"
     loop x    
 
 let groupPowers pl =
@@ -238,7 +239,9 @@ module Units =
   let giga = 1_000_000_000Q
   let tera = 1_000_000_000_000Q
   let minute = 60Q * sec |> setAlt "minute"
-  let hr = 60Q * minute  |> setAlt "hr" 
+  let hr = 60Q * minute  |> setAlt "hr"
+
+  let days = 24Q * hr  |> setAlt "days" 
    
   let differentiate (dy:Units) (dx:Units) =
       Units(Calculus.differentiate dy.Quantity dx.Quantity, dx.Unit/dy.Unit, dx.AltUnit+"/"+dy.AltUnit)
@@ -262,6 +265,33 @@ let rec containsVar x = function
    | Sum     l -> List.exists (containsVar x) l
    | _ -> false
 
+let rec replaceSymbol r x = function
+   | Identifier _ as sy when sy = x -> r
+   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
+   | Power(Sum l, n)      -> Power(Sum     (List.map (replaceSymbol r x) l), n)
+   | Power(Product l, n)  -> Power(Product (List.map (replaceSymbol r x) l), n)
+   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
+   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
+   | Product l -> Product (List.map (replaceSymbol r x) l)
+   | Sum     l -> Sum     (List.map (replaceSymbol r x) l)
+   | x -> x
+
+let rec size = function
+   | Identifier _ -> 1
+   | Power(x, n) -> size x + 1 + size n 
+   | Product l -> List.sumBy size l 
+   | Sum     l -> List.sumBy size l
+   | Function (_, x) -> size x + 1  
+   | Approximation _
+   | Number _ -> 1 
+   | _ -> failwith "unimplemented compute size"
+   
+let replaceInProductWithShrinkHeuristic replacement test (e:Expression) = 
+     let e' = e / test
+     if size e' < size e then e' * replacement else e
+
+let replaceProductInSumWithShrinkHeuristic replacement test (e:Expression) = 
+     Algebraic.summands e |> List.map (replaceInProductWithShrinkHeuristic replacement test) |> Sum
 
 module Vars = 
   let a = symbol "a"

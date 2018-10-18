@@ -6,55 +6,95 @@ open Vars
 open MathNet.Numerics
 open MathNet.Symbolics
 
-type ExprType = IsSum | IsProduct | IsOther | Zero
+type ExprType = IsSum | IsProduct | NonOp
 
 let inverse f (e:Expression) =  
     match (e,f) with 
     | x ,IsSum -> -x
     | x, IsProduct -> 1 / x 
-    
-let rec rinverseAndPartitionVar s = function 
-    | Sum l as pl -> 
-        let matches,fails = List.partition (containsVar s) l
-        printfn "m,f: %A" (matches,fails)
-        let fl = List.map (inverse IsSum) fails
-        printfn "fl: %A" fl
-                     
-        let m, mf = rinverseAndPartitionVar s matches.Head
-        printfn "%A" m
-        printfn "mf: %A" mf
-                     
-        match mf with 
-            None -> m, Some (IsSum, Sum fl) 
-          | Some (t,x) -> 
-            printfn "x: %A" x
-            printfn "+++++++++"
-            let op = match t with IsSum -> (+) | IsProduct -> (*) |  _ -> (+) 
-            m, Some(IsSum, op x (Sum fl))
-              
-    | Product l as pl ->       
-      let matches,fails = List.partition (containsVar s) l
-      printfn "m,f: %A" (matches,fails)
-      let fl = List.map (inverse IsProduct) fails
-      printfn "%A" fl
-                         
-      let m, mf = rinverseAndPartitionVar s matches.Head
-      printfn "%A" m
-      printfn "%A" mf
-      printfn "**" 
-                         
-      match mf with 
-          None -> m, Some (IsProduct,Product fl) 
-        | Some (t,x) -> 
-          let op = match t with IsSum -> (+) | IsProduct -> (*) |  _ -> (+) 
-          m, Some(IsProduct, op x (Product fl))
-    | x -> if containsVar s x then Some x, None else None,Some (Zero, x)
+    | _ -> failwith "error"
 
+let rec matchGroupAndInverse sumOrProduct isSumOrProduct s l =     
+    let matches,fails = List.partition (containsVar s) l
+    printfn "matches: %A\nfails: %A" matches fails
+    let inverteds = List.map (inverse isSumOrProduct) fails
+    printfn "Inverteds: %A" inverteds
+                 
+    let m, matchfails = rinverseAndPartitionVar s matches.Head
+    printfn "Recursive Matched: %A" m
+    printfn "Recursive Failed: %A" matchfails
+                 
+    match matchfails with 
+        None -> m, Some (isSumOrProduct, sumOrProduct inverteds) 
+      | Some (t,x) -> 
+        printfn "x: %A" x
+        printfn "+++++++++"
+        let op = match t with IsSum -> (+) | IsProduct -> (*) |  _ -> (+) 
+        m, Some(isSumOrProduct, op x (sumOrProduct inverteds))
+
+and rinverseAndPartitionVar s = function 
+    | Sum l -> matchGroupAndInverse Sum IsSum s l 
+    | Product l -> matchGroupAndInverse Product IsProduct s l
+    | f -> if containsVar s f then Some f, None else None,Some (NonOp, f)
+
+let reduce s (l,r) = 
+    let rec iter fx ops = 
+        match fx with    
+        | f when f = s -> ops
+        | Power(f, Number n) when n > 0N -> printfn "raise to power"; iter f ((fun (x:Expression) -> x **(-1/Number n))::ops)
+        | Power(f, Number n) when n < 0N -> printfn "raise to power"; iter f ((fun (x:Expression) -> x ** (1/Number n))::ops)
+        | Sum []
+        | Product []
+        | Sum [_]
+        | Product [_] -> ops
+        | Product l -> printfn "divide"; 
+                       let matched, novar = List.partition (containsVar s) l 
+                       iter (Product matched) ((*) ((1/(Product novar)))::ops)
+        | Sum l -> 
+            printfn "subtract"; 
+            let matched, novar = List.partition (containsVar s) l 
+            iter (Sum matched) ((+) ((-(Product novar)))::ops)
+        | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
+        | Function(Exp, x)  -> printfn "log"; iter x (log::ops)
+        | _ -> failwith "err"
+    iter l [] |> List.rev |> List.fold (fun e f -> f e) r
+
+let fullinverse s (l,r) = 
+    let rec iter fx ops = 
+        match fx with    
+        | f when f = s -> ops
+        | Power(f, Number n) when n > 0N -> 
+            printfn "raise to power"; 
+            iter f ((fun (x:Expression) -> x **(-1/Number n))::ops)
+        | Power(f, Number n) when n < 0N -> printfn "raise to power"; iter f ((fun (x:Expression) -> x ** (1/Number n))::ops)
+        | Sum []
+        | Product []
+        | Sum [_]
+        | Product [_] -> ops
+        | Product l -> printfn "divide";  
+                       let matched, novar = List.partition (containsVar s) l 
+                       let ops' = ((*) ((1/(Product novar))))::ops
+                       match matched with
+                       | [] -> ops'
+                       | [h] | h::_ -> iter h ops'
+        | Sum l -> 
+            printfn "subtract"; 
+            let matched, novar = List.partition (containsVar s) l
+            let ops' = ((+) (-(Sum novar)))::ops
+            match matched with
+             | [] -> ops'
+             | [h] |  h::_ -> iter h ops' 
+        | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
+        | Function(Exp, x)  -> printfn "log"; iter x (log::ops)
+        | _ -> failwith "err"
+    s,iter l [] |> List.rev |> List.fold (fun e f -> f e) r   
 let simp = (a+b) + x / (r+y)
 let eqx,eqy = rinverseAndPartitionVar y (simp)
 
 eqy.Value |> snd |> Infix.format
 eqx.Value |> Infix.format
+
+reduce y (eqx.Value, eqy.Value |> snd) 
 
 containsVar y simp 
 
@@ -75,7 +115,7 @@ Evaluate.evaluate symbols eq2
 
 Infix.format eq2
 
-let eqt,eqt2 = rinverseAndPartitionVar t pn
+let eqt,eqt2 = rinverseAndPartitionVar a eq3
 
 eqt2.Value |> snd |> Infix.format
 eqt.Value |> Infix.format

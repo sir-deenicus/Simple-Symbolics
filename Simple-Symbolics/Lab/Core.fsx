@@ -285,6 +285,8 @@ let rec size = function
    | Approximation _
    | Number _ -> 1 
    | _ -> failwith "unimplemented compute size"
+
+let symbolString = function Identifier (Symbol s) -> s | _ -> ""
    
 let replaceInProductWithShrinkHeuristic replacement test (e:Expression) = 
      let e' = e / test

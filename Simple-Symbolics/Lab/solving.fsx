@@ -31,33 +31,10 @@ let rec matchGroupAndInverse sumOrProduct isSumOrProduct s l =
         printfn "+++++++++"
         let op = match t with IsSum -> (+) | IsProduct -> (*) |  _ -> (+) 
         m, Some(isSumOrProduct, op x (sumOrProduct inverteds))
-
 and rinverseAndPartitionVar s = function 
     | Sum l -> matchGroupAndInverse Sum IsSum s l 
     | Product l -> matchGroupAndInverse Product IsProduct s l
-    | f -> if containsVar s f then Some f, None else None,Some (NonOp, f)
-
-let reduce s (l,r) = 
-    let rec iter fx ops = 
-        match fx with    
-        | f when f = s -> ops
-        | Power(f, Number n) when n > 0N -> printfn "raise to power"; iter f ((fun (x:Expression) -> x **(-1/Number n))::ops)
-        | Power(f, Number n) when n < 0N -> printfn "raise to power"; iter f ((fun (x:Expression) -> x ** (1/Number n))::ops)
-        | Sum []
-        | Product []
-        | Sum [_]
-        | Product [_] -> ops
-        | Product l -> printfn "divide"; 
-                       let matched, novar = List.partition (containsVar s) l 
-                       iter (Product matched) ((*) ((1/(Product novar)))::ops)
-        | Sum l -> 
-            printfn "subtract"; 
-            let matched, novar = List.partition (containsVar s) l 
-            iter (Sum matched) ((+) ((-(Product novar)))::ops)
-        | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
-        | Function(Exp, x)  -> printfn "log"; iter x (log::ops)
-        | _ -> failwith "err"
-    iter l [] |> List.rev |> List.fold (fun e f -> f e) r
+    | f -> if containsVar s f then Some f, None else None,Some (NonOp, f) 
 
 let fullinverse s (l,r) = 
     let rec iter fx ops = 
@@ -85,6 +62,7 @@ let fullinverse s (l,r) =
              | [] -> ops'
              | [h] |  h::_ -> iter h ops' 
         | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
+        | Function(Cos, x) -> printfn "acos"; iter x ((fun x -> Function(Acos, x))::ops)
         | Function(Exp, x)  -> printfn "log"; iter x (log::ops)
         | _ -> failwith "err"
     s,iter l [] |> List.rev |> List.fold (fun e f -> f e) r   
@@ -93,8 +71,8 @@ let eqx,eqy = rinverseAndPartitionVar y (simp)
 
 eqy.Value |> snd |> Infix.format
 eqx.Value |> Infix.format
-
-reduce y (eqx.Value, eqy.Value |> snd) 
+ 
+Function(Acos, x) |> Infix.format
 
 containsVar y simp 
 

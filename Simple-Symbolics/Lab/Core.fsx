@@ -99,6 +99,8 @@ let simplifySquareRoot (num:Expression) =
 open Operators 
 let ln = MathNet.Symbolics.Operators.ln
 
+let symbol = symbol
+
 module Algebraic = 
   let simplify simplifysqrt fx =
       let rec simplifyLoop = function               
@@ -257,54 +259,45 @@ module Units =
 
 
 let rec containsVar x = function
-   | Identifier _ as sy when sy = x -> true
-   | Power(Identifier (Symbol _) as sy, _) when sy = x -> true  
-   | Power(Sum     l, _)  -> List.exists (containsVar x) l
-   | Power(Product l, _)  -> List.exists (containsVar x) l  
-   | Power(Function(_, (Identifier (Symbol _) as sy)), _) when sy = x -> true   
-   |       Function(_, (Identifier (Symbol _) as sy))     when sy = x -> true
-   | Product l -> List.exists (containsVar x) l
+   | Identifier _ as sy when sy = x -> true  
+   | Power(p, n)  -> containsVar x n || containsVar x p   
+   | Function(_,fx) -> containsVar x fx  
+   | Product l  
    | Sum     l -> List.exists (containsVar x) l
    | _ -> false
 
 let rec replaceSymbol r x = function
-   | Identifier _ as sy when sy = x -> r
-   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
-   | Power(Sum l, n)      -> Power(Sum     (List.map (replaceSymbol r x) l), n)
-   | Power(Product l, n)  -> Power(Product (List.map (replaceSymbol r x) l), n)
-   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
-   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
+   | Identifier _ as var when var = x -> r  
+   | Power(f, n) -> Power(replaceSymbol r x f, replaceSymbol r x n)   
+   | Function(fn, f) -> Function(fn, replaceSymbol r x f)
    | Product l -> Product (List.map (replaceSymbol r x) l)
    | Sum     l -> Sum     (List.map (replaceSymbol r x) l)
    | x -> x
 
 let expressionToList = function 
-     | Sum l
-     | Product l -> l
-     | x -> [x]
-let letTryReplace r (xhs: Hashset<_>) (l:_ list) =
-        let hs = Hashset l
-        if xhs.IsSubsetOf hs then 
-           hs.SymmetricExceptWith xhs 
-           r::List.ofSeq hs
-        else l
-let replaceSymbolFull r x formula = 
-   let xhs = Hashset(expressionToList x)    
-   let rec iter = function
-   | Identifier _ as sy when sy = x -> r
-   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
-   | Power(Sum l, n)      -> Power(Sum     (List.map iter (letTryReplace r xhs l)), n)
-   | Power(Product l, n)  -> Power(Product (List.map iter (letTryReplace r xhs l)), n)
-   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
-   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
-   | Product l ->  Product (List.map iter (letTryReplace r xhs l))
-   | Sum     l ->  Sum     (List.map iter (letTryReplace r xhs l))
+     | Sum l | Product l -> l | x -> [x]
+let letTryReplaceCompoundExpression replacement (expressionToFindContentSet: Hashset<_>) (expressionList:_ list) =
+    let expressionListSet = Hashset expressionList
+    if expressionToFindContentSet.IsSubsetOf expressionListSet then 
+       expressionListSet.SymmetricExceptWith expressionToFindContentSet 
+       replacement::List.ofSeq expressionListSet
+    else expressionList 
+
+let replaceExpression replacement expressionToFind formula = 
+   let expressionToFindContentSet = Hashset(expressionToList expressionToFind)    
+   let rec iterReplaceIn = function
+   | Identifier _ as var when var = expressionToFind -> replacement
+   | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)    
+   | Function(f, fx)  -> Function(f, iterReplaceIn fx) 
+   | Product l ->  Product (List.map iterReplaceIn (letTryReplaceCompoundExpression replacement expressionToFindContentSet l))
+   | Sum     l ->  Sum     (List.map iterReplaceIn (letTryReplaceCompoundExpression replacement expressionToFindContentSet l))
    | x -> x
-   iter formula |> Algebraic.simplify true
+   iterReplaceIn formula |> Algebraic.simplify true
+
 let rec size = function
    | Identifier _ -> 1
    | Power(x, n) -> size x + 1 + size n 
-   | Product l -> List.sumBy size l 
+   | Product l 
    | Sum     l -> List.sumBy size l
    | Function (_, x) -> size x + 1  
    | Approximation _
@@ -312,13 +305,6 @@ let rec size = function
    | _ -> failwith "unimplemented compute size"
 
 let symbolString = function Identifier (Symbol s) -> s | _ -> ""
-   
-let replaceInProductWithShrinkHeuristic replacement test (e:Expression) = 
-     let e' = e / test
-     if size e' < size e then e' * replacement else e
-
-let replaceProductInSumWithShrinkHeuristic replacement test (e:Expression) = 
-     Algebraic.summands e |> List.map (replaceInProductWithShrinkHeuristic replacement test) |> Sum
 
 let reArrangeEquation s (l,r) = 
     let rec iter fx ops = 

@@ -76,35 +76,7 @@ let symbols = (Map["r", FloatingPoint.Real 1.;
                    "a", FloatingPoint.Complex (complex 2. 3.);
                    "b", FloatingPoint.Real 2.])
 
-///////////////
-type Hashset<'a> = System.Collections.Generic.HashSet<'a> 
-let expressionToList = function 
-     | Sum l
-     | Product l -> l
-     | x -> [x]
-let letTryReplace r (xhs: Hashset<_>) (l:_ list) =
-        let hs = Hashset l
-        if xhs.IsSubsetOf hs then 
-           hs.SymmetricExceptWith xhs 
-           r::List.ofSeq hs
-        else l
-let replaceSymbolFull r x formula = 
-   let xhs = Hashset(expressionToList r)    
-   let rec iter = function
-   | Identifier _ as sy when sy = x -> r
-   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
-   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
-   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
-   | Power(Sum l, n)      -> Power(Sum     (List.map iter (letTryReplace r xhs l)), n)
-   | Power(Product l, n)  -> Power(Product (List.map iter (letTryReplace r xhs l)), n)
-   | Power(Function(f, Sum l), n) -> Power(Function(f, Sum (List.map iter (letTryReplace r xhs l))),n)
-   | Power(Function(f, Product l), n) -> Power(Function(f, Product (List.map iter (letTryReplace r xhs l))),n)
-   |       Function(f, Product l)  ->          Function(f, Product (List.map iter (letTryReplace r xhs l)))
-   |       Function(f, Sum l)  ->              Function(f, Sum (List.map iter (letTryReplace r xhs l))) 
-   | Product l ->  Product (List.map iter (letTryReplace r xhs l))
-   | Sum     l ->  Sum     (List.map iter (letTryReplace r xhs l))
-   | x -> x
-   iter formula |> Algebraic.simplify true
+/////////////// 
 
 log 1. - log 2. - log 3.
 log (1./2./3.)
@@ -145,7 +117,7 @@ zz |>  Algebraic.expand
 
 
 (2 * pi * sigma2 ** 2)
-(1/2Q * ln(2 * pi * sigma2 ** 2) + -1/2Q * (1 + ln(2 * pi * sigma1 ** 2)) ) |> replaceSymbolFull (2 * pi * sigma2 ** 2) x
+(1/2Q * ln(2 * pi * sigma2 ** 2) + -1/2Q * (1 + ln(2 * pi * sigma1 ** 2)) ) |> replaceSymbolFull x (2 * pi * sigma2 ** 2) 
 (1/2Q * ln(2 * pi * sigma2 ** 2) + -1/2Q * (1 + ln(2 * pi * sigma1 ** 2)) ) |> containsVar sigma2
 
 replaceSymbolFull x (b * c) (b * c * 2 * sqrt(3 * b * c + 4))

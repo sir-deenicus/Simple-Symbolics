@@ -9,6 +9,7 @@
 open MathNet.Symbolics 
 open MathNet.Numerics
 open System
+type Hashset<'a> = System.Collections.Generic.HashSet<'a> 
 
 let flip f a b = f b a
 
@@ -96,7 +97,8 @@ let simplifySquareRoot (num:Expression) =
     List.fold (*) 1Q outr * sqrt(List.fold (*) (if isneg then -1Q else 1Q) inr)
 
 open Operators 
- 
+let ln = MathNet.Symbolics.Operators.ln
+
 module Algebraic = 
   let simplify simplifysqrt fx =
       let rec simplifyLoop = function               
@@ -276,6 +278,29 @@ let rec replaceSymbol r x = function
    | Sum     l -> Sum     (List.map (replaceSymbol r x) l)
    | x -> x
 
+let expressionToList = function 
+     | Sum l
+     | Product l -> l
+     | x -> [x]
+let letTryReplace r (xhs: Hashset<_>) (l:_ list) =
+        let hs = Hashset l
+        if xhs.IsSubsetOf hs then 
+           hs.SymmetricExceptWith xhs 
+           r::List.ofSeq hs
+        else l
+let replaceSymbolFull r x formula = 
+   let xhs = Hashset(expressionToList x)    
+   let rec iter = function
+   | Identifier _ as sy when sy = x -> r
+   | Power(Identifier (Symbol _) as sy, n) when sy = x -> Power(r, n)   
+   | Power(Sum l, n)      -> Power(Sum     (List.map iter (letTryReplace r xhs l)), n)
+   | Power(Product l, n)  -> Power(Product (List.map iter (letTryReplace r xhs l)), n)
+   | Power(Function(f, (Identifier (Symbol _) as sy)), n) when sy = x -> Power(Function(f, r), n)
+   |       Function(f, (Identifier (Symbol _ ) as sy))    when sy = x -> Function(f, r)
+   | Product l ->  Product (List.map iter (letTryReplace r xhs l))
+   | Sum     l ->  Sum     (List.map iter (letTryReplace r xhs l))
+   | x -> x
+   iter formula |> Algebraic.simplify true
 let rec size = function
    | Identifier _ -> 1
    | Power(x, n) -> size x + 1 + size n 
@@ -294,6 +319,38 @@ let replaceInProductWithShrinkHeuristic replacement test (e:Expression) =
 
 let replaceProductInSumWithShrinkHeuristic replacement test (e:Expression) = 
      Algebraic.summands e |> List.map (replaceInProductWithShrinkHeuristic replacement test) |> Sum
+
+let reArrangeEquation s (l,r) = 
+    let rec iter fx ops = 
+        match fx with    
+        | f when f = s -> f, ops
+        | Power(f, p) -> 
+            printfn "raise to power"; 
+            iter f ((fun (x:Expression) -> x**(1/p))::ops) 
+        | Sum []     | Sum [_]
+        | Product [] | Product [_] -> fx, ops
+        | Product l -> 
+           printfn "divide";  
+           let matched, novar = List.partition (containsVar s) l 
+           let ops' = match novar with [] -> ops | _ -> (fun x -> x/(Product novar))::ops
+           match matched with
+           | [] -> fx, ops'
+           | [h] -> iter h ops'
+           | hs -> Product hs, ops'
+        | Sum l -> 
+            printfn "subtract"; 
+            let matched, novar = List.partition (containsVar s) l
+            let ops' = match novar with [] -> ops | _ -> (fun x -> x - (Sum novar))::ops
+            match matched with
+             | [] -> fx, ops'
+             | [h] -> iter h ops'
+             | hs -> Sum hs, ops'
+        | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
+        | Function(Cos, x) -> printfn "acos"; iter x ((fun x -> Function(Acos, x))::ops)
+        | Function(Exp, x) -> printfn "log"; iter x (ln::ops)
+        | _ -> failwith "err"
+    let f, ops = iter l [] 
+    f, ops |> List.rev |> List.fold (fun e f -> f e) r       
 
 module Vars = 
   let a = symbol "a"
@@ -324,3 +381,4 @@ module Vars =
 
   let phi = symbol "φ"   
   let π = pi
+  let pi = pi

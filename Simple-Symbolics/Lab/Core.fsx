@@ -13,6 +13,8 @@ type Hashset<'a> = System.Collections.Generic.HashSet<'a>
 
 let flip f a b = f b a
 
+let fst3 (a,_,_) = a
+
 let pairmap f (x,y) = f x , f y
 
 let standardSymbols = Map []
@@ -54,8 +56,15 @@ let inline factors toint f x =
        if x' % n = 0 then yield f n; if m <> n then yield f m]
     |> List.sortByDescending toint
 
-let factorsExpr = factors (fun (i:Expression) -> i.ToInt()) (Expression.FromInt32)
-
+let factorsExpr = abs >> factors (fun (i:Expression) -> i.ToInt()) (Expression.FromInt32)
+ 
+let productToConstantsAndVars = function 
+     | Number _ as n -> Some (n, [])
+     | Product p -> 
+          let nums, vars = List.partition (function | Number _ -> true | _ -> false) p 
+          Some(List.fold (*) 1Q nums, vars)
+     | _ -> None
+ 
 let inline primefactors factor x =
     let rec loop x =
         match factor x with
@@ -68,34 +77,40 @@ let inline primefactors factor x =
         | _ -> failwith "unexpected error"
     loop x    
 
-let groupPowers pl =
+let primefactorsPartial x = 
+    match productToConstantsAndVars x with
+    | Some (ns, vs) -> 
+      Some(vs @ primefactors factorsExpr (abs ns), ns)
+    | None -> None
+
+let groupPowers singletonLift pl =
        List.groupBy id pl 
     |> List.map (fun (x, l) -> 
-        if l.Length = 1 then x         
+        if l.Length = 1 then singletonLift x         
         else Power(x , Expression.FromInt32 (List.length l)) )  
+ 
+let primeFactorsExpr = abs >> primefactors factorsExpr >> groupPowers (fun x -> Sum[x]) >> Product
+let primeFactorsPartialExpr = primefactorsPartial >> Option.map (fst >> groupPowers (fun x -> Sum[x]) >> Product)
 
-let primeFactorsExpr = primefactors factorsExpr >> groupPowers >> Product
-
-let simplifySquareRoot (num:Expression) =
-    let n = abs num
+let simplifySquareRoot (expr:Expression) = 
     let sqRootGrouping = 
         function 
         | (Power(x, Number n)) when n > 1N -> 
             if (int n % 2 = 0) then x ** (Expression.FromRational (n/2N)), 1Q
             elif n = 3N then x, x
             else x, Power(x, Number (n - 2N)) 
-        | x -> 1Q, x  
-
-    let outr, inr =        
-        primefactors factorsExpr n 
-        |> groupPowers
-        |> List.map sqRootGrouping 
-        |> List.unzip
-
-    
-    let isneg = num.ToInt() < 0
-    List.fold (*) 1Q outr * sqrt(List.fold (*) (if isneg then -1Q else 1Q) inr)
-
+        | x -> 1Q, x   
+    match primefactorsPartial expr with
+     | None -> None
+     | Some (pfl, n) ->
+        let n, (outr, inr) = 
+            n, pfl
+            |> groupPowers id
+            |> List.map sqRootGrouping 
+            |> List.unzip 
+        let isneg = n.ToInt() < 0
+        Some(List.fold (*) 1Q outr * sqrt(List.fold (*) (if isneg then -1Q else 1Q) inr))
+   
 open Operators 
 let ln = MathNet.Symbolics.Operators.ln
 
@@ -109,7 +124,10 @@ module Algebraic =
          | Power (Product[x], n) 
          | Power (Sum[x], n) -> simplifyLoop (Power(x, n))
          | Power (Power (x, a), b) -> simplifyLoop(Power(x, (a * b)))
-         | Power (Number _ as x,n) when n = 1Q/2Q && simplifysqrt -> simplifySquareRoot x
+         | Power (x,n) when n = 1Q/2Q && simplifysqrt -> 
+             match simplifySquareRoot x with
+             | Some x' -> x'  
+             | None -> Power(simplifyLoop x, n)
          | Power (x,n) -> Power(simplifyLoop x, simplifyLoop n) 
          | Function(Atan, Number n) when n = 1N -> pi/4 
          | Function(Atan, Number n) when n = 0N -> 0Q 
@@ -119,7 +137,7 @@ module Algebraic =
          | Product l -> Product (List.map simplifyLoop l)
          | Sum l -> Sum (List.map simplifyLoop l)
          | x -> x
-      simplifyLoop fx
+      simplifyLoop fx |> Rational.reduce
       
 type Complex(r:Expression,i:Expression) =  
   member __.Real = r
@@ -294,6 +312,14 @@ let replaceExpression replacement expressionToFind formula =
    | x -> x
    iterReplaceIn formula |> Algebraic.simplify true
 
+let rec findVariablesOfExpression = function 
+   | Identifier _ as var -> [var]
+   | Power(x, n) -> findVariablesOfExpression x @ findVariablesOfExpression n
+   | Product l 
+   | Sum     l -> List.collect findVariablesOfExpression l
+   | Function (_, x) -> findVariablesOfExpression x   
+   | _ -> []
+   
 let rec size = function
    | Identifier _ -> 1
    | Power(x, n) -> size x + 1 + size n 
@@ -306,37 +332,8 @@ let rec size = function
 
 let symbolString = function Identifier (Symbol s) -> s | _ -> ""
 
-let reArrangeEquation s (l,r) = 
-    let rec iter fx ops = 
-        match fx with    
-        | f when f = s -> f, ops
-        | Power(f, p) -> 
-            printfn "raise to power"; 
-            iter f ((fun (x:Expression) -> x**(1/p))::ops) 
-        | Sum []     | Sum [_]
-        | Product [] | Product [_] -> fx, ops
-        | Product l -> 
-           printfn "divide";  
-           let matched, novar = List.partition (containsVar s) l 
-           let ops' = match novar with [] -> ops | _ -> (fun x -> x/(Product novar))::ops
-           match matched with
-           | [] -> fx, ops'
-           | [h] -> iter h ops'
-           | hs -> Product hs, ops'
-        | Sum l -> 
-            printfn "subtract"; 
-            let matched, novar = List.partition (containsVar s) l
-            let ops' = match novar with [] -> ops | _ -> (fun x -> x - (Sum novar))::ops
-            match matched with
-             | [] -> fx, ops'
-             | [h] -> iter h ops'
-             | hs -> Sum hs, ops'
-        | Function(Ln, x) -> printfn "exponentiate"; iter x (exp::ops)
-        | Function(Cos, x) -> printfn "acos"; iter x ((fun x -> Function(Acos, x))::ops)
-        | Function(Exp, x) -> printfn "log"; iter x (ln::ops)
-        | _ -> failwith "err"
-    let f, ops = iter l [] 
-    f, ops |> List.rev |> List.fold (fun e f -> f e) r       
+type Equation (leq:Expression, req:Expression) = 
+     override __.ToString () = leq.ToFormattedString() + " = " + req.ToFormattedString()
 
 module Vars = 
   let a = symbol "a"

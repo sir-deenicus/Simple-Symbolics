@@ -36,11 +36,18 @@ let extractLinearComponent x ex =
 
 let linearSquared combinator = combinator (function | Power(e, n) when n = 2Q && isLinear x e -> true | _ -> false)  
 
+type IntegrationResult =
+      | Suceeded of Expression
+      | Partial of Success:Expression * Defer:Expression
+      | Deferred of Expression
+
+let justSuccess = function | Suceeded e -> e | _ -> failwith "could not extract"
+      
 let integrateSimplePartial x f =  
     let rec iter = function 
-    | Number _ as n -> Some(n * x), None 
-    | Identifier (Symbol _) as vx -> if vx = x then Some(vx ** 2/2), None else Some(vx * x), None
-    | f when f = 1/(1 + x ** 2) -> Some(arctan x), None
+    | Number _ as n -> Suceeded(n * x) 
+    | Identifier (Symbol _) as vx -> if vx = x then Suceeded(vx ** 2/2)  else Suceeded(vx * x) 
+    | f when f = 1/(1 + x ** 2) -> Suceeded(arctan x) 
     | Power(Sum l, neg1) as f when neg1 = -1Q && linearSquared List.exists l -> 
         let ex, l' = linearSquared List.partition l
         let n = Sum l'
@@ -48,59 +55,53 @@ let integrateSimplePartial x f =
         | [Power(e, _)] ->
             let m, _ = extractLinearComponent x e
             let fx = arctan (e / (sqrt n)) / (m * sqrt n) |> Algebraic.simplify true
-            Some fx, None
-        |_ -> None, Some f
-    | f when f = 1/(sqrt (1 - x ** 2)) -> Some (arcsin x), None
-    | Power(e, n) as p when not (containsVar x e) && not(containsVar x n) ->  Some(p * x), None
+            Suceeded fx 
+        |_ -> Deferred f
+    | f when f = 1/(sqrt (1 - x ** 2)) -> Suceeded(arcsin x)
+    | Power(e, n) as p when not (containsVar x e) && not(containsVar x n) ->  Suceeded(p * x)
     | Power(e, n) as p when not (containsVar x e) && (containsVar x n) && isLinear x n ->  
-           Some(p / (fst (extractLinearComponent x n)  * ln(e))), None
-    | Power(e, n) as f when not (containsVar x e) && (containsVar x n) -> printfn "Power nolinear in x, fail" ; None , Some f
-    | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e -> Some(Function(Ln , e)/fst (extractLinearComponent x e)) , None
-    | Power (Identifier _ as y, n) when x = y && n <> -1Q -> Some((x ** (n + 1)) / (n + 1)), None
+           Suceeded(p / (fst (extractLinearComponent x n)  * ln(e)))
+    | Power(e, n) as f when not (containsVar x e) && (containsVar x n) -> printfn "Power nolinear in x, fail" ; Deferred f
+    | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e -> Suceeded(Function(Ln , e)/fst (extractLinearComponent x e)) 
+    | Power (Identifier _ as y, n) when x = y && n <> -1Q -> Suceeded((x ** (n + 1)) / (n + 1))
     | poly when Polynomial.isMonomial x poly ->
         let k, mono = Algebraic.separateFactors x poly
         match (iter mono) with
-         | Some good, None -> Some(k * good) , None
-         | _ -> failwith "unexpected state in integrate monomial"
-         
+         | Suceeded fx  -> Suceeded(k * fx) 
+         | _ -> failwith "unexpected state in integrate monomial"         
     | Power(Sum _ as e, n) when isLinear x e && n <> -1Q -> 
         let t, e' = extractLinearComponent x e
-        Some(integratePolynomExpr t n e'), None
+        Suceeded(integratePolynomExpr t n e')
     | Power(e, n) as poly when Polynomial.isPolynomial x e && n <> -1Q -> 
-        Some
+        Suceeded
          (poly |> Algebraic.expand  
                |> Algebraic.summands 
-               |> List.map (iter >> fst >> Option.get)
-               |> Sum), None
-    | Function(f, (Identifier (Symbol _) as y)) when x <> y -> Some(x * Function(f, y)), None
-    | Function(f, (Number _ as n)) -> Some(x * Function(f, n)), None
-    | Function(_, (Identifier (Symbol _))) as f -> Some (intFuncStraight f), None
+               |> List.map (iter >> justSuccess)
+               |> Sum)
+    | Function(f, (Identifier (Symbol _) as y)) when x <> y -> Suceeded(x * Function(f, y))
+    | Function(f, (Number _ as n)) -> Suceeded(x * Function(f, n))
+    | Function(_, (Identifier (Symbol _))) as f -> Suceeded (intFuncStraight f)
     | Function(_, ex) as f when isLinear x ex ->  
-        Some((intFuncStraight f) / fst(extractLinearComponent x ex)), None
+        Suceeded((intFuncStraight f) / fst(extractLinearComponent x ex))
     | Sum l -> 
-      let res = List.map iter l
-      let ra, rb =
+      let calculated, deferred =
           List.fold (fun (sums,ins) r -> 
                match r with 
-               | Some g, None -> g + sums, ins
-               | Some g, Some f -> g + sums, f + ins
-               | None, Some f -> sums, ins + f
-               | None, None -> (sums, ins) ) (0Q, 0Q) res
-      Some ra, Some rb
+               | Suceeded g -> g + sums, ins
+               | Partial(Success = g; Defer = f) -> g + sums, f + ins
+               | Deferred f -> sums, ins + f) (0Q, 0Q) (List.map iter l) 
+      Partial(calculated, deferred)
     | Product _ as e -> 
         let k, e' = Algebraic.separateFactors x e  
-        if k = 1Q then printfn "Separating factors, no x found."; None, Some e
+        if k = 1Q then printfn "Separating factors, no x found."; Deferred e
         else match (iter e') with
-             | Some good, None -> Some(k * good) , None
-             | Some good, Some fail -> Some (k * good), Some (fail)
-             | None, Some fail -> Some k, Some fail
-             | None, None -> failwith "unexpected state in integrate product"
-             
-    | f when not(containsVar x f) -> Some (x * f), None
-    
-    | f -> printfn "Can't integrate this %s" (f.ToFormattedString()); None, Some f
+             | Suceeded good -> Suceeded(k * good) 
+             | Partial(good, fail) -> Partial((k * good), fail)
+             | Deferred fail -> Partial(k,fail)             
+    | f when not(containsVar x f) -> Suceeded (x * f)    
+    | f -> printfn "Can't integrate this %s" (f.ToFormattedString()); Deferred f
     iter f
-
+     
 let rec integrateSimple x = function 
     | Number _ as n -> n * x 
     | Identifier (Symbol _) as vx -> if vx = x then vx ** 2/2 else vx * x
@@ -170,7 +171,7 @@ integrateSimple t a |> integrateSimple t |> Infix.format
 integrateSimple t (a * t + v0) |> Infix.format
 
 integrateSimple x (1/( sqrt(1 - 16 * x **2) )) |> Infix.format
-csc(2*x + 1) * cot(2*x + 1 ) |> Trigonometric.separateFactors x // |> Infix.format
+csc(2*x + 1) * cot(2*x + 1 ) |> Trigonometric.separateFactors // |> Infix.format
 ///////////BROKE
 integrateSimple x (1/((3 * (a * x)**2 + 1))) |> Infix.format 
 integrateSimple x (1/((a * x)**2 + 1) ) |> Infix.format 

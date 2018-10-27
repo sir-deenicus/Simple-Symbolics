@@ -63,6 +63,9 @@ let reArrangeEquation0 silent s (l,r) =
         | Function(Ln, x) -> 
           if not silent then printfn "exponentiate"; 
           iter x (exp::ops)
+        | Function(Tan, x) -> 
+          if not silent then printfn "atan"; 
+          iter x ((fun x -> Function(Atan, x))::ops)  
         | Function(Cos, x) -> 
           if not silent then printfn "acos"; 
           iter x ((fun x -> Function(Acos, x))::ops)
@@ -73,7 +76,7 @@ let reArrangeEquation0 silent s (l,r) =
     let f, ops = iter l [] 
     f, ops |> List.rev |> List.fold (fun e f -> f e) r |> Algebraic.simplify true      
 
-let reArrangeEquation s (l,r) = reArrangeEquation0 true s (l,r)
+let reArrangeEquation s (l,r) = reArrangeEquation0 false s (l,r)
 
 let rec invertFunction x expression = 
     printfn "%s" (expression |> Infix.format)

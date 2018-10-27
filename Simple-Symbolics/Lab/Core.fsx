@@ -110,7 +110,8 @@ let simplifySquareRoot (expr:Expression) =
             |> List.unzip 
         let isneg = n.ToInt() < 0
         Some(List.fold (*) 1Q outr * sqrt(List.fold (*) (if isneg then -1Q else 1Q) inr))
-   
+let rec factorial (n:BigRational) = if n = 1N then 1N else n * factorial (n-1N)  
+
 open Operators 
 let ln = MathNet.Symbolics.Operators.ln
 
@@ -131,6 +132,7 @@ module Algebraic =
          | Power (x,n) -> Power(simplifyLoop x, simplifyLoop n) 
          | Function(Atan, Number n) when n = 1N -> pi/4 
          | Function(Atan, Number n) when n = 0N -> 0Q 
+         | Function(Ln, Function(Exp, x)) -> simplifyLoop x
          | Function(f, x) -> Function(f, (simplifyLoop x)) 
          | Sum     [x]  
          | Product [x] -> simplifyLoop x
@@ -294,7 +296,7 @@ let rec replaceSymbol r x = function
 
 let expressionToList = function 
      | Sum l | Product l -> l | x -> [x]
-let letTryReplaceCompoundExpression replacement (expressionToFindContentSet: Hashset<_>) (expressionList:_ list) =
+let tryReplaceCompoundExpression replacement (expressionToFindContentSet: Hashset<_>) (expressionList:_ list) =
     let expressionListSet = Hashset expressionList
     if expressionToFindContentSet.IsSubsetOf expressionListSet then 
        expressionListSet.SymmetricExceptWith expressionToFindContentSet 
@@ -307,8 +309,8 @@ let replaceExpression replacement expressionToFind formula =
    | Identifier _ as var when var = expressionToFind -> replacement
    | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)    
    | Function(f, fx)  -> Function(f, iterReplaceIn fx) 
-   | Product l ->  Product (List.map iterReplaceIn (letTryReplaceCompoundExpression replacement expressionToFindContentSet l))
-   | Sum     l ->  Sum     (List.map iterReplaceIn (letTryReplaceCompoundExpression replacement expressionToFindContentSet l))
+   | Product l ->  Product (List.map iterReplaceIn (tryReplaceCompoundExpression replacement expressionToFindContentSet l))
+   | Sum     l ->  Sum     (List.map iterReplaceIn (tryReplaceCompoundExpression replacement expressionToFindContentSet l))
    | x -> x
    iterReplaceIn formula |> Algebraic.simplify true
 
@@ -319,7 +321,7 @@ let rec findVariablesOfExpression = function
    | Sum     l -> List.collect findVariablesOfExpression l
    | Function (_, x) -> findVariablesOfExpression x   
    | _ -> []
-   
+
 let rec size = function
    | Identifier _ -> 1
    | Power(x, n) -> size x + 1 + size n 
@@ -333,6 +335,7 @@ let rec size = function
 let symbolString = function Identifier (Symbol s) -> s | _ -> ""
 
 type Equation (leq:Expression, req:Expression) = 
+     member __.Equalities = [leq,req; req,leq]
      override __.ToString () = leq.ToFormattedString() + " = " + req.ToFormattedString()
 
 module Vars = 

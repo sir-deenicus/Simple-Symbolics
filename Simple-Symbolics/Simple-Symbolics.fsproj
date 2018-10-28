@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net45;netstandard2.0;netcoreapp2.0</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description> 
   </PropertyGroup>
 

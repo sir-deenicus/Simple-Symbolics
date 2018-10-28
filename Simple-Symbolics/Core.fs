@@ -5,7 +5,7 @@ open MathNet.Numerics
 open System
 
 let flip f a b = f b a
-
+let symbol = MathNet.Symbolics.Operators.symbol
 let standardSymbols = Map []
 
 let mutable expressionFormater = Infix.format
@@ -104,8 +104,7 @@ type Complex(r:Expression,i:Expression) =
   
   new(r) = Complex(r, 0Q)
 
-  override t.ToString() = sprintf "(%s, %s)" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())  
-
+  override t.ToString() = sprintf "(%s, %s)" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())   
 
 
 let rec containsVar x = function
@@ -128,6 +127,8 @@ module Vars =
   let h = symbol "h"
   let i = symbol "i"
   let n = symbol "n"
+  let p = symbol "p"
+  let q = symbol "q"
   let r = symbol "r"
   let t = symbol "t"
   let u = symbol "u"
@@ -146,4 +147,4 @@ module Vars =
 
   let phi = symbol "φ"   
   let π = pi
-  let pi = pi
+  let pi = pi 

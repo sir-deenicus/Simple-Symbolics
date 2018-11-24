@@ -1,0 +1,13 @@
+﻿#Changes in Full Library (not fsx files)
+
+* 0.0.1 - Start
+
+* 0.0.2 - Complex numbers
+
+* 0.0.3 - Basic Matrix Vec
+
+* 0.0.4 - very basic simplification
+
+* 0.0.5 - rationals from floats
+
+* 0.0.7 - improvements to complex, expression, simplification and checking if a variable is contained.

@@ -106,8 +106,5 @@ BigRational.fromFloat(1e-26)
 simplifySquareRoot -145Q
 (primeFactorsExpr 5324Q).ToFormattedString()
 Core.expressionFormater <- Infix.format
-
-
-
 Logarithm.powerRule(ln(x ** 2))
 

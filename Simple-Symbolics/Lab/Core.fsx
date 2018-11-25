@@ -55,9 +55,12 @@ type Expression with
         match t with
         | Number n -> n
         | _ -> failwith "not a number"
-
+    
 module Expression =
+    let fromFloat f = BigRational.fromFloat f |> Expression.FromRational
+    let fromFloatRepeating f = BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat(x: Expression) = x.ToFloat()
+    let toPlainString = Infix.format
 
 let inline factors toint f x =
     let x' = toint x
@@ -172,7 +175,7 @@ module Algebraic =
             | Product l when List.exists (function 
                                  | Product _ -> true
                                  | _ -> false) l -> 
-                simplifyLoop(List.fold (*) 1Q l) 
+                simplifyLoop(List.fold (*) 1Q l)
             | Product l -> Product(List.map simplifyLoop l)
             | Sum l -> Sum(List.map simplifyLoop l)
             | x -> x
@@ -205,12 +208,12 @@ module Logarithm =
             
             ln(Product logs') + Sum rest
         | f -> f
-
+    
     let bringPowerOut =
         function 
         | Power(x,n) -> n,x
         | f -> 1Q,f
-
+    
     let powerRuleSingle =
         function 
         | Function(Ln,Product l) -> 
@@ -218,7 +221,7 @@ module Logarithm =
             Product ns * Function(Ln,Product xs)
         | Function(Ln,Power(x,n)) -> n * Function(Ln,x)
         | f -> f
-
+    
     let rec powerRule =
         function 
         | Product l -> Product(List.map powerRule l)
@@ -494,6 +497,29 @@ let rec findVariablesOfExpression =
     | Function(_,x) -> findVariablesOfExpression x
     | _ -> []
 
+
+let tryFindCompoundExpression (expressionToFindContentSet: Hashset<_>) 
+    (expressionList: _ list) =
+    let expressionListSet = Hashset expressionList
+    expressionToFindContentSet.IsSubsetOf expressionListSet
+
+let containsExpression expressionToFind formula =
+    let expressionToFindContentSet = Hashset(expressionToList expressionToFind)
+    
+    let rec iterFindIn =
+        function 
+        | Identifier _ as var when var = expressionToFind -> true
+        | Power(p,n) -> iterFindIn p || iterFindIn n
+        | Function(_,fx) -> iterFindIn fx
+        | Product l -> 
+            tryFindCompoundExpression expressionToFindContentSet l 
+            || (List.exists iterFindIn l)
+        | Sum l -> 
+            tryFindCompoundExpression expressionToFindContentSet l 
+            || (List.exists iterFindIn l)
+        | _ -> false
+    iterFindIn formula
+
 let rec size =
     function 
     | Identifier _ -> 1
@@ -508,6 +534,22 @@ let symbolString =
     | Identifier(Symbol s) -> s
     | _ -> ""
 
+module Structure =
+    let filter func =
+        function 
+        | Sum l | Product l -> List.exists func l
+        | f -> func f
+    
+    let rec filterRecursive func =
+        function 
+        | Identifier _ as i -> func i
+        | Power(p,n) as pow -> 
+            func pow || filterRecursive func n || filterRecursive func p
+        | Function(_,fx) as f -> func f || filterRecursive func fx
+        | (Product l | Sum l) as prod -> 
+            func prod || List.exists (filterRecursive func) l
+        | _ -> false
+
 type Equation(leq: Expression,req: Expression) =
     
     member __.Equalities =
@@ -516,6 +558,8 @@ type Equation(leq: Expression,req: Expression) =
     
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
+
+let equals a b = Equation(a,b)
 
 module Vars =
     let a = symbol "a"

@@ -2,7 +2,6 @@
 #r "prelude.dll"
 #r "hansei.core.dll"
 #r "hansei.dll"
-
 #load "solving.fsx"
 
 open System.Collections.Generic
@@ -17,7 +16,65 @@ open Hansei.Core
 open Hansei.Continuation
 open Hansei.Core.Distributions
 open System
-open Prelude.Common
+open Prelude.Common 
+open Prelude.StringMetrics
+
+let pchoice = [0.3;0.2;0.15;0.15;0.05;0.05;0.05;0.05]
+
+let options =
+    [Algebraic.expand,"Expand"
+     Rational.reduce,"Reduce fractions"
+     Rational.rationalize,"rationalize terms"
+     Rational.expand,"expand fractions"
+     Logarithm.expand,"logarithm product or quotient rule, expand"
+     Logarithm.contract,"logarithm product or quotient rule, contract"
+     Logarithm.powerRule,"logarithm power rule"
+     Algebraic.simplify true,"simplify expression"]
+
+let poptions = List.zip pchoice options
+
+let exprContainsLog =
+    function 
+    | Function(Ln,_) -> true
+    | _ -> false
+
+let transformExpr targetexpr sourceexpr =
+    let targetstr = Expression.toPlainString targetexpr
+    let containsLog = Structure.filterRecursive exprContainsLog sourceexpr
+    let options' = //remove operations that are un-needed
+        List.filter 
+            (fun (_,str: string) -> not(str.Contains "logarithm") || containsLog) 
+            options
+    
+    let rec loop path currentexpr =
+        cont {
+            let! chosenOp,desc = uniform options'
+            let expr' = chosenOp currentexpr
+            if expr' = targetexpr then return List.rev (desc::path)
+            else 
+                do! constrain(currentexpr <> expr')
+                let str' = Expression.toPlainString expr'
+                let reward = stringSimilarityDice targetstr str' //bias search towards string that are more like our target
+                let! p = uniform_float 20
+                do! constrain(reward > p)
+                return! loop (desc::path) expr'
+        }
+    loop [] sourceexpr
+
+let sigma2,sigma1 = Operators.symbol "\sigma_2",Operators.symbol "\sigma_1"
+let sc =
+    (1 / 2Q * ln(2 * pi * sigma2 ** 2) 
+     + -1 / 2Q * (1 + ln(2 * pi * sigma1 ** 2)))
+let tc =
+    (1 / 2Q * ln(2 * pi * sigma2 ** 2) 
+     + -1 / 2Q * (1 + ln(2 * pi * sigma1 ** 2))) |> Logarithm.powerRule //|> Rational.expand  |> Logarithm.contract |> Algebraic.simplify true 
+let searcher = Model(transformExpr tc sc)
+
+exprContainsLog tc
+
+searcher.ImportanceSample(100,20)
+///////////////////////////
+/// ////////////////////
 
 let rec findVariablesOfExpression = function 
    | Identifier _ as var -> [var]

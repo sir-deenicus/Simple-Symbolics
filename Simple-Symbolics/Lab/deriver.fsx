@@ -16,7 +16,7 @@ open Hansei.Core
 open Hansei.Continuation
 open Hansei.Core.Distributions
 open System
-open Prelude.Common 
+open Prelude.Common
 open Prelude.StringMetrics
 
 let pchoice = [0.3;0.2;0.15;0.15;0.05;0.05;0.05;0.05]
@@ -50,14 +50,14 @@ let transformExpr targetexpr sourceexpr =
         cont {
             let! chosenOp,desc = uniform options'
             let expr' = chosenOp currentexpr
-            if expr' = targetexpr then return List.rev (desc::path)
+            if expr' = targetexpr then return List.rev(desc :: path)
             else 
                 do! constrain(currentexpr <> expr')
                 let str' = Expression.toPlainString expr'
                 let reward = stringSimilarityDice targetstr str' //bias search towards string that are more like our target
                 let! p = uniform_float 20
                 do! constrain(reward > p)
-                return! loop (desc::path) expr'
+                return! loop (desc :: path) expr'
         }
     loop [] sourceexpr
 
@@ -71,118 +71,149 @@ let tc =
 let searcher = Model(transformExpr tc sc)
 
 exprContainsLog tc
-
 searcher.ImportanceSample(100,20)
+
 ///////////////////////////
-/// ////////////////////
+/// //////////////////// 
+let deriveTrivialEqualitiesSingle(e1,eq) =
+    [yield Equation(e1,eq)
+     for var in findVariablesOfExpression eq do
+         match reArrangeEquation0 true var (eq,e1) with
+         | Identifier _ as var,req -> yield Equation(var,req)
+         | _ -> ()]
 
-let rec findVariablesOfExpression = function 
-   | Identifier _ as var -> [var]
-   | Power(x, n) -> findVariablesOfExpression x @ findVariablesOfExpression n
-   | Product l 
-   | Sum     l -> List.collect findVariablesOfExpression l
-   | Function (_, x) -> findVariablesOfExpression x   
-   | _ -> []
-
-let deriveTrivialEqualitiesSingle (e1,eq) = 
-    [ yield Equation(e1,eq)
-      for var in findVariablesOfExpression eq do 
-       match reArrangeEquation0 true var (eq, e1) with
-       | Identifier _ as var, req -> yield Equation(var, req) 
-       | _ -> () ]
-
-let deriveTrivialEqualities (eqs: Equation list) =
+let deriveTrivialEqualities(eqs: Equation list) =
     let deqs =
-      [for eq in eqs do 
-        yield! deriveTrivialEqualitiesSingle eq.Equalities.Head ]
+        [for eq in eqs do
+             yield! deriveTrivialEqualitiesSingle eq.Equalities.Head]
     Hashset deqs |> Seq.toList
 
-let genEqualitiesList (eqs:Equation list) = [for e in eqs do yield! e.Equalities]
-
-let equals a b = Equation(a,b)
+let genEqualitiesList(eqs: Equation list) =
+    [for e in eqs do
+         yield! e.Equalities]
 
 let ``P(A|B)`` = symbol "P(A|B)"
-let ``P(A ∩ B)`` = Operators.symbol "P(A ∩ B)"
-let ``P(B)`` = Operators.symbol "P(B)"
-let ``P(A)`` = Operators.symbol "P(A)"
-let ``P(B|A)`` = Operators.symbol "P(B|A)"
+let ``P(A ∩ B)`` = symbol "P(A ∩ B)"
+let ``P(B)`` = symbol "P(B)"
+let ``P(A)`` = symbol "P(A)"
+let ``P(B|A)`` = symbol "P(B|A)"
 
-let tryFindCompoundExpression (expressionToFindContentSet: Hashset<_>) (expressionList:_ list) =
-    let expressionListSet = Hashset expressionList
-    expressionToFindContentSet.IsSubsetOf expressionListSet 
+let findPathUsingEqualities terminationCondition equalities (seen: Hashset<_>) 
+    startExpression targetExpression =
+    let rec search path currentExpression =
+        cont {
+            if terminationCondition targetExpression currentExpression then 
+                return path
+            else 
+                let applicable =
+                    List.filter 
+                        (fst >> flip containsExpression currentExpression) 
+                        equalities
+                match applicable with
+                | [] -> return! fail()
+                | _ -> 
+                    let! e1,e2 = uniform applicable
+                    let expressionNew =
+                        replaceExpression e2 e1 currentExpression
+                    do! constrain
+                            (not
+                                 (seen.Contains
+                                      (Rational.rationalize expressionNew)))
+                    let msg =
+                        sprintf 
+                            @"%s = %s \; \left( \textrm{because} \; %s = %s\right)" 
+                            (currentExpression.ToFormattedString()) 
+                            (expressionNew.ToFormattedString()) 
+                            (e1.ToFormattedString()) (e2.ToFormattedString())
+                    seen.Add expressionNew |> ignore
+                    return! search (msg :: path) expressionNew
+        }
+    search [] startExpression
 
-let containsExpression expressionToFind formula = 
-   let expressionToFindContentSet = Hashset(expressionToList expressionToFind)    
-   let rec iterFindIn = function
-   | Identifier _ as var when var = expressionToFind -> true
-   | Power(p, n) -> iterFindIn p || iterFindIn n    
-   | Function(_, fx)  ->  iterFindIn fx
-   | Product l ->  tryFindCompoundExpression expressionToFindContentSet l || (List.exists iterFindIn l)
-   | Sum     l ->  tryFindCompoundExpression expressionToFindContentSet l || (List.exists iterFindIn l)
-   | _ -> false
-   iterFindIn formula  
-
-let feq equalities (seen : Hashset<_>) eq0 eq1 = 
-    let rec search path ec = cont {  
-       if containsExpression eq1 ec then return path
-       else  
-        let! e1,e2 = uniform equalities 
-        do! constrain (containsExpression e1 ec) 
-        let ec' = replaceExpression e2 e1 ec
-        do! constrain (not (seen.Contains (Rational.rationalize ec')))
-        let msg = sprintf "replace %s with %s in %s" (e1.ToFormattedString()) (e2.ToFormattedString()) (ec.ToFormattedString())
-        //printfn "%s" msg
-        printfn "Old: %s => New: %s" (ec.ToFormattedString()) (ec'.ToFormattedString())
-        seen.Add ec' |> ignore
-        return! search (msg::path) ec'  }
-    search [] eq0
-
-let feq2 equalities (seen : Hashset<_>) eq0 eq1 = 
-    let rec search path ec = cont {  
-       seen.Add eq0 |> ignore
-       if eq1 = ec then return path
-       else  
-         let! replace = bernoulli 0.5
-         if replace then 
-            let! e1,e2 = uniform equalities
-            do! constrain (containsExpression e1 ec) 
-            let ec' = replaceExpression e2 e1 ec
-            do! constrain (not (seen.Contains (Rational.rationalize ec')))
-            let msg = sprintf "%s = %s" (ec.ToFormattedString()) (ec'.ToFormattedString())
-            //printfn "%s" msg
-            //printfn "Old: %s => New: %s" (ec.ToFormattedString()) (ec'.ToFormattedString())
-            seen.Add ec' |> ignore
-            return! search (msg::path) ec'
-         else let variables = findVariablesOfExpression ec
-              let! desc, op = uniform ( (List.map (fun (x:Expression) -> ("*" + (x.ToFormattedString())), (*) x) variables) @
-                                        (List.map (fun (x:Expression) -> ("/" + (x.ToFormattedString())), flip (/) x) variables))
-              //printfn "%s" desc
-              let ec' = op ec
-              do! constrain (not (seen.Contains (Rational.rationalize ec')))
-              let s = ec.ToFormattedString()
-              let s' = ec'.ToFormattedString()
-              let msg = s + desc + " = " + s'
-              return! search (msg::path) ec' }
-    search [] eq0
+let findPath equalities (seen: Hashset<_>) startExpression targetExpression =
+    let rec search path currentExpression =
+        cont {
+            seen.Add startExpression |> ignore
+            if targetExpression = currentExpression then 
+                return List.rev
+                           (Expression.toFormattedString currentExpression 
+                            :: path)
+            else 
+                let! replace = bernoulli 0.5
+                if replace then 
+                    let applicable =
+                        List.filter 
+                            (fst >> flip containsExpression currentExpression) 
+                            equalities
+                    match applicable with
+                    | [] -> return! fail()
+                    | _ -> 
+                        let! e1,e2 = uniform applicable
+                        let expressionNew =
+                            replaceExpression e2 e1 currentExpression
+                        do! constrain
+                                (not
+                                     (seen.Contains
+                                          (Rational.rationalize expressionNew)))
+                        let msg =
+                            sprintf 
+                                @" = %s \; \left( \textrm{because} \; %s = %s\right)" 
+                                (expressionNew.ToFormattedString()) 
+                                (e1.ToFormattedString()) 
+                                (e2.ToFormattedString())
+                        seen.Add expressionNew |> ignore
+                        return! search (msg :: path) expressionNew
+                else 
+                    let variables = findVariablesOfExpression currentExpression
+                    let! desc,op = uniform
+                                       ((List.map 
+                                             (fun (x: Expression) -> 
+                                             ("*" + (x.ToFormattedString())),
+                                             (*) x) variables) 
+                                        @ (List.map 
+                                               (fun (x: Expression) -> 
+                                               ("/" + (x.ToFormattedString())),
+                                               flip (/) x) variables))
+                    let nextExpression = op currentExpression
+                    do! constrain
+                            (not
+                                 (seen.Contains
+                                      (Rational.rationalize nextExpression)))
+                    let msg =
+                        sprintf @"%s = %s %s" 
+                            (nextExpression.ToFormattedString()) 
+                            (currentExpression.ToFormattedString()) desc
+                    return! search (msg :: path) nextExpression
+        }
+    search [Expression.toFormattedString startExpression] startExpression
 
 let equalities =
-    deriveTrivialEqualities [``P(A|B)`` </equals/> (``P(A ∩ B)``/``P(B)`` )
-                             ``P(B|A)`` </equals/> (``P(A ∩ B)``/``P(A)`` ) ]      
+    deriveTrivialEqualities [``P(A|B)`` </ equals /> (``P(A ∩ B)`` / ``P(B)``)
+                             ``P(B|A)`` </ equals /> (``P(A ∩ B)`` / ``P(A)``)]
 
-let eqls = genEqualitiesList equalities
-eqls
-let model seen = Model(feq eqls seen ``P(A|B)`` ``P(B|A)``) 
-let extractValue = function | Value x -> x | _ -> failwith "error"
-(model (Hashset())).ImportanceSample(5,2) |> Utils.normalize |> List.map (fun (p, l) -> string p + ", " + (List.rev (extractValue l) |> String.concat "\n"  )) |> String.concat "\\"
- 
+let generatedEqualities = genEqualitiesList equalities
 
-let model2 seen = Model(feq2 eqls seen ``P(A|B)`` ``P(B|A)``) 
+generatedEqualities
 
-(model2 (Hashset())).ImportanceSample(15000,15) |> List.rev |> Utils.normalize 
+let model seen =
+    Model
+        (findPathUsingEqualities (=) generatedEqualities seen ``P(A|B)`` 
+             ``P(B|A)``)
 
-ln (exp 2Q) |> Algebraic.simplify true
+let extractValue =
+    function 
+    | Value x -> x
+    | _ -> failwith "error"
 
-exp 2Q
+(model(Hashset())).ImportanceSample(5,2)
+|> Utils.normalize
+|> List.map(fun (p,l) -> 
+       string p + ", " + (List.rev(extractValue l)
+                          |> String.concat "\n"))
+|> String.concat "\\"
 
-log 1.
+let model2 seen = Model(findPath generatedEqualities seen ``P(A|B)`` ``P(B|A)``)
 
+(model2(Hashset())).ImportanceSample(15000,15)
+|> List.rev
+|> Utils.normalize

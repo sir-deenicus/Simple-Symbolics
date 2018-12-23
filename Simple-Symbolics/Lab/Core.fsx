@@ -60,8 +60,9 @@ module Expression =
     let fromFloat f = BigRational.fromFloat f |> Expression.FromRational
     let fromFloatRepeating f = BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat(x: Expression) = x.ToFloat()
-    let toPlainString = Infix.format
-
+    let toPlainString = Infix.format 
+    let toFormattedString (e:Expression) = e.ToFormattedString()
+    
 let inline factors toint f x =
     let x' = toint x
     let sqrtx = int(sqrt(float x'))
@@ -397,8 +398,15 @@ module Units =
     let setAlt alt (u: Units) =
         u.AltUnit <- alt
         u
-    
-    let kg = Units(1Q,Operators.symbol "kg","kg")
+
+    let micro = Expression.fromFloat 1e-6    
+    let milli = Expression.fromFloat (0.001)    
+    let kilo = 1000Q
+    let mega = 1_000_000Q
+    let giga = 1_000_000_000Q
+    let tera = 1_000_000_000_000Q
+    let gram = Units(1Q,Operators.symbol "g","g")
+    let kg = kilo * gram |> setAlt "kg"
     let meter = Units(1Q,Operators.symbol "meters","meter")
     let sec = Units(1Q,Operators.symbol "sec","sec")
     let flops = Units(1Q,Operators.symbol "flops")
@@ -406,14 +414,13 @@ module Units =
     let bytes = 8Q * bits |> setAlt "bytes"
     let N = kg * meter / sec ** 2 |> setAlt "N"
     let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
+    let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
+
     let km = 1000Q * meter
     let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
     let btu = Expression.FromRational(BigRational.fromFloat 1055.06) * J
     let W = J / sec |> setAlt "W"
-    let kilo = 1000Q
-    let mega = 1_000_000Q
-    let giga = 1_000_000_000Q
-    let tera = 1_000_000_000_000Q
+
     let minute = 60Q * sec |> setAlt "minute"
     let hr = 60Q * minute |> setAlt "hr"
     let days = 24Q * hr |> setAlt "days"
@@ -428,6 +435,7 @@ module Units =
          N,"Force"
          hr,"Time"
          sec,"Time"
+         gram,"mass"
          kg,"mass"
          meter,"length"]
     
@@ -571,6 +579,8 @@ module Vars =
     let g = symbol "g"
     let h = symbol "h"
     let i = symbol "i"
+    let j = symbol "j"
+    let k = symbol "k"
     let n = symbol "n"
     let r = symbol "r"
     let t = symbol "t"

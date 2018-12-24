@@ -41,6 +41,36 @@ module BigRational =
             BigRational.FromIntFraction
                 (int(df * pow10 - floor df),int(pow10 - 1M))
 
+
+module Algebraic = 
+  let simplify simplifysqrt fx =
+      let rec simplifyLoop = function               
+         | Power (x, Number n) when n = 1N -> simplifyLoop x
+         | Power (Number x, _) when x = 1N -> 1Q  
+         | Power (Product[x], n) 
+         | Power (Sum[x], n) -> simplifyLoop (Power(x, n))
+         | Power (Power (x, a), b) -> simplifyLoop(Power(x, (a * b)))
+         | Power (x,n) when n = 1Q/2Q && simplifysqrt -> 
+             match None with
+             | Some x' -> x'  
+             | None -> Power(simplifyLoop x, n)
+         | Power (x,n) -> Power(simplifyLoop x, simplifyLoop n) 
+         | Function(Atan, Number n) when n = 1N -> MathNet.Symbolics.Operators.pi/4 
+         | Function(Atan, Number n) when n = 0N -> 0Q 
+         | Function(Cos,Product [Number n; Constant Pi]) when n = (1N/2N) -> 0Q
+         | Function(Sin,Product [Number n; Constant Pi]) when n = (1N/2N) -> 1Q
+         | Function(Cos,Product [Number n; Constant Pi]) when n = 1N/4N -> 1Q/sqrt(2Q) 
+         | Function(Sin,Product [Number n; Constant Pi]) when n = 1N/4N -> 1Q/sqrt(2Q) 
+         | Function(Ln, Function(Exp, x)) -> simplifyLoop x
+         | Function(f, x) -> Function(f, (simplifyLoop x)) 
+         | Sum     [x]  
+         | Product [x] -> simplifyLoop x
+         | Product l -> 
+             List.map simplifyLoop l |> List.fold (*) 1Q
+         | Sum l -> List.map simplifyLoop l |> List.sum
+         | x -> x
+      simplifyLoop fx |> Rational.reduce
+
 type Expression with
     member t.ToFormattedString() = expressionFormater t
     member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
@@ -61,7 +91,16 @@ module Expression =
     let fromFloatRepeating f = BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat(x: Expression) = x.ToFloat()
     let toPlainString = Infix.format 
-    let toFormattedString (e:Expression) = e.ToFormattedString()
+    let toFormattedString (e:Expression) = e.ToFormattedString() 
+    let toRational e =
+        let e' = Trigonometric.simplify e |> Algebraic.simplify true 
+        match e' with 
+        | Number (n) -> n
+        | _ -> failwith (sprintf "not a number : %s => %s | %A" (e.ToFormattedString()) (e'.ToFormattedString()) e') 
+    let fullSimplify e = 
+        Trigonometric.simplify e |> Algebraic.simplify true  |> Algebraic.simplify true
+        |> Rational.rationalize |> Algebraic.expand
+
     
 let inline factors toint f x =
     let x' = toint x
@@ -152,35 +191,8 @@ open Operators
 
 let ln = MathNet.Symbolics.Operators.ln
 let arctan = MathNet.Symbolics.Operators.arctan
-let symbol = symbol
+let symbol = symbol 
 
-module Algebraic =
-    let simplify simplifysqrt fx =
-        let rec simplifyLoop =
-            function 
-            | Power(x,Number n) when n = 1N -> simplifyLoop x
-            | Power(Number x,_) when x = 1N -> 1Q
-            | Power(Product [x],n) | Power(Sum [x],n) -> 
-                simplifyLoop(Power(x,n))
-            | Power(Power(x,a),b) -> simplifyLoop(Power(x,(a * b)))
-            | Power(x,n) when n = 1Q / 2Q && simplifysqrt -> 
-                match simplifySquareRoot x with
-                | Some x' -> x'
-                | None -> Power(simplifyLoop x,n)
-            | Power(x,n) -> Power(simplifyLoop x,simplifyLoop n)
-            | Function(Atan,Number n) when n = 1N -> pi / 4
-            | Function(Atan,Number n) when n = 0N -> 0Q
-            | Function(Ln,Function(Exp,x)) -> simplifyLoop x
-            | Function(f,x) -> Function(f,(simplifyLoop x))
-            | Sum [x] | Product [x] -> simplifyLoop x
-            | Product l when List.exists (function 
-                                 | Product _ -> true
-                                 | _ -> false) l -> 
-                simplifyLoop(List.fold (*) 1Q l)
-            | Product l -> Product(List.map simplifyLoop l)
-            | Sum l -> Sum(List.map simplifyLoop l)
-            | x -> x
-        simplifyLoop fx |> Rational.reduce
 
 module Logarithm =
     let expand =

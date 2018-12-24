@@ -11,3 +11,5 @@
 * 0.0.5 - rationals from floats
 
 * 0.0.7 - improvements to complex, expression, simplification and checking if a variable is contained.
+
+* 0.0.8 - basic matrix and vector operations

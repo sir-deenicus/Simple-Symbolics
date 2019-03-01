@@ -40,7 +40,7 @@ let exprContainsLog =
 
 let transformExpr targetexpr sourceexpr =
     let targetstr = Expression.toPlainString targetexpr
-    let containsLog = Structure.filterRecursive exprContainsLog sourceexpr
+    let containsLog = Structure.existsRecursive exprContainsLog sourceexpr
     let options' = //remove operations that are un-needed
         List.filter 
             (fun (_,str: string) -> not(str.Contains "logarithm") || containsLog) 

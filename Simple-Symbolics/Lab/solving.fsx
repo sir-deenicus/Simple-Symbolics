@@ -97,3 +97,10 @@ let quadraticSolve p =
        Algebraic.simplify true ((-b + sqrt(b**2 - 4 * a * c)) / (2 * a)), 
        Algebraic.simplify true ((-b - sqrt(b **2 - 4 * a * c)) / (2 * a)) 
     else failwith "Not quadratic"
+
+let completeSquare x  p = 
+    if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
+       let coeffs = Polynomial.coefficients x p
+       let a,b,c = coeffs.[2], coeffs.[1], coeffs.[0]
+       a * (x + b/(2*a)) ** 2 + c - b**2/(4*a) 
+    else failwith "Not quadratic"

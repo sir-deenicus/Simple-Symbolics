@@ -92,6 +92,7 @@ let rec tryFactorizePolynomial x fx =
       r @ List.concat sols |> HashSet |> Seq.toList, s @ List.concat eq |> HashSet |> Seq.toList
   
  
+tryFactorizePolynomial n (n**3 + 3*n**2 + 2*n)
 let res = tryFactorizePolynomial x p5
 let mm = Polynomial.divide x p5 3Q |> fst 
 //|> pairmap Infix.format

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Content Include="Changes.txt" />
+    <None Include="Lab\deriver2.fsx" />
     <None Include="Lab\linear-algebra.fsx" />
     <None Include="Lab\linalg-tests.fsx" />
     <None Include="Lab\Core.fsx" />
@@ -19,8 +20,6 @@
     <Compile Include="Core.fs" />
     <Compile Include="LinearAlgebra.fs" />
   </ItemGroup>
-
-  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />

@@ -102,7 +102,7 @@ BigRational.fromFloat(1e-26)
 |> List.map(fun x -> 
        x.ToFormattedString(),
        let y = simplifySquareRoot x
-       y.ToFormattedString()) //, y.ToFloat() ** 2.)
+       y |> Option.map Expression.toFormattedString) //, y.ToFloat() ** 2.)
 simplifySquareRoot -145Q
 (primeFactorsExpr 5324Q).ToFormattedString()
 Core.expressionFormater <- Infix.format

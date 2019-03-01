@@ -35,7 +35,13 @@ vf + 3Q * vf
 Units.simplifyUnits (vr * vf)
 Units.To(vr * vf, J)
  
+let vu = Vector([ 400 * W; 45 * tera * flops; 16 * giga * bytes])
 
+16Q * vu |> Vector.map Units.trySimplifyUnits
+
+30Q * 16Q * vu.[0] |> Units.trySimplifyUnits
+30Q * 16Q * vu.[0] * 14Q * days |> Units.trySimplifyUnits
+Units.ToUnit(30Q * 16Q * vu.[0] * 14Q * days, mega * W * hr).Value.Evaluate()
 ///////////////
 let mu = [[Complex 1Q; Complex (2Q, 1Q)];[Complex (1/2Q,3Q);Complex 4Q]]
 let mi = [[ 1Q;  2Q];[ 3Q; 4Q]]

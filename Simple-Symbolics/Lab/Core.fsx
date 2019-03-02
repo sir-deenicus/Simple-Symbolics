@@ -146,22 +146,24 @@ module Algebraic =
             | (Power(x, Number n)) when n > 1N ->
                 if (int n % 2 = 0) then x ** (Expression.FromRational(n / 2N)), 1Q
                 elif n = 3N then x, x
-                else x, Power(x, Number(n - 2N))
+                else x, simplifyNumericPower(Power(x, Number(n - 2N)))
             | x -> 1Q, x
-        match primefactorsPartial expr with
-        | None -> None
-        | Some(pfl, n) ->
-            let n, (outr, inr) =
-                n,
-                pfl
-                |> groupPowers id
-                |> List.map sqRootGrouping
-                |> List.unzip
+        match expr with
+        | Power(x, n) when n = 1Q / 2Q ->
+            match primefactorsPartial x with
+            | None -> None
+            | Some(pfl, n) ->
+                let n, (outr, inr) =
+                    n,
+                    pfl
+                    |> groupPowers id
+                    |> List.map sqRootGrouping
+                    |> List.unzip
 
-            let isneg = n.ToInt() < 0
-            Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q
+                let isneg = n.ToInt() < 0
+                Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q
                                                               else 1Q) inr))
-
+        | _ -> None
 
     let collectNestedSumOrProduct test l =
         let innersums, rest = List.partition test l

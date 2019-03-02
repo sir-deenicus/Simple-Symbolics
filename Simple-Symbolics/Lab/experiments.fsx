@@ -110,7 +110,6 @@ Algebraic.simplifySquareRoot (sqrt -145Q)
 Core.expressionFormater <- Infix.format
 Logarithm.powerRule(ln(x ** 2))
 
-20Q |> Algebraic.simplifySquareRoot
+sqrt 20Q |> Algebraic.simplifySquareRoot
 
-let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get 
-vr |> Algebraic.simplifyLite
+let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get  

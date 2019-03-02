@@ -67,12 +67,8 @@ let baseOfPower = function
 
 let number = function
     | Number n -> Some n
-    | _ -> None
+    | _ -> None 
 
-let isNumber =
-    function
-    | Number _ -> true
-    | _ -> false
 
 let splitPowerIn2ByN nInt = 
     let n = Expression.FromInt32 nInt

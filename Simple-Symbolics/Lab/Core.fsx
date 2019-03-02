@@ -87,7 +87,82 @@ module Expression =
         | Sum _ -> true
         | _ -> false
 
+    let isNumber =
+        function
+        | Number _ -> true
+        | _ -> false
+
+let productToConstantsAndVars =
+    function
+    | Number _ as n -> Some(n, [])
+    | Product p ->
+        let nums, vars =
+            List.partition Expression.isNumber p
+        Some(List.fold (*) 1Q nums, vars)
+    | _ -> None
+
+let inline primefactors factor x =
+    let rec loop x =
+        match factor x with
+        | [ one ] -> [ one ]
+        | [ x; _ ] -> [ x ]
+        | _ :: (nextfactor :: _) -> //first number is the largest, = input
+            let r = x / nextfactor
+            let f1, f2 = loop r, loop nextfactor
+            f1 @ f2
+        | _ -> failwith "unexpected error"
+    loop x
+
+let inline factors toint f x =
+    let x' = toint x
+    let sqrtx = int (sqrt (float x'))
+    [ for n in 1..sqrtx do
+          let m = x' / n
+          if x' % n = 0 then
+              yield f n
+              if m <> n then yield f m ]
+    |> List.sortByDescending toint
+
+let factorsExpr = abs >> factors Expression.toInt Expression.FromInt32
+
+let groupPowers singletonLift pl =
+    List.groupBy id pl
+    |> List.map (fun (x, l) ->
+           if l.Length = 1 then singletonLift x
+           else Power(x, Expression.FromInt32(List.length l)))
+
+let primefactorsPartial x =
+    match productToConstantsAndVars x with
+    | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
+    | None -> None
+       
 module Algebraic =
+    let simplifyNumericPower = function  
+        | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
+        | f -> f
+    let simplifySquareRoot (expr : Expression) =
+        let sqRootGrouping =
+            function
+            | (Power(x, Number n)) when n > 1N ->
+                if (int n % 2 = 0) then x ** (Expression.FromRational(n / 2N)), 1Q
+                elif n = 3N then x, x
+                else x, Power(x, Number(n - 2N))
+            | x -> 1Q, x
+        match primefactorsPartial expr with
+        | None -> None
+        | Some(pfl, n) ->
+            let n, (outr, inr) =
+                n,
+                pfl
+                |> groupPowers id
+                |> List.map sqRootGrouping
+                |> List.unzip
+
+            let isneg = n.ToInt() < 0
+            Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q
+                                                              else 1Q) inr))
+
+
     let collectNestedSumOrProduct test l =
         let innersums, rest = List.partition test l
         let ls = List.collect Expression.toList innersums
@@ -96,7 +171,8 @@ module Algebraic =
     let rec simplifyLite =
         function
         | Sum [ x ] | Product [ x ] -> simplifyLite x
-        | Product l ->
+        | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
+        | Product l -> 
             Product
                 (List.map simplifyLite
                      (collectNestedSumOrProduct Expression.isProduct l))
@@ -113,9 +189,10 @@ module Algebraic =
             | Power(Number x, _) when x = 1N -> 1Q
             | Power(Product [ x ], n) | Power(Sum [ x ], n) ->
                 simplifyLoop (Power(x, n))
+            | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
             | Power(Power(x, a), b) -> simplifyLoop (Power(x, (a * b)))
-            | Power(x, n) when n = 1Q / 2Q && simplifysqrt ->
-                match None with
+            | Power(x, n) as expr when n = 1Q / 2Q && simplifysqrt ->
+                match simplifySquareRoot expr with
                 | Some x' -> x'
                 | None -> Power(simplifyLoop x, n)
             | Power(x, n) -> Power(simplifyLoop x, simplifyLoop n)
@@ -168,51 +245,7 @@ let rec partitions =
                   yield [ p.Head + 1 ] @ p.Tail ]
         |> List.filter (List.sum >> (=) n)
 
-let inline factors toint f x =
-    let x' = toint x
-    let sqrtx = int (sqrt (float x'))
-    [ for n in 1..sqrtx do
-          let m = x' / n
-          if x' % n = 0 then
-              yield f n
-              if m <> n then yield f m ]
-    |> List.sortByDescending toint
 
-let factorsExpr = abs >> factors Expression.toInt Expression.FromInt32
-
-let productToConstantsAndVars =
-    function
-    | Number _ as n -> Some(n, [])
-    | Product p ->
-        let nums, vars =
-            List.partition (function
-                | Number _ -> true
-                | _ -> false) p
-        Some(List.fold (*) 1Q nums, vars)
-    | _ -> None
-
-let inline primefactors factor x =
-    let rec loop x =
-        match factor x with
-        | [ one ] -> [ one ]
-        | [ x; _ ] -> [ x ]
-        | _ :: (tf :: _) ->
-            let r = x / tf
-            let f1, f2 = loop r, loop tf
-            f1 @ f2
-        | _ -> failwith "unexpected error"
-    loop x
-
-let primefactorsPartial x =
-    match productToConstantsAndVars x with
-    | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
-    | None -> None
-
-let groupPowers singletonLift pl =
-    List.groupBy id pl
-    |> List.map (fun (x, l) ->
-           if l.Length = 1 then singletonLift x
-           else Power(x, Expression.FromInt32(List.length l)))
 
 let primeFactorsExpr =
     abs
@@ -226,27 +259,6 @@ let primeFactorsPartialExpr =
                    >> groupPowers (fun x -> Sum [ x ])
                    >> Product)
 
-let simplifySquareRoot (expr : Expression) =
-    let sqRootGrouping =
-        function
-        | (Power(x, Number n)) when n > 1N ->
-            if (int n % 2 = 0) then x ** (Expression.FromRational(n / 2N)), 1Q
-            elif n = 3N then x, x
-            else x, Power(x, Number(n - 2N))
-        | x -> 1Q, x
-    match primefactorsPartial expr with
-    | None -> None
-    | Some(pfl, n) ->
-        let n, (outr, inr) =
-            n,
-            pfl
-            |> groupPowers id
-            |> List.map sqRootGrouping
-            |> List.unzip
-
-        let isneg = n.ToInt() < 0
-        Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q
-                                                          else 1Q) inr))
 
 let rec factorial (n : BigRational) =
     if n = 1N then 1N

@@ -82,6 +82,8 @@ let pn = 1 / 2Q * (a * meter / sec ** 2) * (t * sec) ** 2
 Units.differentiate (t * sec) pn |> Units.differentiate(t * sec)
 ///////////
 BigRational.fromFloat(1e-26)
+ 
+
 [2. ** 3.
  2. ** 5.
  2. ** 4.
@@ -101,10 +103,14 @@ BigRational.fromFloat(1e-26)
 |> List.map(BigRational.fromFloat >> Expression.FromRational)
 |> List.map(fun x -> 
        x.ToFormattedString(),
-       let y = simplifySquareRoot x
+       let y = Algebraic.simplifySquareRoot (sqrt x)
        y |> Option.map Expression.toFormattedString) //, y.ToFloat() ** 2.)
-simplifySquareRoot -145Q
+Algebraic.simplifySquareRoot (sqrt -145Q)
 (primeFactorsExpr 5324Q).ToFormattedString()
 Core.expressionFormater <- Infix.format
 Logarithm.powerRule(ln(x ** 2))
 
+20Q |> Algebraic.simplifySquareRoot
+
+let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get 
+vr |> Algebraic.simplifyLite

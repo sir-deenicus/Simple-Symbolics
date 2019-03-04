@@ -4,7 +4,7 @@
 #r @".\lib\net45\MathNet.Numerics.FSharp.dll"
 #r @".\fparsec\fparsecCs.dll"
 #r @".\fparsec\fparsec.dll"
-#r @".\MathNet.Symbolics.Ext\MathNet.Symbolics.Ext.dll"
+#r @".\MathNet.Symbolic.Ext\MathNet.Symbolic.Ext.dll"
 
 //#r @".\symbolics\net40\mathnet.symbolics.dll"
 open MathNet.Symbolics
@@ -18,6 +18,11 @@ let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
+
+let symbolString =
+    function
+    | Identifier(Symbol s) -> s
+    | _ -> ""
 
 module List =
     let filterMap filter map xs =
@@ -71,6 +76,11 @@ module Expression =
     let toInt (i : Expression) = i.ToInt()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
+    let evaluateFloat vars expr =
+        let map =
+            List.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
+        let symbvals = System.Collections.Generic.Dictionary(dict map)
+        try Some(Evaluate.evaluate symbvals expr) with _ -> None
 
     let toList =
         function
@@ -92,14 +102,26 @@ module Expression =
         | Number _ -> true
         | _ -> false
 
-let productToConstantsAndVars =
+    let isInteger =
+        function
+        | Number n when n.IsInteger -> true
+        | _ -> false   
+        
+    let isVariable = function
+        | Identifier _ -> true
+        | _ -> false
+
+let productToConstantsAndVarsGen test =
     function
     | Number _ as n -> Some(n, [])
     | Product p ->
-        let nums, vars =
-            List.partition Expression.isNumber p
+        let nums, vars = List.partition test p
         Some(List.fold (*) 1Q nums, vars)
     | _ -> None
+
+let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+
+let productToIntConstantsAndVars = productToConstantsAndVarsGen Expression.isInteger
 
 let inline primefactors factor x =
     let rec loop x =
@@ -132,21 +154,25 @@ let groupPowers singletonLift pl =
            else Power(x, Expression.FromInt32(List.length l)))
 
 let primefactorsPartial x =
-    match productToConstantsAndVars x with
+    match productToIntConstantsAndVars x with
     | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
     | None -> None
-       
+
 module Algebraic =
-    let simplifyNumericPower = function  
-        | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
+    let simplifyNumericPower =
+        function
+        | Power(Number n, Number m) when m.IsInteger ->
+            Expression.FromRational(n ** (int m))
         | f -> f
+
     let simplifySquareRoot (expr : Expression) =
         let sqRootGrouping =
             function
             | (Power(x, Number n)) when n > 1N ->
-                if (int n % 2 = 0) then x ** (Expression.FromRational(n / 2N)), 1Q
+                if (int n % 2 = 0) then
+                    x ** (Expression.FromRational(n / 2N)), 1Q
                 elif n = 3N then x, x
-                else x, simplifyNumericPower(Power(x, Number(n - 2N)))
+                else x, simplifyNumericPower (Power(x, Number(n - 2N)))
             | x -> 1Q, x
         match expr with
         | Power(x, n) when n = 1Q / 2Q ->
@@ -161,8 +187,9 @@ module Algebraic =
                     |> List.unzip
 
                 let isneg = n.ToInt() < 0
-                Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q
-                                                              else 1Q) inr))
+                Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then
+                                                                      -1Q
+                                                                  else 1Q) inr))
         | _ -> None
 
     let collectNestedSumOrProduct test l =
@@ -173,8 +200,9 @@ module Algebraic =
     let rec simplifyLite =
         function
         | Sum [ x ] | Product [ x ] -> simplifyLite x
-        | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
-        | Product l -> 
+        | Power(Number n, Number m) when m.IsInteger ->
+            Expression.FromRational(n ** (int m))
+        | Product l ->
             Product
                 (List.map simplifyLite
                      (collectNestedSumOrProduct Expression.isProduct l))
@@ -191,7 +219,8 @@ module Algebraic =
             | Power(Number x, _) when x = 1N -> 1Q
             | Power(Product [ x ], n) | Power(Sum [ x ], n) ->
                 simplifyLoop (Power(x, n))
-            | Power(Number n, Number m) when m.IsInteger -> Expression.FromRational (n**(int m))
+            | Power(Number n, Number m) when m.IsInteger ->
+                Expression.FromRational(n ** (int m))
             | Power(Power(x, a), b) -> simplifyLoop (Power(x, (a * b)))
             | Power(x, n) as expr when n = 1Q / 2Q && simplifysqrt ->
                 match simplifySquareRoot expr with
@@ -247,8 +276,6 @@ let rec partitions =
                   yield [ p.Head + 1 ] @ p.Tail ]
         |> List.filter (List.sum >> (=) n)
 
-
-
 let primeFactorsExpr =
     abs
     >> primefactors factorsExpr
@@ -260,7 +287,6 @@ let primeFactorsPartialExpr =
     >> Option.map (fst
                    >> groupPowers (fun x -> Sum [ x ])
                    >> Product)
-
 
 let rec factorial (n : BigRational) =
     if n = 1N then 1N
@@ -511,6 +537,8 @@ module Units =
     let mega = 1_000_000Q
     let giga = 1_000_000_000Q
     let tera = 1_000_000_000_000Q
+
+    let K = Units(1Q, symbol "K", "K")
     let gram = Units(1Q, Operators.symbol "g", "g")
     let kg = kilo * gram |> setAlt "kg"
     let meter = Units(1Q, Operators.symbol "meters", "meter")
@@ -544,6 +572,7 @@ module Units =
           kW, "Power"
           J, "Energy"
           N, "Force"
+          K, "Temperature"
           W / meter ** 2, "Energy flux"
           W / cm ** 2, "Energy flux"
           bytes, "information"
@@ -688,10 +717,6 @@ let averageDepth =
     | Sum l | Product l -> List.averageBy (depth >> float) l
     | e -> float (depth e)
 
-let symbolString =
-    function
-    | Identifier(Symbol s) -> s
-    | _ -> ""
 
 module Structure =
     let exists func =
@@ -741,6 +766,9 @@ type Equation(leq : Expression, req : Expression) =
 
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
+
+     
+let (<=>) a b = Equation(a,b) 
 
 let equals a b = Equation(a, b)
 

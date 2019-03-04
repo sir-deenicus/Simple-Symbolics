@@ -2,7 +2,7 @@
 #r "prelude.dll"
 #r "hansei.core.dll"
 #r "hansei.dll"
-#load "solving.fsx"
+#load "derivations.fsx"
 
 open System.Collections.Generic
 open MathNet.Symbolics
@@ -75,22 +75,7 @@ searcher.ImportanceSample(100,20)
 
 ///////////////////////////
 /// //////////////////// 
-let deriveTrivialEqualitiesSingle(e1,eq) =
-    [yield Equation(e1,eq)
-     for var in findVariablesOfExpression eq do
-         match reArrangeEquation0 true var (eq,e1) with
-         | Identifier _ as var,req -> yield Equation(var,req)
-         | _ -> ()]
 
-let deriveTrivialEqualities(eqs: Equation list) =
-    let deqs =
-        [for eq in eqs do
-             yield! deriveTrivialEqualitiesSingle eq.Equalities.Head]
-    Hashset deqs |> Seq.toList
-
-let genEqualitiesList(eqs: Equation list) =
-    [for e in eqs do
-         yield! e.Equalities]
 
 let ``P(A|B)`` = symbol "P(A|B)"
 let ``P(A ∩ B)`` = symbol "P(A ∩ B)"

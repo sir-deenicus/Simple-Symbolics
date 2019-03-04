@@ -4,7 +4,8 @@
     <TargetFrameworks>net45;netstandard2.0;netcoreapp2.0</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
     <Version>0.0.8</Version>
-    <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description> 
+    <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,8 +24,8 @@
 
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />
-    <PackageReference Include="MathNet.Numerics.FSharp" Version="4.6.0" />
-    <PackageReference Include="MathNet.Symbolics" Version="0.19.0" />
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.20.1" />
   </ItemGroup>
 
 </Project>

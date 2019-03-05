@@ -78,9 +78,9 @@ module Expression =
     let toFormattedString (e : Expression) = e.ToFormattedString()
     let evaluateFloat vars expr =
         let map =
-            List.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
+            Seq.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
         let symbvals = System.Collections.Generic.Dictionary(dict map)
-        try Some(Evaluate.evaluate symbvals expr) with _ -> None
+        try Some(let v = Evaluate.evaluate symbvals expr in v.RealValue) with _ -> None
 
     let toList =
         function
@@ -524,6 +524,8 @@ type Units(q : Expression, u : Expression, ?altUnit) =
             (t.Unit.ToFormattedString())
 
 module Units =
+    open System.Collections.Generic
+
     let (^) a b = Units(a, b)
 
     let setAlt alt (u : Units) =
@@ -598,6 +600,14 @@ module Units =
         try
             simplifyUnits u
         with _ -> Some(u.ToString())
+
+    let rec evaluateUnits (map:IDictionary<Expression,Units>) = function
+        | Identifier _ as v when map.ContainsKey v -> map.[v]
+        | Power(x,p) -> (evaluateUnits map x) ** p
+        | Sum l -> List.sumBy (evaluateUnits map) l
+        | Product l -> l |> List.fold (fun p x -> p * (evaluateUnits map x)) (Units(1Q,1Q))    
+        | f -> Units(f, 1Q)
+    let tryEvaluateUnits vars e = try Some (let u = evaluateUnits (dict vars) e in u.Evaluate() ; u) with _ -> None
 
 let rec containsVar x =
     function

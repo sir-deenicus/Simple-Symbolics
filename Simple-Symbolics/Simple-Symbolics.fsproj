@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Content Include="Changes.txt" />
+    <None Include="Lab\simplesolve.fsx" />
     <None Include="Lab\deriver2.fsx" />
     <None Include="Lab\linear-algebra.fsx" />
     <None Include="Lab\linalg-tests.fsx" />

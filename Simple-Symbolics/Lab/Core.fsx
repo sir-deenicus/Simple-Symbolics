@@ -19,6 +19,15 @@ let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 
+let smartroundEx n x =
+    if x > 0. && x < 1. then
+        let p = log10 x
+        let roundto = int(ceil -p) + n
+        Math.Round(x, roundto), roundto
+    else Math.Round(x, n), n
+
+let smartround n = smartroundEx n >> fst        
+
 let symbolString =
     function
     | Identifier(Symbol s) -> s
@@ -485,43 +494,23 @@ type Units(q : Expression, u : Expression, ?altUnit) =
     static member (/) (a : Expression, b : Units) =
         Units(a / b.Quantity, 1 / b.Unit, b.AltUnit + "^-1")
 
-    static member ToUnit(a : Units, b : Units) =
+    static member To(a : Units, b : Units) = 
         if a.Unit = b.Unit then
             let altunit =
                 if b.AltUnit = "" then
                     Units.numstr b.Quantity + " " + b.Unit.ToFormattedString()
                 else b.AltUnit
-            Some(Units((a / b).Quantity, b.Unit, altunit))
-        else None
-
-    static member To(a : Units, b : Units, round : int option) =
-        let r = defaultArg round 12
-
-        let rstr =
-            match round with
-            | None -> ""
-            | Some n -> string n
-        if a.Unit = b.Unit then
-            let altunit =
-                if b.AltUnit = "" then
-                    Units.numstr b.Quantity + " " + b.Unit.ToFormattedString()
-                else b.AltUnit
+            let q,r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
+            let qstr = q.ToString("N" + string r) 
             Some
-                (sprintf "%s %s"
-                     (Math.Round((a / b).Quantity.ToFloat(), r)
-                          .ToString("N" + rstr)) altunit)
-        else None
-
-    static member To(a : Units, b : Units) = Units.To(a, b, None)
-
-    static member To(a : Units, b : Units, unitstr : string) =
-        if a.Unit = b.Unit then
-            Some(sprintf "%s %s" ((a / b).Quantity.ToFormattedString()) unitstr)
+                (sprintf "%s %s" qstr altunit, qstr.Length)
         else None
 
     override t.ToString() =
-        sprintf "(%s, %s)" (t.Quantity.ToFormattedString())
-            (t.Unit.ToFormattedString())
+        let q, r = t.Quantity.ToFloat() |> smartroundEx 1
+        let qstr = q.ToString("N" + string r)
+        if t.Unit = 1Q then qstr
+        else sprintf "%s %s" qstr (t.Unit.ToFormattedString())
 
 module Units =
     open System.Collections.Generic
@@ -532,6 +521,7 @@ module Units =
         u.AltUnit <- alt
         u
 
+    let unitless = Units(1Q, 1Q, "")
     let micro = Expression.fromFloat 1e-6
     let milli = Expression.fromFloat (0.001)
     let centi = Expression.FromRational(1N / 100N)
@@ -539,31 +529,48 @@ module Units =
     let mega = 1_000_000Q
     let giga = 1_000_000_000Q
     let tera = 1_000_000_000_000Q
+    let exa = 10Q ** 18
 
     let K = Units(1Q, symbol "K", "K")
+    
     let gram = Units(1Q, Operators.symbol "g", "g")
     let kg = kilo * gram |> setAlt "kg"
+    
     let meter = Units(1Q, Operators.symbol "meters", "meter")
+    
     let sec = Units(1Q, Operators.symbol "sec", "sec")
-    let flops = Units(1Q, Operators.symbol "flops")
+    
+    let flop = Units(1Q, Operators.symbol "flop")
     let bits = Units(1Q, Operators.symbol "bits")
     let bytes = 8Q * bits |> setAlt "bytes"
     let N = kg * meter / sec ** 2 |> setAlt "N"
+    let usd = Units(1Q, symbol "\\;USD", "\\;USD")
+    let exafloatops = exa * flop |> setAlt "exafloatops"
+    let terafloatops = tera * flop |> setAlt "terafloatops"
     let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
     let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
     let km = 1000Q * meter |> setAlt "km"
     let cm = centi * meter |> setAlt "cm"
     let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
     let inches = 12 * ft
+
     let btu = Expression.FromRational(BigRational.fromFloat 1055.06) * J
     let W = (J / sec) |> setAlt "W"
     let kW = (W * 1000Q) |> setAlt "kW"
-    let gigaflops = giga * flops |> setAlt "gigaflops"
-    let teraflops = tera * flops |> setAlt "teraflops"
+    let kJ = (J * 1000Q) |> setAlt "kJ" 
+    let flops = flop / sec |> setAlt "flop/s"
+    let gigaflops = giga * flops |> setAlt "gigaflop/s"
+    let teraflops = tera * flops |> setAlt "teraflop/s"
+
     let gigabytes = giga * bytes |> setAlt "gigabytes"
+
     let minute = 60Q * sec |> setAlt "minute"
     let hr = 60Q * minute |> setAlt "hr"
     let days = 24Q * hr |> setAlt "days"
+    let weeks = 7Q * days |> setAlt "weeks"
+    let years = 52Q * weeks |> setAlt "years"
+    let kWh = (kW * hr) |> setAlt "kWh"
+
     let differentiate (dy : Units) (dx : Units) =
         Units
             (Calculus.differentiate dy.Quantity dx.Quantity, dx.Unit / dy.Unit,
@@ -573,34 +580,40 @@ module Units =
         [ W, "Power"
           kW, "Power"
           J, "Energy"
+          kJ, "Energy"
+          kWh, "Energy" 
+          terafloatops, "computation"
+          exafloatops, "computation"
+          flop, "computation"
           N, "Force"
           K, "Temperature"
           W / meter ** 2, "Energy flux"
           W / cm ** 2, "Energy flux"
           bytes, "information"
           gigabytes, "information"
+          flops, "flop/s"
           gigaflops, "flop/s"
           teraflops, "flop/s"
           hr, "Time"
+          years,"Time"
+          weeks, "Time"
+          days, "Time"
           sec, "Time"
           gram, "mass"
           kg, "mass"
           meter, "length" ]
 
-    let simplifyUnitsEx (r : int option) (u : Units) =
-        List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
-        |> List.map
-               (fun (u', t) ->
-               Units.To(u, u', r) |> Option.map (fun s -> s + " (" + t + ")"))
-        |> List.minBy (fun u -> Option.get u |> String.length)
-
-    let simplifyUnits = simplifyUnitsEx None
-
-    let trySimplifyUnits (u : Units) =
-        try
-            simplifyUnits u
-        with _ -> Some(u.ToString())
-
+    let simplifyUnits (u : Units) =
+        let matched =
+            List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
+            |> List.map
+                   (fun (u', t) ->
+                   let s,len = Units.To(u, u') |> Option.get 
+                   len, s + " (" + t + ")")
+        match matched with
+        | [] -> u.ToString()
+        | l -> l |> List.minBy fst |> snd
+         
     let rec evaluateUnits (map:IDictionary<Expression,Units>) = function
         | Identifier _ as v when map.ContainsKey v -> map.[v]
         | Power(x,p) -> (evaluateUnits map x) ** p

@@ -48,7 +48,7 @@ let iterativeSolve eval vars knowns =
         | sols -> 
             sols |> List.iter (fst >> vset.Add >> ignore)
             let vars' = sols @ List.ofSeq vs
-            loop (candidates::cs) (sols::tsols) vars'
+            loop (List.ofSeq candidates::cs) (sols::tsols) vars'
     loop [] [] vars
 
 
@@ -79,7 +79,7 @@ let varsu =
               
 let zx, zy = iterativeSolve Expression.evaluateFloat vars knowns
 let zxu, zyu = iterativeSolve Units.tryEvaluateUnits varsu knowns
-6./13.
+
 Units.evaluateUnits
 
-zxu |> List.map (fun (x,u) -> x, )
+zxu |> List.map (keepLeft Units.simplifyUnits)

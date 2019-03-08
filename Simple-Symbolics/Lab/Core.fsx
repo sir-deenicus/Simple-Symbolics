@@ -20,13 +20,14 @@ let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 
 let smartroundEx n x =
-    if x > 0. && x < 1. then
-        let p = log10 x
-        let roundto = int(ceil -p) + n
-        Math.Round(x, roundto), roundto
+    if x > -1. && x < 1. && x <> 0. then
+        let p = log10 (abs x)
+        let roundto = int (ceil -p) + n
+        if roundto > 15 then x, roundto
+        else Math.Round(x, roundto), roundto
     else Math.Round(x, n), n
 
-let smartround n = smartroundEx n >> fst        
+let smartround n = smartroundEx n >> fst
 
 let symbolString =
     function
@@ -41,13 +42,28 @@ module List =
 module BigRational =
     open Microsoft.FSharp.Core.Operators
 
+    let almostZero x = (floor x) / x > 0.999999
+
+    let fromFloatDouble (df : float) =
+        let rec countDigits n x =
+            let x' = x * 10.
+            if almostZero x' then n + 1
+            else countDigits (n + 1) x'
+        if almostZero df then BigRational.FromBigInt(Numerics.BigInteger df)
+        else
+            let dpart = df - floor df
+            let dpow = countDigits 0 dpart
+            let pow10 = Numerics.BigInteger 10 ** int dpow
+            BigRational.FromBigIntFraction
+                (Numerics.BigInteger(df * double pow10), pow10)
+
     ///limited by range of decimal (which is used as a less noisy alternative to floats)
     let fromFloat (f : float) =
         let df = decimal f
         if df = floor df then BigRational.FromBigInt(Numerics.BigInteger df)
         else
-            let s = string (df - floor df)
-            let pow10 = Numerics.BigInteger 10 ** (s.Length - 2)
+            let decimalpart = string (df - floor df)
+            let pow10 = Numerics.BigInteger 10 ** (decimalpart.Length - 2)
             BigRational.FromBigIntFraction
                 (Numerics.BigInteger(df * decimal pow10), pow10)
 
@@ -78,6 +94,8 @@ type Expression with
         | _ -> failwith "not a number"
 
 module Expression =
+    let fromFloatDouble f =
+        BigRational.fromFloatDouble f |> Expression.FromRational
     let fromFloat f = BigRational.fromFloat f |> Expression.FromRational
     let fromFloatRepeating f =
         BigRational.fromFloatRepeating f |> Expression.FromRational
@@ -85,11 +103,21 @@ module Expression =
     let toInt (i : Expression) = i.ToInt()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
+    let toSciNumString r (x: float) = 
+        let npow = if x > 0. then Some(floor (log10 x)) else None
+        match npow with
+        | Some n when n > 6. -> 
+            let pow10 = Power(10Q, Expression.FromInt32 (int n))
+            sprintf "%s × %s" (Math.Round(x/(10. ** n), 3).ToString("N3")) (pow10.ToFormattedString())
+        
+        | _ -> if r > 6 then string x else x.ToString("N" + string r)    
     let evaluateFloat vars expr =
         let map =
             Seq.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
         let symbvals = System.Collections.Generic.Dictionary(dict map)
-        try Some(let v = Evaluate.evaluate symbvals expr in v.RealValue) with _ -> None
+        try
+            Some(let v = Evaluate.evaluate symbvals expr in v.RealValue)
+        with _ -> None
 
     let toList =
         function
@@ -106,17 +134,25 @@ module Expression =
         | Sum _ -> true
         | _ -> false
 
-    let isNumber =
+    let isRationalNumber =
         function
         | Number _ -> true
+        | _ -> false
+
+    let isNumber =
+        function
+        | Number _
+        | Power(Number _, Number _)
+        | Product[Number _; Constant _] -> true
         | _ -> false
 
     let isInteger =
         function
         | Number n when n.IsInteger -> true
-        | _ -> false   
-        
-    let isVariable = function
+        | _ -> false
+
+    let isVariable =
+        function
         | Identifier _ -> true
         | _ -> false
 
@@ -129,8 +165,8 @@ let productToConstantsAndVarsGen test =
     | _ -> None
 
 let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
-
-let productToIntConstantsAndVars = productToConstantsAndVarsGen Expression.isInteger
+let productToIntConstantsAndVars =
+    productToConstantsAndVarsGen Expression.isInteger
 
 let inline primefactors factor x =
     let rec loop x =
@@ -302,6 +338,7 @@ let rec factorial (n : BigRational) =
     else n * factorial (n - 1N)
 
 open Operators
+open System.Collections.Generic
 
 let ln = MathNet.Symbolics.Operators.ln
 let arctan = MathNet.Symbolics.Operators.arctan
@@ -479,6 +516,7 @@ type Units(q : Expression, u : Expression, ?altUnit) =
                                     b.Unit.ToFormattedString()
                                 else b.AltUnit))
 
+    static member Abs(a:Units) = Units(abs a.Quantity, a.Unit, a.AltUnit)
     static member Pow(a : Units, b : int) =
         Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^" + string b)
     static member Pow(a : Units, b : Expression) =
@@ -494,23 +532,39 @@ type Units(q : Expression, u : Expression, ?altUnit) =
     static member (/) (a : Expression, b : Units) =
         Units(a / b.Quantity, 1 / b.Unit, b.AltUnit + "^-1")
 
-    static member To(a : Units, b : Units) = 
+    static member To(a : Units, b : Units) =
         if a.Unit = b.Unit then
             let altunit =
                 if b.AltUnit = "" then
                     Units.numstr b.Quantity + " " + b.Unit.ToFormattedString()
                 else b.AltUnit
-            let q,r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
-            let qstr = q.ToString("N" + string r) 
-            Some
-                (sprintf "%s %s" qstr altunit, qstr.Length)
+            let qstr = 
+                if Expression.isNumber (a/b).Quantity then
+                    let q, r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
+                    Expression.toSciNumString r q
+                else (a/b).Quantity.ToFormattedString()                
+            Some(sprintf "%s %s" qstr altunit, qstr.Length)
         else None
-
     override t.ToString() =
-        let q, r = t.Quantity.ToFloat() |> smartroundEx 1
-        let qstr = q.ToString("N" + string r)
-        if t.Unit = 1Q then qstr
-        else sprintf "%s %s" qstr (t.Unit.ToFormattedString())
+        if Expression.isNumber t.Quantity then
+            let q, r = t.Quantity.ToFloat() |> smartroundEx 1
+            let qstr = Expression.toSciNumString r q
+            if t.Unit = 1Q then qstr
+            else sprintf "%s %s" qstr (t.Unit.ToFormattedString())
+        else sprintf "%s %s" (t.Quantity.ToFormattedString()) (t.Unit.ToFormattedString())     
+
+module UnitsDesc =
+    let power = symbol "power"
+    let energy = symbol "energy"
+    let force = symbol "force"
+    let energyflux = symbol "energyflux"
+    let volume = symbol "volume"
+    let velocity = symbol "velocity"
+    let accel = symbol "accel"
+    let time = symbol "time"
+    let mass = symbol "mass"
+    let length = symbol "length"
+    let temperature = symbol "temperature"
 
 module Units =
     open System.Collections.Generic
@@ -527,49 +581,57 @@ module Units =
     let centi = Expression.FromRational(1N / 100N)
     let kilo = 1000Q
     let mega = 1_000_000Q
+    let million = mega 
     let giga = 1_000_000_000Q
+    let billion = giga
     let tera = 1_000_000_000_000Q
+    let peta = 10Q ** 15
     let exa = 10Q ** 18
-
+    //----------Temperature
     let K = Units(1Q, symbol "K", "K")
-    
+    //----------
     let gram = Units(1Q, Operators.symbol "g", "g")
     let kg = kilo * gram |> setAlt "kg"
-    
     let meter = Units(1Q, Operators.symbol "meters", "meter")
-    
-    let sec = Units(1Q, Operators.symbol "sec", "sec")
-    
-    let flop = Units(1Q, Operators.symbol "flop")
-    let bits = Units(1Q, Operators.symbol "bits")
-    let bytes = 8Q * bits |> setAlt "bytes"
-    let N = kg * meter / sec ** 2 |> setAlt "N"
-    let usd = Units(1Q, symbol "\\;USD", "\\;USD")
-    let exafloatops = exa * flop |> setAlt "exafloatops"
-    let terafloatops = tera * flop |> setAlt "terafloatops"
-    let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
-    let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
     let km = 1000Q * meter |> setAlt "km"
     let cm = centi * meter |> setAlt "cm"
     let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
     let inches = 12 * ft
-
-    let btu = Expression.FromRational(BigRational.fromFloat 1055.06) * J
-    let W = (J / sec) |> setAlt "W"
-    let kW = (W * 1000Q) |> setAlt "kW"
-    let kJ = (J * 1000Q) |> setAlt "kJ" 
-    let flops = flop / sec |> setAlt "flop/s"
-    let gigaflops = giga * flops |> setAlt "gigaflop/s"
-    let teraflops = tera * flops |> setAlt "teraflop/s"
-
-    let gigabytes = giga * bytes |> setAlt "gigabytes"
-
+    //----------
+    let sec = Units(1Q, Operators.symbol "sec", "sec")
     let minute = 60Q * sec |> setAlt "minute"
     let hr = 60Q * minute |> setAlt "hr"
     let days = 24Q * hr |> setAlt "days"
+    let day = days |> setAlt "day"
     let weeks = 7Q * days |> setAlt "weeks"
     let years = 52Q * weeks |> setAlt "years"
+    //----------
+    let N = kg * meter / sec ** 2 |> setAlt "N"
+    let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
+    let kJ = (J * 1000Q) |> setAlt "kJ"
+    let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
+    let btu = Expression.FromRational(BigRational.fromFloat 1055.06) * J
+    let W = (J / sec) |> setAlt "W"
+    let kW = (W * 1000Q) |> setAlt "kW"
     let kWh = (kW * hr) |> setAlt "kWh"
+    //----------
+    let bits = Units(1Q, Operators.symbol "bits")
+    let bytes = 8Q * bits |> setAlt "bytes"
+    let gigabytes = giga * bytes |> setAlt "gigabytes"
+    let flop = Units(1Q, Operators.symbol "flop")
+    let exafloatops = exa * flop |> setAlt "exafloatops"
+    let terafloatops = tera * flop |> setAlt "terafloatops"
+    let flops = flop / sec |> setAlt "flop/s"
+    let gigaflops = giga * flops |> setAlt "gigaflop/s"
+    let teraflops = tera * flops |> setAlt "teraflop/s"
+    let usd = Units(1Q, symbol "\\;USD", "\\;USD")
+    
+    let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
+    let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
+    let hbar = planck / (2 * pi)
+    let speed_of_light = 299_792_458 * meter/sec 
+    let stefan_boltzman = Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
+    let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
 
     let differentiate (dy : Units) (dx : Units) =
         Units
@@ -579,9 +641,12 @@ module Units =
     let units =
         [ W, "Power"
           kW, "Power"
+          giga * W |> setAlt "gigawatts", "Power"
+          tera * W |> setAlt "terawatts", "Power"
           J, "Energy"
           kJ, "Energy"
-          kWh, "Energy" 
+          mega * J|> setAlt "terawatts", "Energy"
+          kWh, "Energy"
           terafloatops, "computation"
           exafloatops, "computation"
           flop, "computation"
@@ -591,36 +656,53 @@ module Units =
           W / cm ** 2, "Energy flux"
           bytes, "information"
           gigabytes, "information"
+          tera*bytes, "information"
           flops, "flop/s"
           gigaflops, "flop/s"
           teraflops, "flop/s"
+          meter ** 3, "volume"
+          meter/sec, "velocity"
+          meter/sec**2, "Acceleration" 
+          minute, "Time"
           hr, "Time"
-          years,"Time"
+          years, "Time"
           weeks, "Time"
           days, "Time"
           sec, "Time"
           gram, "mass"
           kg, "mass"
-          meter, "length" ]
-
+          meter, "length" 
+          km, "length"]
+    
     let simplifyUnits (u : Units) =
         let matched =
             List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
-            |> List.map
-                   (fun (u', t) ->
-                   let s,len = Units.To(u, u') |> Option.get 
+            |> List.map (fun (u', t) ->
+                   let s, len = Units.To(u, u') |> Option.get
                    len, s + " (" + t + ")")
         match matched with
         | [] -> u.ToString()
-        | l -> l |> List.minBy fst |> snd
-         
-    let rec evaluateUnits (map:IDictionary<Expression,Units>) = function
+        | l ->
+            l
+            |> List.minBy fst
+            |> snd
+
+    let rec evaluateUnits (map : IDictionary<Expression, Units>) =
+        function
         | Identifier _ as v when map.ContainsKey v -> map.[v]
-        | Power(x,p) -> (evaluateUnits map x) ** p
+        | Power(x, p) -> (evaluateUnits map x) ** p
         | Sum l -> List.sumBy (evaluateUnits map) l
-        | Product l -> l |> List.fold (fun p x -> p * (evaluateUnits map x)) (Units(1Q,1Q))    
+        | Product l ->
+            l
+            |> List.fold (fun p x -> p * (evaluateUnits map x)) (Units(1Q, 1Q))
         | f -> Units(f, 1Q)
-    let tryEvaluateUnits vars e = try Some (let u = evaluateUnits (dict vars) e in u.Evaluate() ; u) with _ -> None
+
+    let tryEvaluateUnits vars e =
+        try
+            let u = evaluateUnits (dict vars) e
+            u.Evaluate() |> ignore
+            Some u
+        with _ -> None
 
 let rec containsVar x =
     function
@@ -638,7 +720,14 @@ let rec replaceSymbol r x =
     | Product l -> Product(List.map (replaceSymbol r x) l)
     | Sum l -> Sum(List.map (replaceSymbol r x) l)
     | x -> x
-
+let rec replaceSymbols (vars:IDictionary<_,_>) =
+    function
+    | Identifier _ as var when vars.ContainsKey var -> vars.[var]
+    | Power(f, n) -> Power(replaceSymbols vars f, replaceSymbols vars n)
+    | Function(fn, f) -> Function(fn, replaceSymbols vars f)
+    | Product l -> Product(List.map (replaceSymbols vars) l)
+    | Sum l -> Sum(List.map (replaceSymbols vars) l)
+    | x -> x
 let rec replaceVariableSymbol replacer targetvar =
     function
     | Identifier(Symbol s) when s = targetvar -> Identifier(Symbol(replacer s))
@@ -740,7 +829,6 @@ let averageDepth =
     | Sum l | Product l -> List.averageBy (depth >> float) l
     | e -> float (depth e)
 
-
 module Structure =
     let exists func =
         function
@@ -790,9 +878,7 @@ type Equation(leq : Expression, req : Expression) =
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
-     
-let (<=>) a b = Equation(a,b) 
-
+let (<=>) a b = Equation(a, b)
 let equals a b = Equation(a, b)
 
 module Vars =

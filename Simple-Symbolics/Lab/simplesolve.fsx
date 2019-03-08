@@ -23,6 +23,8 @@ open System
 open Hansei.Core.Distributions
 open Prelude.StringMetrics
 open Derivations
+open Units 
+ 
 
 let getCandidates (vset : Hashset<_>) vars knowns =
     knowns
@@ -38,18 +40,48 @@ let getSolutions evaluate vset vars candidates =
           | None -> ()
           | Some v -> yield e, v ]
 
-let iterativeSolve eval vars knowns =          
-    let vset = vars |> Seq.map fst |> Hashset 
-    let rec loop cs tsols (vs:seq<_>) =
+let iterativeSolve eval vars knowns =
+    let vset =
+        vars
+        |> Seq.map fst
+        |> Hashset
+
+    let rec loop cs tsols (vs : seq<_>) =
         let candidates = getCandidates vset vs knowns
         let sols = getSolutions eval vset vs candidates
         match sols with
         | [] -> List.concat tsols |> List.rev, cs
-        | sols -> 
-            sols |> List.iter (fst >> vset.Add >> ignore)
+        | sols ->
+            sols
+            |> List.iter (fst
+                          >> vset.Add
+                          >> ignore)
             let vars' = sols @ List.ofSeq vs
-            loop (List.ofSeq candidates::cs) (sols::tsols) vars'
+            loop (List.ofSeq candidates :: cs) (sols :: tsols) vars'
+
     loop [] [] vars
+let iterativeSolve2 f eval vars knowns =
+    let vset =
+        vars
+        |> Seq.map fst
+        |> Hashset
+
+    let rec loop ts cs tsols (vs : seq<_>) =
+        let candidates = getCandidates vset vs knowns
+        let sols = getSolutions eval vset vs candidates
+        match sols with
+        | [] -> List.concat tsols |> List.rev, cs, ts
+        | sols ->
+            sols
+            |> List.iter (fst
+                          >> vset.Add
+                          >> ignore)
+            let vars' = sols @ List.ofSeq vs
+            let vmap = Dict.ofSeq (Seq.map (keepLeft f) vars')
+            let ts' = candidates |> Seq.map (fun (e,e2) -> e,  replaceSymbols vmap e2)
+            loop (List.ofSeq ts':: ts) (List.ofSeq candidates :: cs) (sols :: tsols) vars'
+
+    loop [] [] [] vars
 
 
 let eff = symbol "eff"
@@ -64,8 +96,9 @@ let eq2 = W <=> qh - qc
 let knowns =
     deriveAndGenerateEqualities [ eff <=> 1 - tc / th
                                   W <=> qh - qc
-                                  qc <=> (1 - eff) * qh ]  
-open Units
+                                  qc <=> (1 - eff) * qh ]
+
+
 
 let vars =
     [ tc, 350.
@@ -75,11 +108,49 @@ let vars =
 let varsu =
     [ tc, 350 * K
       qc, 6300 * J
-      th, 650 * K]
-              
+      th, 650 * K ]
+
 let zx, zy = iterativeSolve Expression.evaluateFloat vars knowns
 let zxu, zyu = iterativeSolve Units.tryEvaluateUnits varsu knowns
 
 Units.evaluateUnits
-
 zxu |> List.map (keepLeft Units.simplifyUnits)
+
+
+let simplifyRational = function
+    | Number n as num -> 
+        let f = float n
+        let pf = abs f 
+        if pf > 10000. || pf < 0.0001 then
+            let p10 = floor(log10 pf)
+            let x = Math.Round(f / 10. ** p10, 0) |> Expression.fromFloat
+            Product [x; Power(10Q, p10|> Expression.fromFloat)]  
+        else num
+    | x -> x
+
+
+simplifyRational (1/100000Q)
+1./100000. = 1e-5
+Approximation.Real 5.
+open Core.Vars
+
+let suntemp = symbol "T_\\odot"
+let sunLum = symbol "L_\\odot"
+let earthLum = symbol "L_\\oplus"
+let sunrad = symbol "R_\\odot"
+let earthtemp = symbol "T_\\oplus"
+let earthrad = symbol "R_\\oplus"
+let earthsundistpow = symbol "E_\\oplus"
+let earthsundist = symbol "a_0"
+let earthabs = symbol "E_absorb"
+let sigma = symbol "\\sigma"
+
+let lum c T r = 4 * pi * r ** 2 * T ** 4 * c
+//= lum sigma earthtemp earthrad
+let thermknown =
+    deriveAndGenerateEqualities [sunLum <=>lum sigma suntemp sunrad; earthsundistpow <=> sunLum/(4 * pi * earthsundist**2)
+                                 earthabs <=> pi * earthrad ** 2 * earthsundistpow
+                                 earthLum <=> lum sigma earthtemp earthrad
+                                 earthLum <=> earthabs]
+
+let zx, zy = iterativeSolve Units.tryEvaluateUnits [suntemp, 5778 * K; sunrad, 695_510 * km] thermknown

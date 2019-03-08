@@ -145,7 +145,13 @@ let rec integrateSimple x = function
     
     | x -> failwith "Can't integrate this"
 
-
+type Integral(fx, x:Expression) =
+    let expr = Function(Function.Integral, fx)
+    member t.Expression = expr
+    member t.Compute() = integrateSimple x fx
+    override t.ToString() = 
+       sprintf @"\displaystyle \int %s d%s" (fx.ToFormattedString()) (x.ToFormattedString())
+ 
 integrateSimple x (1/((a * x + x + b)**2 + 1)) |> Infix.format
 integrateSimple x (1/(1 * (a * x + x + b)**2 + b)) |> Infix.format
 integrateSimple x (1/(((a+2) * x + b + c + x)**2 + c + y)) |> Infix.format //Caveats
@@ -170,13 +176,15 @@ integrateSimple x (1/(x+1)**a) |> Infix.format  //Caveats
 integrateSimple t a |> integrateSimple t |> Infix.format
 integrateSimple t (a * t + v0) |> Infix.format
 
-integrateSimple x (1/( sqrt(1 - 16 * x **2) )) |> Infix.format
+
 csc(2*x + 1) * cot(2*x + 1 ) |> Trigonometric.separateFactors // |> Infix.format
 ///////////BROKE
-integrateSimple x (1/((3 * (a * x)**2 + 1))) |> Infix.format 
-integrateSimple x (1/((a * x)**2 + 1) ) |> Infix.format 
-integrateSimple x (a * x * cos x) |> Infix.format     
-integrateSimple x (1/(3*x**2+1)) |> Infix.format
-integrateSimple x (1/cos(x))|> Infix.format
+//integrateSimple x (1/( sqrt(1 - 16 * x **2) )) |> Infix.format
 
-integrateSimplePartial x (5 * x + 1/cos(x))
+//integrateSimple x (1/((3 * (a * x)**2 + 1))) |> Infix.format 
+//integrateSimple x (1/((a * x)**2 + 1) ) |> Infix.format 
+//integrateSimple x (a * x * cos x) |> Infix.format     
+//integrateSimple x (1/(3*x**2+1)) |> Infix.format
+//integrateSimple x (1/cos(x))|> Infix.format
+
+//integrateSimplePartial x (5 * x + 1/cos(x))

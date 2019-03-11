@@ -103,14 +103,20 @@ module Expression =
     let toInt (i : Expression) = i.ToInt()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
-    let toSciNumString r (x: float) = 
-        let npow = if x > 0. then Some(floor (log10 x)) else None
+
+    let toSciNumString r (x : float) =
+        let npow =
+            if x > 0. then Some(floor (log10 x))
+            else None
         match npow with
-        | Some n when n > 6. -> 
-            let pow10 = Power(10Q, Expression.FromInt32 (int n))
-            sprintf "%s × %s" (Math.Round(x/(10. ** n), 3).ToString("N3")) (pow10.ToFormattedString())
-        
-        | _ -> if r > 6 then string x else x.ToString("N" + string r)    
+        | Some n when n > 6. ->
+            let pow10 = Power(10Q, Expression.FromInt32(int n))
+            sprintf "%s × %s" (Math.Round(x / (10. ** n), 3).ToString("N3"))
+                (pow10.ToFormattedString())
+        | _ ->
+            if r > 6 then string x
+            else x.ToString("N" + string r)
+
     let evaluateFloat vars expr =
         let map =
             Seq.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
@@ -141,9 +147,8 @@ module Expression =
 
     let isNumber =
         function
-        | Number _
-        | Power(Number _, Number _)
-        | Product[Number _; Constant _] -> true
+        | Number _ | Power(Number _, Number _) | Product [ Number _; Constant _ ] ->
+            true
         | _ -> false
 
     let isInteger =
@@ -202,6 +207,23 @@ let primefactorsPartial x =
     match productToIntConstantsAndVars x with
     | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
     | None -> None
+
+let rec simplifyRationals (roundto : int) =
+    function
+    | Number n as num ->
+        let f = float n
+        let pf = abs f
+        if pf > 10000. || pf < 0.0001 then
+            let p10 = floor (log10 pf)
+            let x = Math.Round(f / 10. ** p10, roundto) |> Expression.fromFloat
+            Product [ x
+                      Power(10Q, p10 |> Expression.fromFloat) ]
+        else num
+    | Power(x, n) -> Power(simplifyRationals roundto x, n)
+    | Sum l -> Sum(List.map (simplifyRationals roundto) l)
+    | Product l -> Product(List.map (simplifyRationals roundto) l)
+    | Function(f, x) -> Function(f, simplifyRationals roundto x)
+    | x -> x
 
 module Algebraic =
     let simplifyNumericPower =
@@ -286,6 +308,7 @@ module Algebraic =
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
+            | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
             | Sum l -> List.map simplifyLoop l |> List.sum
@@ -516,7 +539,7 @@ type Units(q : Expression, u : Expression, ?altUnit) =
                                     b.Unit.ToFormattedString()
                                 else b.AltUnit))
 
-    static member Abs(a:Units) = Units(abs a.Quantity, a.Unit, a.AltUnit)
+    static member Abs(a : Units) = Units(abs a.Quantity, a.Unit, a.AltUnit)
     static member Pow(a : Units, b : int) =
         Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^" + string b)
     static member Pow(a : Units, b : Expression) =
@@ -538,20 +561,25 @@ type Units(q : Expression, u : Expression, ?altUnit) =
                 if b.AltUnit = "" then
                     Units.numstr b.Quantity + " " + b.Unit.ToFormattedString()
                 else b.AltUnit
-            let qstr = 
-                if Expression.isNumber (a/b).Quantity then
+
+            let qstr =
+                if Expression.isNumber (a / b).Quantity then
                     let q, r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
                     Expression.toSciNumString r q
-                else (a/b).Quantity.ToFormattedString()                
+                else (a / b).Quantity.ToFormattedString()
+
             Some(sprintf "%s %s" qstr altunit, qstr.Length)
         else None
+
     override t.ToString() =
         if Expression.isNumber t.Quantity then
             let q, r = t.Quantity.ToFloat() |> smartroundEx 1
             let qstr = Expression.toSciNumString r q
             if t.Unit = 1Q then qstr
             else sprintf "%s %s" qstr (t.Unit.ToFormattedString())
-        else sprintf "%s %s" (t.Quantity.ToFormattedString()) (t.Unit.ToFormattedString())     
+        else
+            sprintf "%s %s" (t.Quantity.ToFormattedString())
+                (t.Unit.ToFormattedString())
 
 module UnitsDesc =
     let power = symbol "power"
@@ -581,7 +609,7 @@ module Units =
     let centi = Expression.FromRational(1N / 100N)
     let kilo = 1000Q
     let mega = 1_000_000Q
-    let million = mega 
+    let million = mega
     let giga = 1_000_000_000Q
     let billion = giga
     let tera = 1_000_000_000_000Q
@@ -625,14 +653,13 @@ module Units =
     let gigaflops = giga * flops |> setAlt "gigaflop/s"
     let teraflops = tera * flops |> setAlt "teraflop/s"
     let usd = Units(1Q, symbol "\\;USD", "\\;USD")
-    
     let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
     let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
     let hbar = planck / (2 * pi)
-    let speed_of_light = 299_792_458 * meter/sec 
-    let stefan_boltzman = Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
+    let speed_of_light = 299_792_458 * meter / sec
+    let stefan_boltzman =
+        Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
     let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
-
     let differentiate (dy : Units) (dx : Units) =
         Units
             (Calculus.differentiate dy.Quantity dx.Quantity, dx.Unit / dy.Unit,
@@ -645,7 +672,7 @@ module Units =
           tera * W |> setAlt "terawatts", "Power"
           J, "Energy"
           kJ, "Energy"
-          mega * J|> setAlt "terawatts", "Energy"
+          mega * J |> setAlt "terawatts", "Energy"
           kWh, "Energy"
           terafloatops, "computation"
           exafloatops, "computation"
@@ -656,13 +683,13 @@ module Units =
           W / cm ** 2, "Energy flux"
           bytes, "information"
           gigabytes, "information"
-          tera*bytes, "information"
+          tera * bytes, "information"
           flops, "flop/s"
           gigaflops, "flop/s"
           teraflops, "flop/s"
           meter ** 3, "volume"
-          meter/sec, "velocity"
-          meter/sec**2, "Acceleration" 
+          meter / sec, "velocity"
+          meter / sec ** 2, "Acceleration"
           minute, "Time"
           hr, "Time"
           years, "Time"
@@ -671,9 +698,9 @@ module Units =
           sec, "Time"
           gram, "mass"
           kg, "mass"
-          meter, "length" 
-          km, "length"]
-    
+          meter, "length"
+          km, "length" ]
+
     let simplifyUnits (u : Units) =
         let matched =
             List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
@@ -709,7 +736,7 @@ let rec containsVar x =
     | Identifier _ as sy when sy = x -> true
     | Power(p, n) -> containsVar x n || containsVar x p
     | Function(_, fx) -> containsVar x fx
-    | Product l | Sum l -> List.exists (containsVar x) l
+    | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
     | _ -> false
 
 let rec replaceSymbol r x =
@@ -719,15 +746,19 @@ let rec replaceSymbol r x =
     | Function(fn, f) -> Function(fn, replaceSymbol r x f)
     | Product l -> Product(List.map (replaceSymbol r x) l)
     | Sum l -> Sum(List.map (replaceSymbol r x) l)
+    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
     | x -> x
-let rec replaceSymbols (vars:IDictionary<_,_>) =
+
+let rec replaceSymbols (vars : IDictionary<_, _>) =
     function
     | Identifier _ as var when vars.ContainsKey var -> vars.[var]
     | Power(f, n) -> Power(replaceSymbols vars f, replaceSymbols vars n)
     | Function(fn, f) -> Function(fn, replaceSymbols vars f)
     | Product l -> Product(List.map (replaceSymbols vars) l)
     | Sum l -> Sum(List.map (replaceSymbols vars) l)
+    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbols vars) l)
     | x -> x
+
 let rec replaceVariableSymbol replacer targetvar =
     function
     | Identifier(Symbol s) when s = targetvar -> Identifier(Symbol(replacer s))
@@ -740,13 +771,16 @@ let rec replaceVariableSymbol replacer targetvar =
     | Product l ->
         Product(List.map (replaceVariableSymbol replacer targetvar) l)
     | Sum l -> Sum(List.map (replaceVariableSymbol replacer targetvar) l)
+    | FunctionN(fn, l) ->
+        FunctionN(fn, List.map (replaceVariableSymbol replacer targetvar) l)
     | x -> x
 
 let rec findVariablesOfExpression =
     function
     | Identifier _ as var -> [ var ]
     | Power(x, n) -> findVariablesOfExpression x @ findVariablesOfExpression n
-    | Product l | Sum l -> List.collect findVariablesOfExpression l
+    | Product l | Sum l | FunctionN(_, l) ->
+        List.collect findVariablesOfExpression l
     | Function(_, x) -> findVariablesOfExpression x
     | _ -> []
 
@@ -778,6 +812,12 @@ let replaceExpression replacement expressionToFind formula =
                 (List.map iterReplaceIn
                      (tryReplaceCompoundExpression replacement
                           expressionToFindContentSet l))
+        | FunctionN(fn, l) ->
+            FunctionN
+                (fn,
+                 List.map iterReplaceIn
+                     (tryReplaceCompoundExpression replacement
+                          expressionToFindContentSet l))
         | x -> x
     iterReplaceIn (Algebraic.simplifyLite formula) |> Algebraic.simplify true
 
@@ -803,6 +843,10 @@ let containsExpression expressionToFind formula =
             sum = expressionToFind
             || tryFindCompoundExpression expressionToFindContentSet l
             || (List.exists iterFindIn l)
+        | FunctionN(_, l) as func ->
+            func = expressionToFind
+            || tryFindCompoundExpression expressionToFindContentSet l
+            || (List.exists iterFindIn l)
         | _ -> false
     iterFindIn (Algebraic.simplifyLite formula)
 
@@ -810,7 +854,7 @@ let rec size =
     function
     | Identifier _ -> 1
     | Power(x, n) -> size x + 1 + size n
-    | Product l | Sum l -> List.sumBy size l
+    | Product l | Sum l | FunctionN(_, l) -> List.sumBy size l
     | Function(_, x) -> size x + 1
     | Approximation _ | Number _ -> 1
     | _ -> failwith "unimplemented compute size"
@@ -819,20 +863,20 @@ let rec depth =
     function
     | Identifier _ -> 1
     | Power(x, n) -> (max (depth x) (depth n)) + 1
-    | Product l | Sum l -> 1 + (List.map depth l |> List.max)
+    | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
     | Function(_, x) -> depth x + 1
     | Approximation _ | Number _ -> 1
     | _ -> failwith "unimplemented compute size"
 
 let averageDepth =
     function
-    | Sum l | Product l -> List.averageBy (depth >> float) l
+    | Sum l | Product l | FunctionN(_, l) -> List.averageBy (depth >> float) l
     | e -> float (depth e)
 
 module Structure =
     let exists func =
         function
-        | Sum l | Product l -> List.exists func l
+        | Sum l | Product l | FunctionN(_, l) -> List.exists func l
         | f -> func f
 
     let rec existsRecursive func =
@@ -841,9 +885,30 @@ module Structure =
         | Power(p, n) as pow ->
             func pow || existsRecursive func n || existsRecursive func p
         | Function(_, fx) as f -> func f || existsRecursive func fx
-        | (Product l | Sum l) as prod ->
+        | (Product l | Sum l | FunctionN(_, l)) as prod ->
             func prod || List.exists (existsRecursive func) l
         | _ -> false
+
+    let rec first func =
+        function
+        | Identifier _ as i ->
+            if func i then Some i
+            else None
+        | Power(p, n) as pow ->
+            if func pow then Some pow
+            else List.tryPick (first func) [ p; n ]
+        | Function(_, fx) as f ->
+            if func f then Some f
+            else first func fx
+        | (Product l | Sum l | FunctionN(_, l)) as prod ->
+            if func prod then Some prod
+            else List.tryPick (first func) l
+        | _ -> None
+
+    let collectDistinctWith f expr =
+        Structure.collectAllDistinct (fun x ->
+            if f x then Some x
+            else None) expr
 
     let rec removeSymbol x =
         function
@@ -862,8 +927,46 @@ module Structure =
             Sum
                 (List.map (removeSymbol x) l
                  |> List.filterMap Option.isSome Option.get) |> Some
+        | FunctionN(fn, l) ->
+            FunctionN
+                (fn,
+                 List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
         | x -> Some x
 
+    let rec removeSymbol x =
+        function
+        | Identifier _ as var when var = x -> None
+        | Power(f, n) ->
+            match removeSymbol x f, removeSymbol x n with
+            | _, None | None, _ -> None
+            | Some g, Some m -> Some(Power(g, m))
+        | Function(fn, f) ->
+            removeSymbol x f |> Option.map (fun g -> Function(fn, g))
+        | Product l ->
+            Product
+                (List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
+        | Sum l ->
+            Sum
+                (List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
+        | FunctionN(fn, l) ->
+            FunctionN
+                (fn,
+                 List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
+        | x -> Some x
+
+    let rec recursiveMap fx =
+        function
+        | Identifier _ as var -> fx var
+        | Power(f, n) -> fx (Power(recursiveMap fx f, recursiveMap fx n))
+        | Function(fn, f) -> fx(Function(fn, recursiveMap fx f))
+        | Product l -> fx (Product(List.map (recursiveMap fx) l))
+        | Sum l -> fx (Sum(List.map (recursiveMap fx) l))
+        | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
+        | x -> fx x
     let removeExpression x f =
         let placeholder = symbol "__PLACE_HOLDER__"
         let replaced = replaceExpression placeholder x f
@@ -916,5 +1019,13 @@ module Vars =
     let y1 = symbol "y₁"
     let y2 = symbol "y₂"
     let phi = symbol "φ"
+    let theta = symbol "θ"
     let π = pi
     let pi = pi
+
+let prob x = FunctionN(Probability, [ x ])
+let condprob x param = FunctionN(Probability, [ x; param ])
+let probparam x param = FunctionN(Probability, [ x; param; 0Q ])
+let integral dx x = FunctionN(Integral, [ x; dx ])
+let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
+let grad x = Function(Gradient, x)

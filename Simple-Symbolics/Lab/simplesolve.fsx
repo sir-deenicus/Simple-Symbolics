@@ -23,8 +23,7 @@ open System
 open Hansei.Core.Distributions
 open Prelude.StringMetrics
 open Derivations
-open Units 
- 
+open Units
 
 let getCandidates (vset : Hashset<_>) vars knowns =
     knowns
@@ -60,6 +59,7 @@ let iterativeSolve eval vars knowns =
             loop (List.ofSeq candidates :: cs) (sols :: tsols) vars'
 
     loop [] [] vars
+
 let iterativeSolve2 f eval vars knowns =
     let vset =
         vars
@@ -78,11 +78,12 @@ let iterativeSolve2 f eval vars knowns =
                           >> ignore)
             let vars' = sols @ List.ofSeq vs
             let vmap = Dict.ofSeq (Seq.map (keepLeft f) vars')
-            let ts' = candidates |> Seq.map (fun (e,e2) -> e,  replaceSymbols vmap e2)
-            loop (List.ofSeq ts':: ts) (List.ofSeq candidates :: cs) (sols :: tsols) vars'
+            let ts' =
+                candidates |> Seq.map (fun (e, e2) -> e, replaceSymbols vmap e2)
+            loop (List.ofSeq ts' :: ts) (List.ofSeq candidates :: cs)
+                (sols :: tsols) vars'
 
     loop [] [] [] vars
-
 
 let eff = symbol "eff"
 let tc = symbol "T_C"
@@ -93,12 +94,12 @@ let qc = symbol "Q_c"
 let eq1 = eff <=> 1 - tc / th
 let eq2 = W <=> qh - qc
 
+ 
+
 let knowns =
     deriveAndGenerateEqualities [ eff <=> 1 - tc / th
                                   W <=> qh - qc
                                   qc <=> (1 - eff) * qh ]
-
-
 
 let vars =
     [ tc, 350.
@@ -117,21 +118,6 @@ Units.evaluateUnits
 zxu |> List.map (keepLeft Units.simplifyUnits)
 
 
-let simplifyRational = function
-    | Number n as num -> 
-        let f = float n
-        let pf = abs f 
-        if pf > 10000. || pf < 0.0001 then
-            let p10 = floor(log10 pf)
-            let x = Math.Round(f / 10. ** p10, 0) |> Expression.fromFloat
-            Product [x; Power(10Q, p10|> Expression.fromFloat)]  
-        else num
-    | x -> x
-
-
-simplifyRational (1/100000Q)
-1./100000. = 1e-5
-Approximation.Real 5.
 open Core.Vars
 
 let suntemp = symbol "T_\\odot"
@@ -144,13 +130,21 @@ let earthsundistpow = symbol "E_\\oplus"
 let earthsundist = symbol "a_0"
 let earthabs = symbol "E_absorb"
 let sigma = symbol "\\sigma"
-
 let lum c T r = 4 * pi * r ** 2 * T ** 4 * c
+
 //= lum sigma earthtemp earthrad
 let thermknown =
-    deriveAndGenerateEqualities [sunLum <=>lum sigma suntemp sunrad; earthsundistpow <=> sunLum/(4 * pi * earthsundist**2)
-                                 earthabs <=> pi * earthrad ** 2 * earthsundistpow
-                                 earthLum <=> lum sigma earthtemp earthrad
-                                 earthLum <=> earthabs]
+    deriveAndGenerateEqualities [ sunLum <=> lum sigma suntemp sunrad
 
-let zx, zy = iterativeSolve Units.tryEvaluateUnits [suntemp, 5778 * K; sunrad, 695_510 * km] thermknown
+                                  earthsundistpow
+                                  <=> sunLum / (4 * pi * earthsundist ** 2)
+
+                                  earthabs
+                                  <=> pi * earthrad ** 2 * earthsundistpow
+                                  earthLum <=> lum sigma earthtemp earthrad
+                                  earthLum <=> earthabs ]
+
+let zx, zy =
+    iterativeSolve Units.tryEvaluateUnits [ suntemp, 5778 * K
+                                            sunrad, 695_510 * km ] thermknown
+

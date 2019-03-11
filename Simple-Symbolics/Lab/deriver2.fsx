@@ -29,9 +29,7 @@ let exprIsLog =
     | Function(Ln, _) -> true
     | _ -> false
 
-let xIsMultipleOfy y x =
-    if x % y = 0 then true
-    else false
+let xIsMultipleOfy y x = x % y = 0
 
 let isCertainlyMultiple tester f =
     let isMultiple =
@@ -176,18 +174,18 @@ let indexableFunc =
       Index collectSymbolTerms, "apply collect vars at "
       NoParam reduceProductOne, "reduce product by one"
       //NoParam makeCertainlyEven, "write as even";
-      NoParam splitPower, "split powers "
-      NoParam makeCertainlyOdd, "write as odd" ]
+      NoParam splitPower, "split powers " ]
 
+//NoParam makeCertainlyOdd, "write as odd"
 let sampleFunction e =
     cont {
         let l = rootExprLength e
         let! (ft, d) = uniform indexableFunc
         let f, ps =
             match ft with
-            | Parameter f -> f, uniform [ 1..6 ]
+            | Parameter f -> f, uniform [ 1..60 ]
             | NoParam f -> ignoreFirst f, exactly -1
-            | Index f -> f, uniform [ 0..7 ]
+            | Index f -> f, uniform [ 0..70 ]
         let! j = ps
         if l = -1 then return (f j e, (d, j, -1))
         else let! i = uniform [ 0..l - 1 ]
@@ -211,10 +209,10 @@ let findPath options targetCond sourceexpr =
                                             exactly
                                                 (chosenOp currentexpr,
                                                  (desc, -1, -1))
-            do! constrain (List.isEmpty path || fst3 (List.head path) <> desc')
+            //do! constrain (List.isEmpty path || fst3 (List.head path) <> desc')
             if targetCond expr' then return List.rev ((desc', i, j) :: path)
             else
-                do! constrain ((currentexpr <> expr'))
+                // do! constrain ((currentexpr <> expr'))
                 return! loop ((desc', i, j) :: path) expr'
         }
     loop [] sourceexpr
@@ -232,7 +230,15 @@ let run x =
         | Some(x) -> ()
     | _ -> ()
 
-searcher.ImportanceSample(nsamples = 25000, maxdepth = 18)
+let prooftest e =
+    match Structure.removeExpression (2Q ** (3 * k + 1) + 5) e with
+    | None -> false
+    | Some e' -> isCertainlyMultiple (xIsMultipleOfy 7) e'
+
+let searcher2 = Model(findpath prooftest (2Q ** (3 * k + 4) + 5))
+
+searcher2.Reify()
+searcher2.ImportanceSample(nsamples = 55000, maxdepth = 58)
 |> Hansei.Utils.normalize
 |> List.sortByDescending fst
 Model(findpath ((=) (ln (x ** (s - 1)) + (-r * x))) (ln (x ** (s - 1Q) * exp (-r * x))))
@@ -240,7 +246,9 @@ Model(findpath ((=) (ln (x ** (s - 1)) + (-r * x))) (ln (x ** (s - 1Q) * exp (-r
 
 let eq = 8 * 2Q ** (3 * n + 1) + 5
 let zq = eq |> applyAtIndex 1 -1 (ignoreFirst reduceProductOne)
+let zq' = Structure.removeExpression ((2Q ** (3 * n + 1) + 5)) zq
 
+isCertainlyMultiple (xIsMultipleOfy 7) zq'.Value
 replaceExpression z (d ** (a + b + c)) (e * d ** (a + b + c)) = e * z
 replaceExpression z (d ** (a + b + c)) (d ** (a + b + c)) = z
 replaceExpression z (a + b + c) (a + b + c) = z
@@ -260,8 +268,6 @@ type Unitsop =
     | Times
     | Divide
 
-
-
 let usefulUnits =
     [ W, "Power", UnitsDesc.power
       J, "Energy", UnitsDesc.energy
@@ -277,13 +283,12 @@ let usefulUnits =
 
 [ for (a, _, _) in usefulUnits do
       for (b, _, _) in usefulUnits do
-          for (c, _, _) in usefulUnits -> ((a * b) * c).Unit = (a * (b * c)).Unit ]
+          for (c, _, _) in usefulUnits ->
+              ((a * b) * c).Unit = (a * (b * c)).Unit ]
 |> List.forall id
-
 [ for (a, _, _) in usefulUnits -> (a * unitless).Unit = a.Unit ]
 |> List.forall id
-
-[ for (a, _, _) in usefulUnits -> (a * 1/a).Unit = unitless.Unit ]
+[ for (a, _, _) in usefulUnits -> (a * 1 / a).Unit = unitless.Unit ]
 |> List.forall id
 
 let rec unitsPath wasrecip path (curA : Expression) (cur : Units)
@@ -309,10 +314,11 @@ Model(unitsPath false [] 1Q Units.stefan_boltzman unitless)
     .ImportanceSample(2500, 50)
 |> List.sortByDescending fst
 |> Seq.takeOrMax 5
-Model(unitsPath false [] 1Q unitless Units.stefan_boltzman)
+Model(unitsPath false [] 1Q unitless W)
     .ImportanceSample(2500, 50)
 |> List.sortByDescending fst
-|> Seq.takeOrMax 5
+|> Seq.takeOrMax 15
+|> Seq.toArray
 Model(unitsPath false [] 1Q J (sec)).ImportanceSample(500, 50)
 |> List.sortByDescending fst
 |> Seq.takeOrMax 5
@@ -377,3 +383,84 @@ topologyFilter (set [ Set.empty ])
 
 let top = Model(createtop 3 (Set.empty) (set [ Set.empty ]) pset)
               .ImportanceSample(2, 50) |> List.sortByDescending fst
+
+/////////////////////
+///
+let findPathUsingEqualities terminationCondition equalities (seen : Hashset<_>)
+    startExpression targetExpression =
+    let rec search path currentExpression =
+        cont {
+            if terminationCondition targetExpression currentExpression then
+                return path
+            else
+                let applicable =
+                    List.filter
+                        (fun (a, b) -> containsExpression a currentExpression)
+                        equalities
+                match applicable with
+                | [] -> return! fail()
+                | _ ->
+                    let! e1, e2 = uniform applicable
+                    let expressionNew =
+                        replaceExpression e2 e1 currentExpression
+                    do! constrain
+                            (not
+                                 (seen.Contains
+                                      (Rational.rationalize expressionNew)))
+                    let msg =
+                        sprintf
+                            @"%s = %s \; \left( \textrm{because} \; %s = %s\right)"
+                            (currentExpression.ToFormattedString())
+                            (expressionNew.ToFormattedString())
+                            (e1.ToFormattedString()) (e2.ToFormattedString())
+                    seen.Add expressionNew |> ignore
+                    return! search (msg :: path) expressionNew
+        }
+    search [] startExpression
+
+let rewriteExpectationAsIntegral = function
+    | FunctionN(Function.Expectation, [ expr; distr ]) ->
+        let dx =
+            match Structure.first Expression.isVariable expr with
+            | Some e -> [ e ] | None -> []
+        FunctionN(Function.Integral, (distr * expr) :: dx)
+    | f -> f    
+
+let rewriteIntegralAsExpectation = function
+    | FunctionN(Function.Integral, Product l :: _) ->
+        maybe {
+            let! p = List.tryFind (function
+                         | FunctionN(Probability, _) -> true
+                         | _ -> false) l
+            return FunctionN(Function.Expectation,
+                             [ (Product l) / p; p ]) }
+    | _ -> None
+
+let bringGradientOutIntegral =
+    function
+    | FunctionN(Function.Integral, Function(Gradient, expr) :: rest) ->
+        Function(Gradient, FunctionN(Function.Integral, expr :: rest))
+    | f -> f
+
+let bringIntegralOutGradient =
+    function
+    | Function(Gradient, FunctionN(Function.Integral, expr :: rest)) ->
+       FunctionN(Function.Integral, Function(Gradient, expr) :: rest)  
+    | f -> f
+
+Function(Gradient, FunctionN(Integral,[x;x])) |> Expression.toFormattedString
+
+
+Function(Gradient, FunctionN(Integral,[x;x])) |> Expression.toFormattedString
+
+FunctionN(Integral,[FunctionN(Integral,[x;x]);y]) |> Expression.toFormattedString
+
+FunctionN(Function.Expectation, [ x; z ])  |> Expression.toFormattedString
+
+FunctionN(Function.Integral, [ x**2;x]) |> rewriteIntegralAsExpectation
+
+grad (integral x x)
+let ez = integral x (prob x * grad x)
+Structure.collectDistinctWith (function | Identifier _ | Function _ | FunctionN(Probability,_) -> true  | _ -> false) ez
+
+Structure.recursiveMap (function FunctionN(Probability,_) -> 1Q | f -> f  ) ez

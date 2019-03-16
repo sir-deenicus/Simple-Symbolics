@@ -8,7 +8,8 @@ let deriveTrivialEqualitiesSingle (e1, eq) =
     [ yield Equation(e1, eq)
       for var in findVariablesOfExpression eq do
           match reArrangeEquation0 true var (eq, e1) with
-          | Identifier _ as var, req -> yield Equation(var, req)
+          | Identifier _ as var, req ->
+              yield Equation(var, Algebraic.simplify true req)
           | _ -> () ]
 
 let deriveTrivialEqualities eqs =
@@ -37,3 +38,20 @@ let genEqualitiesList (eqs : Equation list) =
     |> Seq.toList
 
 let deriveAndGenerateEqualities = deriveTrivialEqualities >> genEqualitiesList
+
+let solveProductForm e =
+    function
+    | (Product l) as p ->
+        l
+        |> List.map (fun e2 ->
+               let r = (p * (1 / e2)) / e
+               if Expression.isNegativePower e2 then r, 1 / e2
+               else 1Q / r, e2)
+    | _ -> []
+
+let deriveEqualitiesFromProduct es =
+    es
+    |> List.collect (fun (e1, e2) ->
+           (e1, e2) :: solveProductForm e1 e2
+           |> List.map Equation
+           |> genEqualitiesList)

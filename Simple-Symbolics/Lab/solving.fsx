@@ -35,10 +35,10 @@ and rinverseAndPartitionVar s = function
     | Product l -> matchGroupAndInverse Product IsProduct s l
     | f -> if containsVar s f then Some f, None else None,Some (NonOp, f) 
 
-let reArrangeEquation0 silent s (l,r) = 
+let reArrangeEquation0 silent focusVar (left,right) = 
     let rec iter fx ops = 
         match fx with    
-        | f when f = s -> f, ops
+        | f when f = focusVar -> f, ops
         | Power(f, p) -> 
             if not silent then printfn "raise to power"; 
             iter f ((fun (x:Expression) -> x**(1/p))::ops) 
@@ -46,7 +46,7 @@ let reArrangeEquation0 silent s (l,r) =
         | Product [] | Product [_] -> fx, ops
         | Product l -> 
            if not silent then printfn "divide";  
-           let matched, novar = List.partition (containsVar s) l 
+           let matched, novar = List.partition (containsVar focusVar) l 
            let ops' = match novar with [] -> ops | _ -> (fun x -> x/(Product novar))::ops
            match matched with
            | [] -> fx, ops'
@@ -54,7 +54,7 @@ let reArrangeEquation0 silent s (l,r) =
            | hs -> Product hs, ops'
         | Sum l -> 
             if not silent then printfn "subtract"; 
-            let matched, novar = List.partition (containsVar s) l
+            let matched, novar = List.partition (containsVar focusVar) l
             let ops' = match novar with [] -> ops | _ -> (fun x -> x - (Sum novar))::ops
             match matched with
              | [] -> fx, ops'
@@ -73,10 +73,10 @@ let reArrangeEquation0 silent s (l,r) =
           if not silent then printfn "log"; 
           iter x (ln::ops)
         | _ -> failwith "err"
-    let f, ops = iter l [] 
-    f, ops |> List.rev |> List.fold (fun e f -> f e) r |> Algebraic.simplify true      
+    let f, ops = iter left [] 
+    f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Algebraic.simplify true      
 
-let reArrangeEquation s (l,r) = reArrangeEquation0 false s (l,r)
+let reArrangeEquation focusVar (left,right) = reArrangeEquation0 false focusVar (left,right)
 
 let rec invertFunction x expression = 
     printfn "%s" (expression |> Infix.format)

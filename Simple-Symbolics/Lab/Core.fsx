@@ -18,6 +18,19 @@ let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
+let ignoreFirst f _ = f
+
+
+type MaybeBuilder() =
+    member __.Bind(x, f) =
+        match x with
+        | Some(x) -> f(x)
+        | _ -> None
+    member __.Delay(f) = f()
+    member __.Return(x) = Some x
+    member __.ReturnFrom(x) = x
+
+let maybe = MaybeBuilder()
 
 let smartroundEx n x =
     if x > -1. && x < 1. && x <> 0. then
@@ -33,6 +46,12 @@ let symbolString =
     function
     | Identifier(Symbol s) -> s
     | _ -> ""
+
+let isSpecializedFunction = function
+        | Probability
+        | Integral 
+        | Expectation -> true
+        | _ -> false
 
 module List =
     let filterMap filter map xs =
@@ -124,6 +143,8 @@ module Expression =
         try
             Some(let v = Evaluate.evaluate symbvals expr in v.RealValue)
         with _ -> None
+        
+    let rewriteAsOne x = Product [ x; x ** -1] 
 
     let toList =
         function
@@ -159,7 +180,18 @@ module Expression =
     let isVariable =
         function
         | Identifier _ -> true
+        | _ -> false 
+    
+    let isCompact =
+        function
+        | Identifier _ | Function _ | FunctionN(Probability, _) -> true
+        | _ -> false    
+
+    let isNegativePower =
+        function
+        | Power(e, Number n) -> n < 0N
         | _ -> false
+    
 
 let productToConstantsAndVarsGen test =
     function
@@ -269,6 +301,7 @@ module Algebraic =
         | Sum [ x ] | Product [ x ] -> simplifyLite x
         | Power(Number n, Number m) when m.IsInteger ->
             Expression.FromRational(n ** (int m))
+        | Power(x, p) -> Power(simplifyLite x, simplifyLite p)        
         | Product l ->
             Product
                 (List.map simplifyLite
@@ -277,6 +310,8 @@ module Algebraic =
             Sum
                 (List.map simplifyLite
                      (collectNestedSumOrProduct Expression.isSum l))
+        | FunctionN(fn, l) -> FunctionN(fn, List.map simplifyLite l)
+        | Function(fn, f) -> Function(fn, simplifyLite f) 
         | x -> x
 
     let simplify simplifysqrt fx =
@@ -759,20 +794,20 @@ let rec replaceSymbols (vars : IDictionary<_, _>) =
     | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbols vars) l)
     | x -> x
 
-let rec replaceVariableSymbol replacer targetvar =
+let rec replaceVariableSymbol replacer =
     function
-    | Identifier(Symbol s) when s = targetvar -> Identifier(Symbol(replacer s))
+    | Identifier(Symbol s) -> Identifier(Symbol(replacer s))
     | Power(f, n) ->
         Power
-            (replaceVariableSymbol replacer targetvar f,
-             replaceVariableSymbol replacer targetvar n)
+            (replaceVariableSymbol replacer f,
+             replaceVariableSymbol replacer n)
     | Function(fn, f) ->
-        Function(fn, replaceVariableSymbol replacer targetvar f)
+        Function(fn, replaceVariableSymbol replacer f)
     | Product l ->
-        Product(List.map (replaceVariableSymbol replacer targetvar) l)
-    | Sum l -> Sum(List.map (replaceVariableSymbol replacer targetvar) l)
+        Product(List.map (replaceVariableSymbol replacer) l)
+    | Sum l -> Sum(List.map (replaceVariableSymbol replacer) l)
     | FunctionN(fn, l) ->
-        FunctionN(fn, List.map (replaceVariableSymbol replacer targetvar) l)
+        FunctionN(fn, List.map (replaceVariableSymbol replacer) l)
     | x -> x
 
 let rec findVariablesOfExpression =
@@ -812,12 +847,10 @@ let replaceExpression replacement expressionToFind formula =
                 (List.map iterReplaceIn
                      (tryReplaceCompoundExpression replacement
                           expressionToFindContentSet l))
+        | FunctionN(Probability, [ x; param; t ]) -> FunctionN(Probability, [ iterReplaceIn x; param;t ]) 
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [iterReplaceIn x; param])
         | FunctionN(fn, l) ->
-            FunctionN
-                (fn,
-                 List.map iterReplaceIn
-                     (tryReplaceCompoundExpression replacement
-                          expressionToFindContentSet l))
+            FunctionN (fn, List.map iterReplaceIn l)
         | x -> x
     iterReplaceIn (Algebraic.simplifyLite formula) |> Algebraic.simplify true
 
@@ -845,17 +878,16 @@ let containsExpression expressionToFind formula =
             || (List.exists iterFindIn l)
         | FunctionN(_, l) as func ->
             func = expressionToFind
-            || tryFindCompoundExpression expressionToFindContentSet l
             || (List.exists iterFindIn l)
         | _ -> false
     iterFindIn (Algebraic.simplifyLite formula)
 
-let rec size =
+let rec width =
     function
     | Identifier _ -> 1
-    | Power(x, n) -> size x + 1 + size n
-    | Product l | Sum l | FunctionN(_, l) -> List.sumBy size l
-    | Function(_, x) -> size x + 1
+    | Power(x, n) -> width x + 1 + width n
+    | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
+    | Function(_, x) -> width x + 1
     | Approximation _ | Number _ -> 1
     | _ -> failwith "unimplemented compute size"
 
@@ -866,7 +898,7 @@ let rec depth =
     | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
     | Function(_, x) -> depth x + 1
     | Approximation _ | Number _ -> 1
-    | _ -> failwith "unimplemented compute size"
+    | f -> failwith ("unimplemented compute depth for " + (f.ToFormattedString()))
 
 let averageDepth =
     function
@@ -874,6 +906,10 @@ let averageDepth =
     | e -> float (depth e)
 
 module Structure =
+    let rootWidth =
+        function
+        | Sum l | Product l -> List.length l
+        | _ -> -1
     let exists func =
         function
         | Sum l | Product l | FunctionN(_, l) -> List.exists func l
@@ -899,7 +935,10 @@ module Structure =
             else List.tryPick (first func) [ p; n ]
         | Function(_, fx) as f ->
             if func f then Some f
-            else first func fx
+            else first func fx 
+        | FunctionN(fn, x::param::_ ) as f when isSpecializedFunction fn -> 
+            if func f then Some f
+            else first func x 
         | (Product l | Sum l | FunctionN(_, l)) as prod ->
             if func prod then Some prod
             else List.tryPick (first func) l
@@ -914,9 +953,10 @@ module Structure =
         function
         | Identifier _ as var when var = x -> None
         | Power(f, n) ->
-            match removeSymbol x f, removeSymbol x n with
-            | _, None | None, _ -> None
-            | Some g, Some m -> Some(Power(g, m))
+            maybe {
+                    let! g = removeSymbol x f  
+                    let! m = removeSymbol x n  
+                    return Power(g, m)} 
         | Function(fn, f) ->
             removeSymbol x f |> Option.map (fun g -> Function(fn, g))
         | Product l ->
@@ -928,34 +968,45 @@ module Structure =
                 (List.map (removeSymbol x) l
                  |> List.filterMap Option.isSome Option.get) |> Some
         | FunctionN(fn, l) ->
-            FunctionN
-                (fn,
-                 List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
+            match List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get with
+            | [] -> None
+            | nl -> FunctionN (fn, nl) |> Some
         | x -> Some x
 
-    let rec removeSymbol x =
+    let rec recursiveFilter filter =
         function
-        | Identifier _ as var when var = x -> None
-        | Power(f, n) ->
-            match removeSymbol x f, removeSymbol x n with
-            | _, None | None, _ -> None
-            | Some g, Some m -> Some(Power(g, m))
-        | Function(fn, f) ->
-            removeSymbol x f |> Option.map (fun g -> Function(fn, g))
-        | Product l ->
-            Product
-                (List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
-        | Sum l ->
-            Sum
-                (List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
-        | FunctionN(fn, l) ->
-            FunctionN
-                (fn,
-                 List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
+        | Identifier _ as var when not (filter var) -> None
+        | Power(f, n) as p ->
+            if filter p then
+                maybe {
+                    let! g = recursiveFilter filter f  
+                    let! m = recursiveFilter filter n  
+                    return Power(g, m)}
+            else None
+        | Function(fn, f) as func ->
+            if filter func then recursiveFilter filter f |> Option.map (fun g -> Function(fn, g)) else None
+        | Product l as prod ->
+            if filter prod then
+                Product
+                    (List.map (recursiveFilter filter) l
+                     |> List.filterMap Option.isSome Option.get) |> Some
+            else None
+        | Sum l as sum ->
+            if filter sum then
+                Sum
+                    (List.map (recursiveFilter filter) l
+                     |> List.filterMap Option.isSome Option.get) |> Some
+            else None
+        | FunctionN(Probability, [ x; param; t ])-> recursiveFilter filter x |> Option.map (fun y -> FunctionN(Probability, [y; param;t]))
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> recursiveFilter filter x |> Option.map (fun y -> FunctionN(fn, [y; param]))
+        | FunctionN(fn, l) as func ->
+            if filter func then
+                FunctionN
+                    (fn,
+                     List.map (recursiveFilter filter) l
+                     |> List.filterMap Option.isSome Option.get) |> Some
+            else None
         | x -> Some x
 
     let rec recursiveMap fx =
@@ -964,19 +1015,25 @@ module Structure =
         | Power(f, n) -> fx (Power(recursiveMap fx f, recursiveMap fx n))
         | Function(fn, f) -> fx(Function(fn, recursiveMap fx f))
         | Product l -> fx (Product(List.map (recursiveMap fx) l))
-        | Sum l -> fx (Sum(List.map (recursiveMap fx) l))
+        | Sum l -> fx (Sum(List.map (recursiveMap fx) l)) 
+        | FunctionN(Probability, [ x; param; t ]) -> FunctionN(Probability, [ recursiveMap fx x; param;t ]) 
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [recursiveMap fx x; param])
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
         | x -> fx x
+
     let removeExpression x f =
         let placeholder = symbol "__PLACE_HOLDER__"
         let replaced = replaceExpression placeholder x f
         removeSymbol placeholder replaced
 
 type Equation(leq : Expression, req : Expression) =
-
+    member __.Definition = leq, req
     member __.Equalities =
         [ leq, req
           req, leq ]
+    static member map f (eq:Equation) = 
+        let leq, req = eq.Definition
+        Equation(f leq, f req)
 
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()

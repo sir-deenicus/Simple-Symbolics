@@ -8,7 +8,7 @@
 //#r "hansei.core.dll"
 //#r "hansei.dll"
 #load "solving.fsx"
-
+open Prelude.Math
 open System.Collections.Generic
 open Hansei
 //open Solving
@@ -22,7 +22,8 @@ open Prelude.Common
 open System
 open Hansei.Core.Distributions
 open Prelude.StringMetrics
-open Prelude.Math
+
+open Units
 
 let exprIsLog =
     function
@@ -69,7 +70,7 @@ let number =
     | Number n -> Some n
     | _ -> None
 
-let splitPowerIn2ByN nInt =
+let movePowerLeft nInt =
     let n = Expression.FromInt32 nInt
     function
     | Power(b, (Sum(Number _ :: _) as r)) ->
@@ -132,7 +133,6 @@ let applyAtIndex i findex f =
     | e -> e
 
 let indexableFunction e = e
-let ignoreFirst f _ = f
 
 let options =
     [ Algebraic.expand, "Expand"
@@ -169,7 +169,7 @@ type FunctionInputType =
 
 let indexableFunc =
     [ Parameter reduceProduct, "apply reduce product at "
-      Parameter splitPowerIn2ByN, "move power left "
+      Parameter movePowerLeft, "move power left "
       Index collectIntegerTerms, "apply collect integers at "
       Index collectSymbolTerms, "apply collect vars at "
       NoParam reduceProductOne, "reduce product by one"
@@ -202,13 +202,12 @@ let findPath options targetCond sourceexpr =
     let rec loop path currentexpr =
         cont {
             let! chosenOp, desc = uniform options'
-            let! expr', (desc', i, j) = match desc with
-                                        | "indexable function" ->
-                                            sampleFunction currentexpr
-                                        | _ ->
-                                            exactly
-                                                (chosenOp currentexpr,
-                                                 (desc, -1, -1))
+            let! expr', (desc', i, j) = 
+                match desc with
+                | "indexable function" ->
+                    sampleFunction currentexpr
+                | _ ->
+                    exactly (chosenOp currentexpr, (desc, -1, -1))
             //do! constrain (List.isEmpty path || fst3 (List.head path) <> desc')
             if targetCond expr' then return List.rev ((desc', i, j) :: path)
             else
@@ -260,8 +259,11 @@ replaceSymbol z a (a * b + (c + 2Q ** (a * b)))
 |> Algebraic.simplify true = (z * b + (c + 2Q ** (z * b)))
 containsExpression ((2Q ** (3 * n + 1) + 5)) zq
 Structure.removeExpression ((2Q ** (3 * n + 1) + 5)) zq
+Structure.recursiveMap (fun e ->
+    if e = (2Q ** (3 * n + 1) + 5) then 0Q
+    else e) (Algebraic.simplifyLite zq)
 
-open Units
+
 
 type Unitsop =
     | Reciprocal
@@ -435,7 +437,7 @@ let rewriteIntegralAsExpectation = function
             return FunctionN(Function.Expectation,
                              [ (Product l) / p; p ]) }
     | _ -> None
-
+    
 let bringGradientOutIntegral =
     function
     | FunctionN(Function.Integral, Function(Gradient, expr) :: rest) ->
@@ -448,19 +450,37 @@ let bringIntegralOutGradient =
        FunctionN(Function.Integral, Function(Gradient, expr) :: rest)  
     | f -> f
 
-Function(Gradient, FunctionN(Integral,[x;x])) |> Expression.toFormattedString
-
-
-Function(Gradient, FunctionN(Integral,[x;x])) |> Expression.toFormattedString
-
-FunctionN(Integral,[FunctionN(Integral,[x;x]);y]) |> Expression.toFormattedString
-
-FunctionN(Function.Expectation, [ x; z ])  |> Expression.toFormattedString
-
-FunctionN(Function.Integral, [ x**2;x]) |> rewriteIntegralAsExpectation
-
+Function(Gradient, FunctionN(Integral, [ x; x ]))
+|> Expression.toFormattedString
+Function(Gradient, FunctionN(Integral, [ x; x ]))
+|> Expression.toFormattedString
+FunctionN(Integral,
+          [ FunctionN(Integral, [ x; x ])
+            y ])
+|> Expression.toFormattedString
+FunctionN(Function.Expectation, [ x; z ]) |> Expression.toFormattedString
+FunctionN(Function.Integral,
+          [ x ** 2
+            x ])
+|> rewriteIntegralAsExpectation
 grad (integral x x)
-let ez = integral x (prob x * grad x)
-Structure.collectDistinctWith (function | Identifier _ | Function _ | FunctionN(Probability,_) -> true  | _ -> false) ez
 
-Structure.recursiveMap (function FunctionN(Probability,_) -> 1Q | f -> f  ) ez
+let ez = integral x (prob x * grad x)
+
+
+let identityTransform =
+    function
+    | Product l as prod ->
+        let z = Structure.collectDistinctWith Expression.isCompact prod
+        let v = Array.sampleOne (List.toArray z)
+        Product(Product [ v; v ** -1 ] :: l)
+    | f -> f
+
+let mapfirstProd expr =
+    let mutable isdone = false
+    Structure.recursiveMap (function
+        | Product _ as p when not isdone ->
+            isdone <- true
+            identityTransform p
+        | f -> f) expr
+

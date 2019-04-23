@@ -107,7 +107,7 @@ type Complex(r : Expression, i : Expression) =
     member __.Conjugate = Complex(r, -i)
     member __.Magnitude = sqrt (r ** 2 + i ** 2)
     member __.ToComplex() = System.Numerics.Complex(r.ToFloat(), i.ToFloat())
-
+    static member magnitude (c:Complex) = c.Magnitude
     member __.Phase =
         let x, y = r.ToFloat(), i.ToFloat()
         if x > 0. then arctan (i / r)

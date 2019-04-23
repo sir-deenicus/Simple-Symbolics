@@ -524,8 +524,12 @@ type Complex(r : Expression, i : Expression) =
     member c.Simplify() = Complex(Expression.fullSimplify r, Expression.fullSimplify i)
     new(r) = Complex(r, 0Q)
     override t.ToString() =
-        sprintf "%s + ⅈ%s" (t.Real.ToFormattedString())
-            (t.Imaginary.ToFormattedString())
+            match t.Real, t.Imaginary with
+              | c when c = (0Q, 0Q) -> sprintf "0"
+              | r, _ when r = 0Q -> sprintf "%sⅈ" (t.Imaginary.ToFormattedString())
+              | _ ->
+                sprintf "%s + ⅈ%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
+
 
 type Units(q : Expression, u : Expression, ?altUnit) =
     let mutable altunit = defaultArg altUnit ("")

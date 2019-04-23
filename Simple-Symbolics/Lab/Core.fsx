@@ -479,7 +479,7 @@ type Complex(r : Expression, i : Expression) =
 
     static member Zero = Complex(0Q, 0Q)
     static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
-
+    static member magnitude (c:Complex) = c.Magnitude
     member c.Pow(n : Expression, phase) =
         let r = c.Magnitude
         let angle = c.Phase
@@ -540,8 +540,7 @@ type Complex(r : Expression, i : Expression) =
                 sprintf "%s + ⅈ%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
 
 module Complex = 
-    let i = Complex(0Q, 1Q)
-    let magnitude (c:Complex) = c.Magnitude
+    let i = Complex(0Q, 1Q) 
 
 type Units(q : Expression, u : Expression, ?altUnit) =
     let mutable altunit = defaultArg altUnit ("")

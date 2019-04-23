@@ -18,6 +18,7 @@ let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
+let mutable expressionFormat = "Infix"
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
 
@@ -501,8 +502,16 @@ type Complex(r : Expression, i : Expression) =
                          |> Algebraic.simplify false
                          |> Trigonometric.simplify)
 
+    static member (+) (a : Complex, b : Expression) =
+        Complex(a.Real + b, a.Imaginary)
+    static member (+) (a : Expression, b : Complex) =
+        Complex(a + b.Real, b.Imaginary)
     static member (+) (a : Complex, b : Complex) =
-        Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
+        Complex(a.Real + b.Real, a.Imaginary + b.Imaginary) 
+    static member (-) (a : Complex, b : Expression) =
+        Complex(a.Real - b, a.Imaginary)
+    static member (-) (a : Expression, b : Complex) =
+        Complex(a - b.Real, b.Imaginary)
     static member (-) (a : Complex, b : Complex) =
         Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
     static member (*) (a : Complex, b : Complex) =
@@ -530,6 +539,9 @@ type Complex(r : Expression, i : Expression) =
               | _ ->
                 sprintf "%s + ⅈ%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
 
+module Complex = 
+    let i = Complex(0Q, 1Q)
+    let magnitude (c:Complex) = c.Magnitude
 
 type Units(q : Expression, u : Expression, ?altUnit) =
     let mutable altunit = defaultArg altUnit ("")

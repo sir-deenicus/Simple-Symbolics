@@ -8,6 +8,7 @@ let flip f a b = f b a
 let symbol = MathNet.Symbolics.Operators.symbol
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
+let mutable expressionFormat = "Infix"
 
 module BigRational =
     open Microsoft.FSharp.Core.Operators
@@ -107,7 +108,7 @@ type Complex(r : Expression, i : Expression) =
     member __.Conjugate = Complex(r, -i)
     member __.Magnitude = sqrt (r ** 2 + i ** 2)
     member __.ToComplex() = System.Numerics.Complex(r.ToFloat(), i.ToFloat())
-    static member magnitude (c:Complex) = c.Magnitude
+
     member __.Phase =
         let x, y = r.ToFloat(), i.ToFloat()
         if x > 0. then arctan (i / r)
@@ -142,8 +143,16 @@ type Complex(r : Expression, i : Expression) =
                          |> Algebraic.simplify false
                          |> Trigonometric.simplify)
 
+    static member (+) (a : Complex, b : Expression) =
+        Complex(a.Real + b, a.Imaginary)
+    static member (+) (a : Expression, b : Complex) =
+        Complex(a + b.Real, b.Imaginary)
     static member (+) (a : Complex, b : Complex) =
-        Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
+        Complex(a.Real + b.Real, a.Imaginary + b.Imaginary) 
+    static member (-) (a : Complex, b : Expression) =
+        Complex(a.Real - b, a.Imaginary)
+    static member (-) (a : Expression, b : Complex) =
+        Complex(a - b.Real, b.Imaginary)
     static member (-) (a : Complex, b : Complex) =
         Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
     static member (*) (a : Complex, b : Complex) =
@@ -165,13 +174,15 @@ type Complex(r : Expression, i : Expression) =
     member c.Simplify() = Complex(Expression.fullSimplify r, Expression.fullSimplify i)
     new(r) = Complex(r, 0Q)
     override t.ToString() =
-        match t.Real, t.Imaginary with
-          | c when c = (0Q, 0Q) -> sprintf "0"
-          | _, i when i = 0Q -> sprintf "%s" (t.Real.ToFormattedString())
-          | r, _ when r = 0Q -> sprintf "%s𝓲" (t.Imaginary.ToFormattedString())
-          | _ ->
-            sprintf "%s + 𝓲%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
+            match t.Real, t.Imaginary with
+              | c when c = (0Q, 0Q) -> sprintf "0"
+              | r, _ when r = 0Q -> sprintf "%sⅈ" (t.Imaginary.ToFormattedString())
+              | _ ->
+                sprintf "%s + ⅈ%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
 
+module Complex = 
+    let i = Complex(0Q, 1Q) 
+    let magnitude (c:Complex) = c.Magnitude
 
 let rec containsVar x =
     function 

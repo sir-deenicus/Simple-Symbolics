@@ -66,4 +66,7 @@ Matrix m3n |> Matrix.determinant
 
 Matrix (mu) |> Matrix.determinant
 
+Complex(1/4Q,3Q) * Vector ([Complex 1Q; Complex (2Q, 1Q)])
+
+
 Matrix.inverse (Matrix mu) * (Matrix mu)

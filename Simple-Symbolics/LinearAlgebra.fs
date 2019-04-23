@@ -85,12 +85,19 @@ let inline inverse m =
 
 type Vector< 'a >(l : 'a list) =
     member __.AsList = l
+    member __.Item  
+      with get(index) = l.[index] 
     static member inline (*) (a:Expression,b : Vector<_>) = Vector(List.map ((*) a) b.AsList)
+    static member inline (*) (a:Complex,b : Vector<_>) = Vector(List.map ((*) a) b.AsList)
     static member inline (*) (a:Vector<_>,b : Expression) = Vector(List.map ((*) b) a.AsList)
+    static member inline (*) (a:Vector<_>,b : Complex) = Vector(List.map ((*) b) a.AsList)
     static member inline (*) (a:Vector<_>,b : Vector<_>) = dot a.AsList b.AsList
     static member inline (-) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (-) a.AsList b.AsList)
     static member inline (+) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (+) a.AsList b.AsList)
-    override t.ToString() = sprintf "%A" (List.map formatGeneric t.AsList)
+    static member inline (<*>) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (*) a.AsList b.AsList)
+    override t.ToString() = 
+        let br1, br2 = if expressionFormat = "Infix" then "[", "]" else "$\[", "\]$"
+        sprintf "[%s]" (List.map formatGeneric t.AsList |> String.concat ",")
 
 module Vector = 
   let toList (v:Vector<_>) = v.AsList

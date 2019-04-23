@@ -322,14 +322,14 @@ let rewriteIntegralAsExpectation = function
     
 let bringGradientOutIntegral =
     function
-    | FunctionN(Function.Integral, Function(Gradient, expr) :: rest) ->
-        Function(Gradient, FunctionN(Function.Integral, expr :: rest))
+    | FunctionN(Function.Integral, FunctionN(Gradient, expr::var) :: dx) ->
+        FunctionN(Gradient, FunctionN(Function.Integral, expr :: dx)::var)
     | f -> f
 
 let bringIntegralOutGradient =
     function
-    | Function(Gradient, FunctionN(Function.Integral, expr :: rest)) ->
-       FunctionN(Function.Integral, Function(Gradient, expr) :: rest)  
+    | FunctionN(Gradient, FunctionN(Function.Integral, expr :: dx)::param) ->
+       FunctionN(Function.Integral, FunctionN(Gradient, expr::param) :: dx)  
     | f -> f
 
 
@@ -357,7 +357,7 @@ let e2 = grad (prob x)/prob x
 
 let f_z = symbol "f(z)"
 f_z.ToFormattedString()
-let e3 = grad (expectation (probparam z theta) f_z)
+let e3 = grad (expectation (prob x) f_z)
 
 let eqs3 = deriveEqualitiesFromProduct [(e3,e3); e1,e2] 
 eqs3 |> List.map (Equation >> string)
@@ -375,13 +375,14 @@ let zt3 =
     pr3 |> sequenceSamples 0.4 (mutate3 eqs3) scorerz 100 100
    
 let ezl2 = zt3.SampleN(200) |> Array.maxBy (scorerz) |> List.map Equation |> List.rev
-
+ 
 let mapfirst func expr =
     let mutable isdone = false
     Structure.recursiveMap (function
         | f when not isdone ->
-            isdone <- true
-            func f
+            let f' = func f
+            isdone <- f' <> f
+            f'
         | f -> f) expr
 
 
@@ -414,7 +415,7 @@ let mutate3 eqs l =
         let (_, currentExpression,_) = List.head l
         let f, s = Array.sampleOne options3
         let nextexpr = f currentExpression
-        let q  = s
+        let q  = s 
         if nextexpr = currentExpression then l
         else 
             (currentExpression, nextexpr,s)::l
@@ -425,13 +426,20 @@ let pr3 = Distributions.uniform [|[(x2,e3, "")]; [x,eb,""]|]
 let scorerz l = 
     let (_, e,_) = List.head l
     let w = float (width e)
-    w + 1./(averageDepth e )
+    1./(averageDepth e )
 
 
 let zt3 =
-    pr3 |> sequenceSamples 0.4 (mutate3 eqs3) scorerz 100 100
+    pr3 |> sequenceSamples 0.4 (mutate3 eqs3) scorerz 100 50
    
 zt3.SampleN(200) |> Array.maxBy (scorerz) |> List.map (fun (a,b,c) -> Equation(a,b).ToString(), c) |> List.rev
 let zz = grad (prob x)/(grad (ln (prob x)))
 let ee = expectation (prob x) e1
+mapfirst rewriteExpectationAsIntegral  e3 |> bringIntegralOutGradient |> Expression.toFormattedString
+(mapfirst rewriteExpectationAsIntegral e3) |> replaceExpression zz (prob x) |> Expression.toFormattedString
+mapfirst rewriteExpectationAsIntegral  e3
 
+mapfirst rewriteExpectationAsIntegral  e3 |> bringIntegralOutGradient 
+
+Structure.collectIdentifiers e3
+Expression.evaluateFloat

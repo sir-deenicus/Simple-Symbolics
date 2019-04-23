@@ -107,7 +107,7 @@ type Complex(r : Expression, i : Expression) =
     member __.Conjugate = Complex(r, -i)
     member __.Magnitude = sqrt (r ** 2 + i ** 2)
     member __.ToComplex() = System.Numerics.Complex(r.ToFloat(), i.ToFloat())
-    
+
     member __.Phase =
         let x, y = r.ToFloat(), i.ToFloat()
         if x > 0. then arctan (i / r)
@@ -116,39 +116,39 @@ type Complex(r : Expression, i : Expression) =
         elif x = 0. && y > 0. then pi / 2
         elif x = 0. && y < 0. then -pi / 2
         else Undefined
-    
+
     static member Zero = Complex(0Q, 0Q)
     static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
-    
+
     member c.Pow(n : Expression, phase) =
         let r = c.Magnitude
         let angle = c.Phase
         r ** n * Complex(cos (n * (angle + phase))
                          |> Algebraic.simplify false
-                         |> Trigonometric.simplify, 
+                         |> Trigonometric.simplify,
                          sin (n * (angle + phase))
                          |> Algebraic.simplify false
                          |> Trigonometric.simplify)
-    
+
     static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
-    
+
     static member Pow(c : Complex, n : Expression) =
         let r = c.Magnitude
         let angle = c.Phase
         r ** n * Complex(cos (n * angle)
                          |> Algebraic.simplify false
-                         |> Trigonometric.simplify, 
+                         |> Trigonometric.simplify,
                          sin (n * angle)
                          |> Algebraic.simplify false
                          |> Trigonometric.simplify)
-    
+
     static member (+) (a : Complex, b : Complex) =
         Complex(a.Real + b.Real, a.Imaginary + b.Imaginary)
     static member (-) (a : Complex, b : Complex) =
         Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
     static member (*) (a : Complex, b : Complex) =
         Complex
-            (a.Real * b.Real - a.Imaginary * b.Imaginary, 
+            (a.Real * b.Real - a.Imaginary * b.Imaginary,
              a.Imaginary * b.Real + a.Real * b.Imaginary)
     static member (*) (a : Complex, b : Expression) =
         Complex(a.Real * b, a.Imaginary * b)
@@ -156,17 +156,18 @@ type Complex(r : Expression, i : Expression) =
         Complex(a * b.Real, a * b.Imaginary)
     static member (/) (a : Complex, b : Expression) =
         Complex(a.Real / b, a.Imaginary / b)
-    
+
     static member (/) (a : Complex, b : Complex) =
         let conj = b.Conjugate
         (a * conj) / (b * conj).Real
-    
+
     static member (/) (a : Expression, b : Complex) = (Complex a) / b
-    static member magnitude (c : Complex) = c.Magnitude
+    member c.Simplify() = Complex(Expression.fullSimplify r, Expression.fullSimplify i)
     new(r) = Complex(r, 0Q)
     override t.ToString() =
-        sprintf "(%s, %s)" (t.Real.ToFormattedString()) 
+        sprintf "%s + ⅈ%s" (t.Real.ToFormattedString())
             (t.Imaginary.ToFormattedString())
+
 
 let rec containsVar x =
     function 

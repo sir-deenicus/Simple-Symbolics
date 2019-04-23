@@ -19,7 +19,7 @@ let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 let ignoreFirst f _ = f
-
+let signstr x = if x < 0. then "-" else ""
 
 type MaybeBuilder() =
     member __.Bind(x, f) =
@@ -49,6 +49,7 @@ let symbolString =
 
 let isSpecializedFunction = function
         | Probability
+        | Gradient
         | Integral 
         | Expectation -> true
         | _ -> false
@@ -122,15 +123,18 @@ module Expression =
     let toInt (i : Expression) = i.ToInt()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
-
+ 
     let toSciNumString r (x : float) =
         let npow =
             if x > 0. then Some(floor (log10 x))
+            elif x < 0. then Some(floor (log10 -x))
             else None
         match npow with
         | Some n when n > 6. ->
             let pow10 = Power(10Q, Expression.FromInt32(int n))
-            sprintf "%s × %s" (Math.Round(x / (10. ** n), 3).ToString("N3"))
+            let num = Math.Round(x / (10. ** n), 2)
+            let prefix = if abs num = 1. then sprintf "%s" (signstr num) else sprintf "%s × " (num.ToString("N2"))
+            sprintf "%s%s" prefix
                 (pow10.ToFormattedString())
         | _ ->
             if r > 6 then string x
@@ -394,7 +398,14 @@ let primeFactorsPartialExpr =
 let rec factorial (n : BigRational) =
     if n = 1N then 1N
     else n * factorial (n - 1N)
-
+    
+let choose n k = 
+    let bn, bk = BigRational.FromInt n, BigRational.FromInt k
+    if k = 0 || n = k then 1Q 
+    else
+        factorial bn / (factorial bk * (factorial (bn - bk))) 
+        |> Expression.FromRational
+    
 open Operators
 open System.Collections.Generic
 
@@ -510,9 +521,10 @@ type Complex(r : Expression, i : Expression) =
         (a * conj) / (b * conj).Real
 
     static member (/) (a : Expression, b : Complex) = (Complex a) / b
+    member c.Simplify() = Complex(Expression.fullSimplify r, Expression.fullSimplify i)
     new(r) = Complex(r, 0Q)
     override t.ToString() =
-        sprintf "(%s, %s)" (t.Real.ToFormattedString())
+        sprintf "%s + ⅈ%s" (t.Real.ToFormattedString())
             (t.Imaginary.ToFormattedString())
 
 type Units(q : Expression, u : Expression, ?altUnit) =
@@ -660,10 +672,13 @@ module Units =
     let cm = centi * meter |> setAlt "cm"
     let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
     let inches = 12 * ft
+    let au =  150Q * mega * km |> setAlt "AU" 
     //----------
     let sec = Units(1Q, Operators.symbol "sec", "sec")
     let minute = 60Q * sec |> setAlt "minute"
+    let minutes = minute |> setAlt "minutes"
     let hr = 60Q * minute |> setAlt "hr"
+    let hrs = hr |> setAlt "hrs"
     let days = 24Q * hr |> setAlt "days"
     let day = days |> setAlt "day"
     let weeks = 7Q * days |> setAlt "weeks"
@@ -703,11 +718,12 @@ module Units =
     let units =
         [ W, "Power"
           kW, "Power"
+          mega * W |> setAlt "megawatts", "Power"
           giga * W |> setAlt "gigawatts", "Power"
           tera * W |> setAlt "terawatts", "Power"
           J, "Energy"
           kJ, "Energy"
-          mega * J |> setAlt "terawatts", "Energy"
+          mega * J |> setAlt "megajoules", "Energy"
           kWh, "Energy"
           terafloatops, "computation"
           exafloatops, "computation"
@@ -833,20 +849,20 @@ let replaceExpression replacement expressionToFind formula =
     let rec iterReplaceIn =
         function
         | Identifier _ as var when var = expressionToFind -> replacement
-        | Power _ | Function _ as expr when expr = expressionToFind ->
+        | FunctionN _ | Power _ | Function _ as expr when expr = expressionToFind ->
             replacement
         | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)
         | Function(f, fx) -> Function(f, iterReplaceIn fx)
         | Product l ->
             Product
-                (List.map iterReplaceIn
-                     (tryReplaceCompoundExpression replacement
-                          expressionToFindContentSet l))
+                (l |> List.map iterReplaceIn
+                   |> (tryReplaceCompoundExpression replacement
+                          expressionToFindContentSet))
         | Sum l ->
             Sum
-                (List.map iterReplaceIn
-                     (tryReplaceCompoundExpression replacement
-                          expressionToFindContentSet l))
+                (l |> List.map iterReplaceIn
+                   |> (tryReplaceCompoundExpression replacement
+                          expressionToFindContentSet))
         | FunctionN(Probability, [ x; param; t ]) -> FunctionN(Probability, [ iterReplaceIn x; param;t ]) 
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [iterReplaceIn x; param])
         | FunctionN(fn, l) ->
@@ -886,6 +902,7 @@ let rec width =
     function
     | Identifier _ -> 1
     | Power(x, n) -> width x + 1 + width n
+    | FunctionN(fn, x::_) when isSpecializedFunction fn -> width x + 1
     | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
     | Function(_, x) -> width x + 1
     | Approximation _ | Number _ -> 1
@@ -895,6 +912,7 @@ let rec depth =
     function
     | Identifier _ -> 1
     | Power(x, n) -> (max (depth x) (depth n)) + 1
+    | FunctionN(fn, x::_) when isSpecializedFunction fn -> depth x + 1
     | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
     | Function(_, x) -> depth x + 1
     | Approximation _ | Number _ -> 1
@@ -1016,8 +1034,8 @@ module Structure =
         | Function(fn, f) -> fx(Function(fn, recursiveMap fx f))
         | Product l -> fx (Product(List.map (recursiveMap fx) l))
         | Sum l -> fx (Sum(List.map (recursiveMap fx) l)) 
-        | FunctionN(Probability, [ x; param; t ]) -> FunctionN(Probability, [ recursiveMap fx x; param;t ]) 
-        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [recursiveMap fx x; param])
+        | FunctionN(Probability, [ x; param; t ]) -> fx (FunctionN(Probability, [ recursiveMap fx x; param;t ]))
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> fx (FunctionN(fn, [recursiveMap fx x; param]))
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
         | x -> fx x
 
@@ -1085,4 +1103,5 @@ let condprob x param = FunctionN(Probability, [ x; param ])
 let probparam x param = FunctionN(Probability, [ x; param; 0Q ])
 let integral dx x = FunctionN(Integral, [ x; dx ])
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
-let grad x = Function(Gradient, x)
+let grad x = FunctionN(Gradient, [x])
+let gradn var x = FunctionN(Gradient, [x;var] )

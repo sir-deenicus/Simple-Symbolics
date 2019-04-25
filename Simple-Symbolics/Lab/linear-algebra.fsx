@@ -96,8 +96,8 @@ type Vector< 'a >(l : 'a list) =
     static member inline (+) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (+) a.AsList b.AsList)
     static member inline (<*>) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (*) a.AsList b.AsList)
     override t.ToString() = 
-        let br1, br2 = if expressionFormat = "Infix" then "[", "]" else "$\[", "\]$"
-        sprintf "[%s]" (List.map formatGeneric t.AsList |> String.concat ",")
+        let br1, br2 = if expressionFormat = "Infix" then "[", "]" else "\[", "\]"
+        sprintf "%s%s%s" br1 (List.map formatGeneric t.AsList |> String.concat ",") br2
 
 module Vector = 
   let toList (v:Vector<_>) = v.AsList

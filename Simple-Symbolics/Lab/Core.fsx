@@ -19,6 +19,15 @@ let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
+
+let setInfix() =
+    expressionFormat <- "Infix"
+    expressionFormater <- Infix.format
+    
+let setLatex() =
+    expressionFormat <- "Latex"
+    expressionFormater <- LaTeX.format
+
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
 

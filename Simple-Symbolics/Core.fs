@@ -9,6 +9,13 @@ let symbol = MathNet.Symbolics.Operators.symbol
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
+let setInfix() =
+    expressionFormat <- "Infix"
+    expressionFormater <- Infix.format
+    
+let setLatex() =
+    expressionFormat <- "Latex"
+    expressionFormater <- LaTeX.format
 
 module BigRational =
     open Microsoft.FSharp.Core.Operators

@@ -96,12 +96,13 @@ type Vector< 'a >(l : 'a list) =
     static member inline (+) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (+) a.AsList b.AsList)
     static member inline (<*>) (a:Vector<_>,b : Vector<_>) = Vector(List.map2 (*) a.AsList b.AsList)
     override t.ToString() = 
-        let br1, br2 = if expressionFormat = "Infix" then "[", "]" else "\left[", "\right]"
+        let br1, br2 = if expressionFormat = "Infix" then "[", "]" else "\\left[", "\\right]"
         sprintf "%s%s%s" br1 (List.map formatGeneric t.AsList |> String.concat ",") br2
 
 module Vector = 
   let toList (v:Vector<_>) = v.AsList
   let map f (v:Vector<_>) = Vector(List.map f v.AsList)
+  let inline lpNorm (p:Expression) (v:Vector<_>) = (v.AsList |> List.sumBy (fun x -> (abs x) ** p)) ** (1/p)
   let inline crossproduct (v1:Vector<_>) (v2 : Vector<_>) = 
       if v1.AsList.Length <> 3 && v2.AsList.Length <> 3 then failwith "Must be a 3-vector"
       else crossproduct (List.toArray v1.AsList) (List.toArray v2.AsList)

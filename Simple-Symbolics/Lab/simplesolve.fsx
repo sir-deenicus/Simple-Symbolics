@@ -1,9 +1,9 @@
 //HIDDENX
 //#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45"
 #I @"C:\Users\cybernetic\source\repos\Simple-Symbolics\Simple-Symbolics\Lab"
-#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Prelude.dll"
-#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Hansei.Core.dll"
-#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Hansei.dll"
+#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net47\Prelude.dll"
+#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net47\Hansei.Core.dll"
+#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net47\Hansei.dll"
 //#r "prelude.dll"
 //#r "hansei.core.dll"
 //#r "hansei.dll"
@@ -26,7 +26,7 @@ open Prelude.StringMetrics
 open Derivations
 open Units
 
-let getCandidates (vset : Hashset<_>) vars knowns =
+let getCandidates1 (vset : Hashset<_>) vars knowns =
     knowns
     |> Seq.filter
            (fun (v1, e) ->
@@ -34,32 +34,114 @@ let getCandidates (vset : Hashset<_>) vars knowns =
            v1isVar && not (vset.Contains v1)
            && vars |> Seq.exists (fun (v, _) -> e |> containsVar v))
 
-let getSolutions evaluate vset vars candidates =
-    [ for (e, e2) in getCandidates vset vars candidates do
+let getCandidates filter vars knowns =
+    knowns
+    |> Seq.filter
+           (fun (v1, e) ->
+           let v1isVar = Expression.isVariable v1
+           v1isVar && filter v1
+           && vars |> Seq.exists (fun (v, _) -> e |> containsVar v))  
+
+let getSolutions evaluate filter vars candidates =
+    [ for (e, e2) in getCandidates filter vars candidates do
           match evaluate vars e2 with
           | None -> ()
           | Some v -> yield e, v ]
-
-let iterativeSolve eval vars knowns =
+ 
+let iterativeSolveGen filter eval vars knowns =
     let vset =
         vars
         |> Seq.map fst
         |> Hashset
 
-    let rec loop cs tsols (vs : seq<_>) =
-        let candidates = getCandidates vset vs knowns
-        let sols = getSolutions eval vset vs candidates
-        match sols with
-        | [] -> List.concat tsols |> List.rev, cs
-        | sols ->
+    let rec loop n prevcount exit cs tsols (vs : seq<_>) =
+        let candidates = getCandidates (filter vset) vs knowns
+        let sols = getSolutions eval (filter vset) vs candidates
+        match sols, n = 3 with
+        | _, true
+        | [], _ -> List.concat tsols |> List.rev, cs
+        | sols, false ->
+            let vcount = List.concat tsols |> List.map snd |> Hashset
             sols
             |> List.iter (fst
                           >> vset.Add
                           >> ignore)
             let vars' = sols @ List.ofSeq vs
-            loop (List.ofSeq candidates :: cs) (sols :: tsols) vars'
+            loop (n+1) vcount.Count (vcount.Count = prevcount) (List.ofSeq candidates :: cs) (sols :: tsols) vars'
 
-    loop [] [] vars
+    loop 0 0 false [] [] vars
+    //not (vset.Contains v1)
+
+let iterativeSolve eval vars knowns = 
+    iterativeSolveGen (fun h v -> not (h.Contains v)) eval vars knowns
+
+
+let redovar vars =
+    let equals = 
+        vars |> Seq.filter (fun (eq:Equation) ->
+            let e1,e2 = eq.Definition
+            Expression.isVariable e1 && Expression.isVariable e2 && e1 <> e2)
+    [ for eq in equals do
+        let a,b = eq.Definition
+        for eq2 in vars do 
+            let e1, e2 = eq2.Definition
+            if e1 <> a && e2 <> a && (containsVar a e2 || containsVar a e1) then
+                yield replaceSymbol b a e1 <=> replaceSymbol b a e2 ]
+ 
+let vars = [ a ** 2 + b ** 2 <=> c ** 2;a <=> b ] 
+redovar vars
+let iterativeSolveb eval vars knowns = iterativeSolveGen (fun _ _ -> true) eval vars knowns
+ 
+//let getCandidatesb vars knowns =
+//    knowns
+//    |> Seq.filter
+//           (fun (v1, e) ->
+//           let v1isVar = Expression.isVariable v1
+//           v1isVar
+//           && vars |> Seq.exists (fun (v, _) -> e |> containsVar v))
+
+//let getSolutionsb evaluate vars candidates =
+//    [ for (e, e2) in getCandidatesb vars candidates do
+//          match evaluate vars e2 with
+//          | None -> ()
+//          | Some v -> yield e, v ]
+
+//let iterativeSolveb eval vars knowns = 
+
+//    let rec loop n cs tsols (vs : seq<_>) =
+//        let candidates = getCandidatesb vs knowns
+//        let sols = getSolutionsb eval vs candidates
+//        match sols with
+//        | _ when n = 3 -> List.concat tsols |> List.rev, cs
+//        | [] -> List.concat tsols |> List.rev, cs
+//        | sols -> 
+//            let vars' = sols @ List.ofSeq vs
+//            loop (n+1) (List.ofSeq candidates :: cs) (sols :: tsols) vars'
+
+ //  loop 0 [] [] vars
+let knowns =
+    deriveAndGenerateEqualities
+        [ a ** 2 + b ** 2 <=> c ** 2 
+          a <=> b]
+let knowns2 =
+    deriveAndGenerateEqualities
+        [ a ** 2 + b ** 2 <=> c ** 2  ] 
+let evalExpr vars x =
+    replaceSymbols (dict vars) x |> Expression.fullSimplify |> Some  
+
+let evalExprNum vars x =
+    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
+    if Seq.isEmpty nums then None
+    else let symb = replaceSymbols (dict nums) x |> Expression.fullSimplify
+         if containsAnyVar symb then None else Some symb 
+
+let eval = evalExpr    
+    
+let vars = [a, sqrt 2Q] 
+(iterativeSolveb  evalExpr  [c, 4Q]   knowns2 |> fst |> List.map (pairapply Infix.format) )  
+(iterativeSolveb evalExpr [a, sqrt 2Q]   knowns2 |> fst |> List.map (pairapply Infix.format) )  
+
+(iterativeSolve Expression.evaluateFloat [a, sqrt 2.] knowns2 |> fst )  
 
 let iterativeSolve2 f eval vars knowns =
     let vset =
@@ -95,6 +177,8 @@ let qc = symbol "Q_c"
 let eq1 = eff <=> 1 - tc / th
 let eq2 = W <=> qh - qc 
 
+[ a ** 2 + b ** 2 <=> c ** 2
+  a ** 2 <=> b **2 ]
 let knowns =
     deriveAndGenerateEqualities 
         [   eff <=> 1 - tc / th

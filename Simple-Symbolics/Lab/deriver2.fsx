@@ -1,7 +1,8 @@
 //HIDDENX
 //#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45"
 #I @"C:\Users\cybernetic\source\repos\Simple-Symbolics\Simple-Symbolics\Lab"
-#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Prelude.dll"
+//#r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net47\Prelude.dll"
+#r @"C:\Users\cybernetic\source\repos\Prelude\Prelude\bin\Release\net47\Prelude.dll"
 #r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Hansei.Core.dll"
 #r @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net45\Hansei.dll"
 //#r "prelude.dll"
@@ -25,6 +26,12 @@ open Prelude.StringMetrics
 
 open Units
 
+let choose n k = 
+    let bn, bk = BigRational.FromInt n, BigRational.FromInt k
+    if k = 0 || n = k then 1Q else
+    factorial bn / (factorial bk * (factorial (bn - bk))) |> Expression.FromRational
+
+choose 9 9
 let exprIsLog =
     function
     | Function(Ln, _) -> true
@@ -242,6 +249,8 @@ searcher2.ImportanceSample(nsamples = 55000, maxdepth = 58)
 |> List.sortByDescending fst
 Model(findpath ((=) (ln (x ** (s - 1)) + (-r * x))) (ln (x ** (s - 1Q) * exp (-r * x))))
     .ImportanceSample(2000, 18)
+Model(findpath ((=) (sqrt(2 * pi * n) * n**n)) (n**(n+1) * sqrt(2*pi/n)))
+    .ImportanceSample(5000, 18)
 
 let eq = 8 * 2Q ** (3 * n + 1) + 5
 let zq = eq |> applyAtIndex 1 -1 (ignoreFirst reduceProductOne)
@@ -325,6 +334,7 @@ Model(unitsPath false [] 1Q J (sec)).ImportanceSample(500, 50)
 |> List.sortByDescending fst
 |> Seq.takeOrMax 5
 (meter / sec) * N / W
+
 
 ///////////////
 ///
@@ -484,3 +494,55 @@ let mapfirstProd expr =
             identityTransform p
         | f -> f) expr
 
+
+#r @"C:\Users\cybernetic\source\repos\EvolutionaryBayes\EvolutionaryBayes\bin\Debug\net46\EvolutionaryBayes.dll"
+#r @"C:\Users\cybernetic\Code\Libs\MathNet\lib\net40\MathNet.Numerics.dll"
+#time "on"
+open EvolutionaryBayes.ProbMonad
+open System
+open Prelude.Common
+open Prelude.Math
+open Helpers
+open EvolutionaryBayes
+open System.Collections.Generic
+
+
+module Guess =
+    open EvolutionaryBayes.ParticleFilters
+    open Helpers
+    open EvolutionaryBayes.ProbMonad
+    open EvolutionaryBayes
+    
+    let scorer sd (f:Expression) = 
+        try 1./
+            (1e-7 + Array.sumBy
+                (fun (x, y) -> 
+                    let value = try (Expression.evaluateFloat [ n, x ] f).Value 
+                                with e -> failwith (sprintf "%A" x)
+                    abs ( (Expression.evaluateFloat [ n, x ] f).Value - y)) sd)
+        with e ->  
+            failwith (sprintf "%s %s" (f.ToFormattedString()) e.Message)
+
+    let sampleMathOp =
+        dist {
+            let! op = Distributions.uniform [| (+); (-); ( * ); (/) |]
+            let! num = Distributions.uniform [| for i in 1..10 -> 1Q * i |]
+            let! b = Distributions.bernoulli 0.5
+            return (if b then op else flip op) num
+        }
+
+    let inline squared x = x * x
+    let inline cubed x = x * x * x
+    let sampleFunction =
+        Distributions.uniform [| factorialSymb; squared; cubed |]
+    let mutate() =
+        dist { let! fx = Distributions.uniform
+                             [| sampleMathOp; sampleFunction |]
+               let! f = fx
+               return f }
+    let ztp2, avp =
+        evolveSequence 0.8 300 [] (fun _ e -> ((mutate()).Sample()) e)
+            (scorer sd3) 350 50 (Distributions.uniform [| n |]) |> List.maxBy snd
+
+
+  

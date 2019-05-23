@@ -272,6 +272,10 @@ let rec simplifyRationals (roundto : int) =
     | x -> x
 
 module Algebraic =
+    let radicalRationalize x =
+        let den = Rational.denominator x
+        let num = Rational.numerator x
+        num * den / (den * den)
     let simplifyNumericPower =
         function
         | Power(Number n, Number m) when m.IsInteger ->
@@ -408,7 +412,12 @@ let primeFactorsPartialExpr =
 let rec factorial (n : BigRational) =
     if n = 1N then 1N
     else n * factorial (n - 1N)
-    
+
+let rec factorialSymb (e : Expression) =
+    match e with 
+    | Number m when m < 15N -> Number(factorial m)
+    | _ -> failwith "Must be a number < 15"
+
 let choose n k = 
     let bn, bk = BigRational.FromInt n, BigRational.FromInt k
     if k = 0 || n = k then 1Q 
@@ -422,6 +431,7 @@ open System.Collections.Generic
 let ln = MathNet.Symbolics.Operators.ln
 let arctan = MathNet.Symbolics.Operators.arctan
 let symbol = symbol
+let sym = symbol
 
 module Logarithm =
     let expand =
@@ -814,6 +824,14 @@ let rec containsVar x =
     | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
     | _ -> false
 
+let rec containsAnyVar =
+    function
+    | Identifier _ -> true
+    | Power(p, n) -> containsAnyVar n || containsAnyVar p
+    | Function(_, fx) -> containsAnyVar fx
+    | Product l | Sum l | FunctionN(_, l) -> List.exists containsAnyVar l
+    | _ -> false
+
 let rec replaceSymbol r x =
     function
     | Identifier _ as var when var = x -> r
@@ -887,7 +905,7 @@ let replaceExpression replacement expressionToFind formula =
                 (l |> List.map iterReplaceIn
                    |> (tryReplaceCompoundExpression replacement
                           expressionToFindContentSet))
-        | FunctionN(Probability, [ x; param; t ]) -> FunctionN(Probability, [ iterReplaceIn x; param;t ]) 
+        | FunctionN(Probability, s::x::rest) -> FunctionN(Probability, s::iterReplaceIn x::rest) 
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [iterReplaceIn x; param])
         | FunctionN(fn, l) ->
             FunctionN (fn, List.map iterReplaceIn l)
@@ -921,6 +939,15 @@ let containsExpression expressionToFind formula =
             || (List.exists iterFindIn l)
         | _ -> false
     iterFindIn (Algebraic.simplifyLite formula)
+
+let evalExpr vars x =
+    replaceSymbols (dict vars) x |> Expression.fullSimplify |> Some  
+
+let evalExprNum vars x =
+    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
+    if Seq.isEmpty nums then None
+    else let symb = replaceSymbols (dict nums) x |> Expression.fullSimplify
+         if containsAnyVar symb then None else Some symb 
 
 let rec width =
     function
@@ -966,7 +993,7 @@ module Structure =
         | (Product l | Sum l | FunctionN(_, l)) as prod ->
             func prod || List.exists (existsRecursive func) l
         | _ -> false
-
+  
     let rec first func =
         function
         | Identifier _ as i ->
@@ -1040,7 +1067,7 @@ module Structure =
                     (List.map (recursiveFilter filter) l
                      |> List.filterMap Option.isSome Option.get) |> Some
             else None
-        | FunctionN(Probability, [ x; param; t ])-> recursiveFilter filter x |> Option.map (fun y -> FunctionN(Probability, [y; param;t]))
+        | FunctionN(Probability, s::x::rest)-> recursiveFilter filter x |> Option.map (fun y -> FunctionN(Probability, s::y::rest))
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> recursiveFilter filter x |> Option.map (fun y -> FunctionN(fn, [y; param]))
         | FunctionN(fn, l) as func ->
             if filter func then
@@ -1050,16 +1077,32 @@ module Structure =
                      |> List.filterMap Option.isSome Option.get) |> Some
             else None
         | x -> Some x
-
+    let rec applyInFunction fx =
+        function 
+        | Power(f, n) -> fx (Power(applyInFunction fx f, applyInFunction fx n))
+        | Function(fn, f) -> fx (Function(fn, applyInFunction fx f)) 
+        | FunctionN(Probability, s::x::rest) ->
+            fx (FunctionN(Probability,
+                            s::applyInFunction fx x::rest))
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
+            fx (FunctionN(fn,
+                          [ applyInFunction fx x
+                            param ]))
+        | x -> fx x
     let rec recursiveMap fx =
         function
         | Identifier _ as var -> fx var
         | Power(f, n) -> fx (Power(recursiveMap fx f, recursiveMap fx n))
-        | Function(fn, f) -> fx(Function(fn, recursiveMap fx f))
+        | Function(fn, f) -> fx (Function(fn, recursiveMap fx f))
         | Product l -> fx (Product(List.map (recursiveMap fx) l))
-        | Sum l -> fx (Sum(List.map (recursiveMap fx) l)) 
-        | FunctionN(Probability, [ x; param; t ]) -> fx (FunctionN(Probability, [ recursiveMap fx x; param;t ]))
-        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> fx (FunctionN(fn, [recursiveMap fx x; param]))
+        | Sum l -> fx (Sum(List.map (recursiveMap fx) l))
+        | FunctionN(Probability, s::x::rest) ->
+            fx (FunctionN(Probability,
+                            s::recursiveMap fx x::rest))
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
+            fx (FunctionN(fn,
+                          [ recursiveMap fx x
+                            param ]))
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
         | x -> fx x
 
@@ -1067,6 +1110,7 @@ module Structure =
         let placeholder = symbol "__PLACE_HOLDER__"
         let replaced = replaceExpression placeholder x f
         removeSymbol placeholder replaced
+
 
 type Equation(leq : Expression, req : Expression) =
     member __.Definition = leq, req
@@ -1122,10 +1166,37 @@ module Vars =
     let π = pi
     let pi = pi
 
-let prob x = FunctionN(Probability, [ x ])
-let condprob x param = FunctionN(Probability, [ x; param ])
-let probparam x param = FunctionN(Probability, [ x; param; 0Q ])
+let prob x = FunctionN(Probability, [sym "P"; x ])
+let probn s x = FunctionN(Probability, [sym s; x ])
+let condprob x param = FunctionN(Probability, [ sym "P"; x; param ])
+let probparam x param = FunctionN(Probability, [sym "P";  x; param; 0Q ])
 let integral dx x = FunctionN(Integral, [ x; dx ])
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
 let grad x = FunctionN(Gradient, [x])
 let gradn var x = FunctionN(Gradient, [x;var] )
+
+
+[<RequireQualifiedAccess>]
+type FuncType =
+     | Power of Expression
+     | Function of Function
+     member t.WrapExpression e =
+        match t with 
+        | Power n -> Expression.Power(e, n)
+        | Function f -> Expression.Function(f, e)
+
+let (|IsFunction|_|) input = 
+     match input with 
+     | Function(f, x) -> Some(FuncType.Function f,x)
+     | Power(x,n) -> Some(FuncType.Power n,x)
+     | _ -> None
+ 
+let rewriteIntegralAsExpectation = function
+    | FunctionN(Function.Integral, Product l :: _) as f ->
+        maybe {
+            let! p = List.tryFind (function
+                         | FunctionN(Probability, _) -> true
+                         | _ -> false) l
+            return FunctionN(Function.Expectation,
+                             [ (Product l) / p; p ]) } |> Option.defaultValue f
+    | f -> f 

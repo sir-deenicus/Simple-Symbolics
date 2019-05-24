@@ -264,3 +264,11 @@ let applyIntegral =
 //integrateSimple x (1/(3*x**2+1)) |> Infix.format
 //integrateSimple x (1/cos(x))|> Infix.format
 //integrateSimplePartial x (5 * x + 1/cos(x))
+
+// (integratePartial x (a * exp(x**2) + b * exp(x**2))) |> writeExpr
+
+// integratePartial x (prob x * x**2 + prob x * 2 * x) |> Structure.recursiveMap rewriteIntegralAsExpectation|> writeExpr
+
+// integratePartial x (prob x * x**2 + prob x * 2 * x)  |> writeExpr 
+// integrateSimple x (sin (x) ** 2 |> Trigonometric.simplify) |> writeExpr
+

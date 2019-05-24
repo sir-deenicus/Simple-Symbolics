@@ -444,7 +444,7 @@ module Logarithm =
 
     let contract =
         function
-        | Sum l ->
+        | Sum l as f ->
             let logs, rest =
                 List.partition (function
                     | Function(Ln, _) -> true
@@ -458,7 +458,9 @@ module Logarithm =
                        | Function(Ln, x) -> x
                        | _ -> failwith "never")
 
-            ln (Product logs') + Sum rest
+            match logs' with
+            | [] -> f
+            | _ -> ln (Product logs') + Sum rest
         | f -> f
 
     let bringPowerOut =
@@ -951,16 +953,18 @@ let evalExprNum vars x =
 
 let rec width =
     function
+    | Constant _
     | Identifier _ -> 1
     | Power(x, n) -> width x + 1 + width n
     | FunctionN(fn, x::_) when isSpecializedFunction fn -> width x + 1
     | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
     | Function(_, x) -> width x + 1
     | Approximation _ | Number _ -> 1
-    | _ -> failwith "unimplemented compute size"
+    | f -> failwith (sprintf "unimplemented compute size %A" (  f))
 
 let rec depth =
     function
+    | Constant _
     | Identifier _ -> 1
     | Power(x, n) -> (max (depth x) (depth n)) + 1
     | FunctionN(fn, x::_) when isSpecializedFunction fn -> depth x + 1
@@ -1046,49 +1050,47 @@ module Structure =
     let rec recursiveFilter filter =
         function
         | Identifier _ as var when not (filter var) -> None
+        | Identifier _ as var -> Some var
         | Power(f, n) as p ->
-            if filter p then
-                maybe {
+            match 
+                (maybe {
                     let! g = recursiveFilter filter f  
                     let! m = recursiveFilter filter n  
-                    return Power(g, m)}
-            else None
-        | Function(fn, f) as func ->
-            if filter func then recursiveFilter filter f |> Option.map (fun g -> Function(fn, g)) else None
+                    return Power(g, m)}) with
+            | None -> if filter p then Some p else None
+            | f -> f
         | Product l as prod ->
-            if filter prod then
-                Product
-                    (List.map (recursiveFilter filter) l
-                     |> List.filterMap Option.isSome Option.get) |> Some
-            else None
+            let pr = List.map (recursiveFilter filter) l
+                     |> List.filterMap Option.isSome Option.get
+            match pr with 
+            | [] -> if filter prod then Some prod else None
+            | l -> Some (List.fold (*) 1Q l)
         | Sum l as sum ->
-            if filter sum then
-                Sum
-                    (List.map (recursiveFilter filter) l
-                     |> List.filterMap Option.isSome Option.get) |> Some
-            else None
-        | FunctionN(Probability, s::x::rest)-> recursiveFilter filter x |> Option.map (fun y -> FunctionN(Probability, s::y::rest))
-        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> recursiveFilter filter x |> Option.map (fun y -> FunctionN(fn, [y; param]))
-        | FunctionN(fn, l) as func ->
-            if filter func then
-                FunctionN
-                    (fn,
-                     List.map (recursiveFilter filter) l
-                     |> List.filterMap Option.isSome Option.get) |> Some
-            else None
-        | x -> Some x
+            let suml = List.map (recursiveFilter filter) l
+                     |> List.filterMap Option.isSome Option.get
+            match suml with 
+            | [] -> if filter sum then Some sum else None
+            | l -> Some (List.sum l) 
+        | Function _ 
+        | FunctionN _ as fn -> 
+            if filter fn then Some fn else None   
+        | _ -> None
+
     let rec applyInFunction fx =
         function 
-        | Power(f, n) -> fx (Power(applyInFunction fx f, applyInFunction fx n))
-        | Function(fn, f) -> fx (Function(fn, applyInFunction fx f)) 
+        | Power(f, n) -> Power(applyInFunction fx f, applyInFunction fx n)
+        | Function(fn, f) -> Function(fn, applyInFunction fx f)
         | FunctionN(Probability, s::x::rest) ->
-            fx (FunctionN(Probability,
-                            s::applyInFunction fx x::rest))
+            FunctionN(Probability,
+                            s::applyInFunction fx x::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
-            fx (FunctionN(fn,
+            FunctionN(fn,
                           [ applyInFunction fx x
-                            param ]))
-        | x -> fx x
+                            param ])
+        | Product l -> Product(List.map (applyInFunction fx) l)
+        | Sum l -> Sum(List.map (applyInFunction fx) l)
+        | x -> x
+
     let rec recursiveMap fx =
         function
         | Identifier _ as var -> fx var
@@ -1105,6 +1107,15 @@ module Structure =
                             param ]))
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
         | x -> fx x
+ 
+    let mapfirst func expr =
+        let mutable isdone = false
+        recursiveMap (function
+            | f when not isdone ->
+                let f' = func f
+                isdone <- f' <> f
+                f'
+            | f -> f) expr
 
     let removeExpression x f =
         let placeholder = symbol "__PLACE_HOLDER__"
@@ -1190,7 +1201,26 @@ let (|IsFunction|_|) input =
      | Function(f, x) -> Some(FuncType.Function f,x)
      | Power(x,n) -> Some(FuncType.Power n,x)
      | _ -> None
- 
+
+let (|IsProb|_|) input = 
+     match input with 
+     | FunctionN(Probability, _::x::_) -> Some(x) 
+     | _ -> None
+
+let (|IsExpectation|_|) input = 
+     match input with 
+     | FunctionN(Function.Expectation, [x; p]) -> Some(x, p) 
+     | _ -> None  
+
+let (|ProductHasNumber|_|) =
+    function
+    | Product l ->
+        match l |> List.filter (Expression.isRationalNumber) with
+        | [ Number n ] -> Some(Expression.FromRational n)
+        | _ -> None
+    | _ -> None
+
+
 let rewriteIntegralAsExpectation = function
     | FunctionN(Function.Integral, Product l :: _) as f ->
         maybe {

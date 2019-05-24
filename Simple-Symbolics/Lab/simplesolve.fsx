@@ -459,15 +459,6 @@ let zt3 =
     pr3 |> sequenceSamples 0.4 (mutate3 eqs3) scorerz 100 100
    
 let ezl2 = zt3.SampleN(200) |> Array.maxBy (scorerz) |> List.map Equation |> List.rev
- 
-let mapfirst func expr =
-    let mutable isdone = false
-    Structure.recursiveMap (function
-        | f when not isdone ->
-            let f' = func f
-            isdone <- f' <> f
-            f'
-        | f -> f) expr
 
 
 let ezl2 = zt3.Sample() |> List.map Equation |> List.rev

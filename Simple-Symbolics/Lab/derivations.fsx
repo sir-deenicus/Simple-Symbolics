@@ -49,9 +49,33 @@ let solveProductForm e =
                else 1Q / r, e2)
     | _ -> []
 
-let deriveEqualitiesFromProduct es =
-    es
-    |> List.collect (fun (e1, e2) ->
+let deriveEqualitiesFromProduct (eqs:Equation list) =
+    eqs
+    |> List.collect (fun eq ->
+           let (e1, e2) = eq.Definition
            (e1, e2) :: solveProductForm e1 e2
            |> List.map Equation
            |> genEqualitiesList)
+
+let transformNegativeEq =
+    function
+    | (ProductHasNumber n as l, r) -> l / n, Algebraic.expand (r / n)
+    | l,r -> l, Algebraic.expand r
+
+let deriveShallowSums (eqs : Equation list) =
+    eqs
+    |> List.collect (fun eq ->
+           let l, r = eq.Definition
+           match r with
+           | Sum sums ->
+               (l, r)
+               :: (sums
+                   |> List.map (fun x -> transformNegativeEq (x, l - (r - x))))
+           | _ -> [l,r])
+    |> List.map Equation
+    |> genEqualitiesList       
+
+let deriveShallowEqualities eqs =
+    let deqs = Hashset(deriveShallowSums eqs)
+    deqs.UnionWith(deriveEqualitiesFromProduct eqs)
+    Seq.toList deqs

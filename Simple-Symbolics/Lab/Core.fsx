@@ -978,6 +978,11 @@ let averageDepth =
     | Sum l | Product l | FunctionN(_, l) -> List.averageBy (depth >> float) l
     | e -> float (depth e)
 
+let averageWidth =
+    function
+    | Sum l | Product l | FunctionN(_, l) -> List.averageBy (width >> float) l
+    | e -> float (depth e)
+
 module Structure =
     let rootWidth =
         function
@@ -1185,7 +1190,24 @@ let integral dx x = FunctionN(Integral, [ x; dx ])
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
 let grad x = FunctionN(Gradient, [x])
 let gradn var x = FunctionN(Gradient, [x;var] )
+let diff dx x = FunctionN(Derivative, [x;dx])
+let pdiff dx x = FunctionN(PartialDerivative, [x;dx])
+let func f = FunctionN(Function.Func, [sym f])
+let fn f x = FunctionN(Function.Func,[sym f;x])
 
+let (|IsDerivative|_|) = function
+     | FunctionN(PartialDerivative, [ x; dx ])
+     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+     | _ -> None
+
+let applyDeriv =
+    function
+    | IsDerivative(f, dx) -> Calculus.differentiate dx f
+    | f -> f
+
+let D = Calculus.differentiate
+
+let Deriv = Structure.recursiveMap applyDeriv >> Algebraic.simplify true
 
 [<RequireQualifiedAccess>]
 type FuncType =
@@ -1221,6 +1243,18 @@ let (|ProductHasNumber|_|) =
     | _ -> None
 
 
+let (|RationalLiteral|_|) r = function
+    | Number n as q when n = BigRational.FromIntFraction r -> Some q
+    | _ -> None
+
+let (|IntegerLiteral|_|) m = function
+    | Number n as q when n.IsInteger && int n = m -> Some q
+    | _ -> None
+
+let (|IntegerNumber|_|)  = function
+    | Number n as q when n.IsInteger -> Some q
+    | _ -> None
+
 let rewriteIntegralAsExpectation = function
     | FunctionN(Function.Integral, Product l :: _) as f ->
         maybe {
@@ -1230,3 +1264,4 @@ let rewriteIntegralAsExpectation = function
             return FunctionN(Function.Expectation,
                              [ (Product l) / p; p ]) } |> Option.defaultValue f
     | f -> f 
+

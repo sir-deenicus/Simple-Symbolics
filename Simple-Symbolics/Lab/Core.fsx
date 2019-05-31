@@ -1130,13 +1130,22 @@ module Structure =
 
 type Equation(leq : Expression, req : Expression) =
     member __.Definition = leq, req
+    member __.Left = leq
+    member __.Right = req
     member __.Equalities =
         [ leq, req
           req, leq ]
     static member map f (eq:Equation) = 
         let leq, req = eq.Definition
         Equation(f leq, f req)
-
+    static member (-) (eq : Equation, expr : Expression) =
+        Equation(eq.Left - expr, eq.Right - expr)
+    static member (+) (eq : Equation, expr : Expression) =
+        Equation(eq.Left + expr, eq.Right + expr)
+    static member (*) (eq : Equation, expr : Expression) =
+        Equation(eq.Left * expr, eq.Right * expr)
+    static member (/) (eq : Equation, expr : Expression) =
+        Equation(eq.Left / expr, eq.Right / expr)
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
@@ -1194,20 +1203,21 @@ let diff dx x = FunctionN(Derivative, [x;dx])
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx])
 let func f = FunctionN(Function.Func, [sym f])
 let fn f x = FunctionN(Function.Func,[sym f;x])
+let makeFunc fname = fun x -> fn fname x
 
 let (|IsDerivative|_|) = function
      | FunctionN(PartialDerivative, [ x; dx ])
      | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
      | _ -> None
 
-let applyDeriv =
+let evalDerivative =
     function
     | IsDerivative(f, dx) -> Calculus.differentiate dx f
     | f -> f
 
-let D = Calculus.differentiate
+let evalDerivs = Structure.recursiveMap evalDerivative >> Algebraic.simplify true
 
-let Deriv = Structure.recursiveMap applyDeriv >> Algebraic.simplify true
+let D = evalDerivs >> Calculus.differentiate
 
 [<RequireQualifiedAccess>]
 type FuncType =
@@ -1255,13 +1265,5 @@ let (|IntegerNumber|_|)  = function
     | Number n as q when n.IsInteger -> Some q
     | _ -> None
 
-let rewriteIntegralAsExpectation = function
-    | FunctionN(Function.Integral, Product l :: _) as f ->
-        maybe {
-            let! p = List.tryFind (function
-                         | FunctionN(Probability, _) -> true
-                         | _ -> false) l
-            return FunctionN(Function.Expectation,
-                             [ (Product l) / p; p ]) } |> Option.defaultValue f
-    | f -> f 
+
 

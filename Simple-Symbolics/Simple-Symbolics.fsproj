@@ -23,6 +23,7 @@
     <Compile Include="Core.fs" />
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
+    <Compile Include="Differentiation.fs" />
     <Compile Include="Integration.fs" />
     <Compile Include="LinearAlgebra.fs" />
   </ItemGroup>

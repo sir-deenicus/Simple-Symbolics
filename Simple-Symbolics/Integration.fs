@@ -14,7 +14,10 @@ module Option =
         | None -> Some def
         | Some y -> Some(f y)
 
+let integral dx x = FunctionN(Integral, [ x; dx ])
+
 let integratePolynomExpr m n e = e ** (n + 1Q) / (m * (n + 1Q))
+
 let isLinear x f =
     Polynomial.isPolynomial x f && (Polynomial.degree x f).ToFloat() = 1.
 
@@ -192,6 +195,40 @@ let rec integrateSimple x =
         else k * integrateSimple x e'
     | f when not (containsVar x f) -> x * f
     | x -> failwith "Can't integrate this"
+     
+let usubst outer diffx =
+    function
+    | Power(x, _) | Function(_, x) -> outer / Calculus.differentiate diffx x
+    | _ -> failwith "unimplemented compute size"
+
+let integratePartialRes x e =
+    match (integrateSimplePartial x e) with 
+    | Partial(s, def, true) -> s + def, false
+    | Partial(s, def, false) -> s * (integral x def), false
+    | Succeeded e -> e, true
+    | Deferred (e,true) -> e, false
+    | Deferred (e,false) -> integral x e, false
+
+let integratePartial x e = fst(integratePartialRes x e)
+
+let (|IsIntegral|_|) = function
+     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
+     | _ -> None
+
+let evalIntegral =
+    function
+    | IsIntegral(f, dx) -> integratePartial dx f
+    | f -> f
+
+let rewriteIntegralAsExpectation = function
+    | FunctionN(Function.Integral, Product l :: _) as f ->
+        maybe {
+            let! p = List.tryFind (function
+                         | FunctionN(Probability, _) -> true
+                         | _ -> false) l
+            return FunctionN(Function.Expectation,
+                             [ (Product l) / p; p ]) } |> Option.defaultValue f
+    | f -> f  
 
 module Riemann =
     let toSum x b a f =
@@ -203,26 +240,3 @@ module Riemann =
         x
         |> Expression.toFormattedString
         |> sprintf @"\lim _{n \rightarrow \infty} \sum_{i=1}^{n}%s"
-
-let usubst outer diffx =
-    function
-    | Power(x, _) | Function(_, x) -> outer / Calculus.differentiate diffx x
-    | _ -> failwith "unimplemented compute size"
-
-let integratePartial x e =
-    match (integrateSimplePartial x e) with 
-    | Partial(s, def, true) -> s + def
-    | Partial(s, def, false) -> s * (integral x def)
-    | Succeeded e 
-    | Deferred (e,true) -> e
-    | Deferred (e,false) -> integral x e
-
-
-let (|IsIntegral|_|) = function
-     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
-     | _ -> None
-
-let applyIntegral =
-    function
-    | IsIntegral(f, dx) -> integratePartial dx f
-    | f -> f

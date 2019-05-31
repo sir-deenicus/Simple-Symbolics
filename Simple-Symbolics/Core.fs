@@ -1123,13 +1123,22 @@ module Structure =
 
 type Equation(leq : Expression, req : Expression) =
     member __.Definition = leq, req
+    member __.Left = leq
+    member __.Right = req
     member __.Equalities =
         [ leq, req
           req, leq ]
     static member map f (eq:Equation) = 
         let leq, req = eq.Definition
         Equation(f leq, f req)
-
+    static member (-) (eq : Equation, expr : Expression) =
+        Equation(eq.Left - expr, eq.Right - expr)
+    static member (+) (eq : Equation, expr : Expression) =
+        Equation(eq.Left + expr, eq.Right + expr)
+    static member (*) (eq : Equation, expr : Expression) =
+        Equation(eq.Left * expr, eq.Right * expr)
+    static member (/) (eq : Equation, expr : Expression) =
+        Equation(eq.Left / expr, eq.Right / expr)
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
@@ -1179,29 +1188,14 @@ let prob x = FunctionN(Probability, [sym "P"; x ])
 let probn s x = FunctionN(Probability, [sym s; x ])
 let condprob x param = FunctionN(Probability, [ sym "P"; x; param ])
 let probparam x param = FunctionN(Probability, [sym "P";  x; param; 0Q ])
-let integral dx x = FunctionN(Integral, [ x; dx ])
+
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
-let grad x = FunctionN(Gradient, [x])
-let gradn var x = FunctionN(Gradient, [x;var] )
-let diff dx x = FunctionN(Derivative, [x;dx])
-let pdiff dx x = FunctionN(PartialDerivative, [x;dx])
+
 let func f = FunctionN(Function.Func, [sym f])
 let fn f x = FunctionN(Function.Func, [sym f;x])
 
-let (|IsDerivative|_|) = function
-     | FunctionN(PartialDerivative, [ x; dx ])
-     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
-     | _ -> None
-
-let D = Calculus.differentiate
-
-let applyDeriv =
-    function
-    | IsDerivative(f, dx) -> D dx f
-    | f -> f
-
-let Deriv = Structure.recursiveMap applyDeriv >> Algebraic.simplify true
-
+let makeFunc fname = fun x -> fn fname x
+ 
 [<RequireQualifiedAccess>]
 type FuncType =
      | Power of Expression
@@ -1248,13 +1242,4 @@ let (|IntegerNumber|_|)  = function
     | Number n as q when n.IsInteger -> Some q
     | _ -> None
     
-let rewriteIntegralAsExpectation = function
-    | FunctionN(Function.Integral, Product l :: _) as f ->
-        maybe {
-            let! p = List.tryFind (function
-                         | FunctionN(Probability, _) -> true
-                         | _ -> false) l
-            return FunctionN(Function.Expectation,
-                             [ (Product l) / p; p ]) } |> Option.defaultValue f
-    | f -> f 
 

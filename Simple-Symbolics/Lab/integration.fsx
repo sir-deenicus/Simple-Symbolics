@@ -222,11 +222,19 @@ let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
      | _ -> None
 
-let applyIntegral =
+let evalIntegral =
     function
     | IsIntegral(f, dx) -> integratePartial dx f
     | f -> f
-
+let rewriteIntegralAsExpectation = function
+    | FunctionN(Function.Integral, Product l :: _) as f ->
+        maybe {
+            let! p = List.tryFind (function
+                         | FunctionN(Probability, _) -> true
+                         | _ -> false) l
+            return FunctionN(Function.Expectation,
+                             [ (Product l) / p; p ]) } |> Option.defaultValue f
+    | f -> f 
 // integrateSimple x (1 / ((a * x + x + b) ** 2 + 1)) |> Infix.format
 // integrateSimple x (1 / (1 * (a * x + x + b) ** 2 + b)) |> Infix.format
 // integrateSimple x (1 / (((a + 2) * x + b + c + x) ** 2 + c + y)) |> Infix.format //Caveats

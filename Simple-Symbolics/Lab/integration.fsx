@@ -280,3 +280,15 @@ let rewriteIntegralAsExpectation = function
 // integratePartial x (prob x * x**2 + prob x * 2 * x)  |> writeExpr 
 // integrateSimple x (sin (x) ** 2 |> Trigonometric.simplify) |> writeExpr
 
+// let ex, tr = integral x (cos (sqrt x)/(sqrt x)) |> usubstitutionSteps  
+// let ex, tr = integral x (exp (2*x) / (8 + exp (2*x))) |> usubstitutionSteps
+// let ex, tr = integral y ((3 * exp (3*sqrt y)) / (sqrt y)) |>evalIntegral |> usubstitutionSteps
+// integral y ((3 * exp (3*sqrt y)) / (sqrt y)) |> evalIntegral |> writeExpr
+// string tr |> writeStr
+// writeExpr ex
+// integral x (Product [sin(x ** 4);x **3]) |> usubstitution  |> writeExpr
+// integral x (sin(7*x ** 4 + 3) * x **3) |> usubstitution |> writeExpr
+    
+// usubstitution (integral x (x * cos(x**2))) |> writeExpr 
+// usubstitutionSteps (integral x (x * 2 * cos(x))) |> snd |> string |> writeStr
+  

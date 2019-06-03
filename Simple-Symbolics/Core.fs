@@ -5,13 +5,15 @@ open MathNet.Numerics
 open System
 
 type Hashset<'a> = System.Collections.Generic.HashSet<'a>
-
+let safeEval f x = try f x with _ -> x
 let flip f a b = f b a
 let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 let standardSymbols = Map []
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
+
+let fmt e = expressionFormater e
 
 let setInfix() =
     expressionFormat <- "Infix"
@@ -44,6 +46,21 @@ let smartroundEx n x =
     else Math.Round(x, n), n
 
 let smartround n = smartroundEx n >> fst
+
+type StepTrace(s) =
+    let trace = Hashset()
+    do trace.Add s |> ignore
+    member __.Add e =
+        trace.Add(sprintf "$%s$" (expressionFormater e)) |> ignore
+    member __.Add e = trace.Add(sprintf "$%s$" (e.ToString())) |> ignore
+    member __.Add s = trace.Add(s) |> ignore
+    member __.Add (s, parameters) = 
+        String.Format(s, Seq.toArray parameters) 
+        |> trace.Add 
+        |> ignore
+    override __.ToString() =
+        String.concat "\n\n" trace
+//==========================================
 
 let symbolString =
     function
@@ -1128,7 +1145,14 @@ type Equation(leq : Expression, req : Expression) =
     member __.Equalities =
         [ leq, req
           req, leq ]
-    static member map f (eq:Equation) = 
+    
+    static member mapRight f (eq:Equation) = 
+        let leq, req = eq.Definition
+        Equation(f leq, f req)
+    static member mapLeft f (eq:Equation) = 
+        let leq, req = eq.Definition
+        Equation(f leq, req)
+    static member map (f, eq:Equation) = 
         let leq, req = eq.Definition
         Equation(f leq, f req)
     static member (-) (eq : Equation, expr : Expression) =
@@ -1143,6 +1167,7 @@ type Equation(leq : Expression, req : Expression) =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
 let (<=>) a b = Equation(a, b)
+
 let equals a b = Equation(a, b)
 
 module Vars =
@@ -1198,18 +1223,25 @@ let makeFunc fname = fun x -> fn fname x
  
 [<RequireQualifiedAccess>]
 type FuncType =
+     | Identity 
      | Power of Expression
      | Function of Function
      member t.WrapExpression e =
         match t with 
         | Power n -> Expression.Power(e, n)
         | Function f -> Expression.Function(f, e)
+        | Identity -> e
+     override t.ToString() =
+        match t with 
+        | Power n -> " _ ^" + (Expression.toFormattedString n)
+        | Function f -> string f
+        | Identity -> "id"
 
-let (|IsFunction|_|) input = 
+let (|AsFunction|_|) input = 
      match input with 
      | Function(f, x) -> Some(FuncType.Function f,x)
      | Power(x,n) -> Some(FuncType.Power n,x)
-     | _ -> None
+     | f -> Some(FuncType.Identity, f)
 
 let (|IsProb|_|) input = 
      match input with 

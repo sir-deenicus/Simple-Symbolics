@@ -31,7 +31,7 @@
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.21.1" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.21.4" />
   </ItemGroup>
 
 </Project>

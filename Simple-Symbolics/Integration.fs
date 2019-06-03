@@ -7,6 +7,7 @@ open MathNet
 open Operators
 open Core
 open Core.Vars
+open MathNet.Symbolics.Differentiation
 
 module Option =
     let mapOrAdd def f =
@@ -87,7 +88,7 @@ let integrateSimplePartial x f =
             //printfn "Power nonlinear in x, fail"
             Deferred (f,false)
         | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e ->
-            Succeeded(Function(Ln, e) / fst (extractLinearComponent x e))
+            Succeeded(Function(Ln, abs e) / fst (extractLinearComponent x e))
         | Power(Identifier _ as y, n) when x = y && n <> -1Q ->
             Succeeded((x ** (n + 1)) / (n + 1))
         | poly when Polynomial.isMonomial x poly ->
@@ -196,10 +197,6 @@ let rec integrateSimple x =
     | f when not (containsVar x f) -> x * f
     | x -> failwith "Can't integrate this"
      
-let usubst outer diffx =
-    function
-    | Power(x, _) | Function(_, x) -> outer / Calculus.differentiate diffx x
-    | _ -> failwith "unimplemented compute size"
 
 let integratePartialRes x e =
     match (integrateSimplePartial x e) with 
@@ -220,15 +217,104 @@ let evalIntegral =
     | IsIntegral(f, dx) -> integratePartial dx f
     | f -> f
 
-let rewriteIntegralAsExpectation = function
+ 
+let usubstitution expr =
+    let usub = sym "u_{sub}"
+
+    let substitute n y (f : FuncType) =
+        let f' = f.WrapExpression usub
+        match integratePartialRes usub f' with
+        | res, true -> n * replaceSymbol y usub res
+        | f, false -> f 
+    let inner dx innerExpr =
+        match innerExpr with
+        | Product [ AsFunction(f1, y1) as x1; AsFunction(f2, y2) as x2 ] ->
+            match x2 / (D dx y1) with
+            | Number _ as n -> substitute n y1 f1
+            | _ ->
+                match x1 / (D dx y2) with
+                | Number _ as n -> substitute n y2 f2
+                | _ -> integral dx innerExpr
+        | _ -> integral dx innerExpr
+
+    match expr with
+    | IsIntegral(f, dx) -> inner dx f
+    | Product [ IsIntegral(f, dx); a ] 
+    | Product [ a; IsIntegral(f, dx) ] -> a * inner dx f
+    | f -> f
+
+let usubstitutionSteps expr =
+    let usub = sym "u_{sub}"
+    let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
+
+    let substitute n y (f : FuncType) =
+        let f' = f.WrapExpression usub
+        match integratePartialRes usub f' with
+        | res, true ->  
+            trace.Add("And: ${0}$", [integral usub f' <=> res])
+            n * replaceSymbol y usub res
+        | f, false -> 
+            trace.Add(integral usub f'); f
+
+    let inner dx innerExpr =
+        match innerExpr with
+        | Product [ AsFunction(f1, y1) as x1; AsFunction(f2, y2) as x2 ] ->
+            match x2 / (D dx y1) with
+            | Number _ as n ->
+                trace.Add
+                  ("${0}$. Therefore ${1}$ and ${2} \\propto {3}$",
+                    [|  usub <=> y1 |> string;
+                        diff dx usub <=> D dx y1 |> string;
+                        fmt (D dx y1) ;
+                        fmt x2|])  
+                sprintf "Allowing rewrite: $%sd%s = %sd%s$" (fmt n)
+                    (fmt usub)
+                    (fmt ((D dx y1) * n))
+                    (fmt dx) |> trace.Add  
+                trace.Add("Container function: " + string f1) 
+                substitute n y1 f1, trace
+            | _ ->
+                match x1 / (D dx y2) with
+                | Number _ as n ->
+                    trace.Add
+                     ("${0}$. Therefore ${1}$ and ${2} \\propto {3}$",
+                     [| usub <=> y2 |> string
+                        diff dx usub <=> D dx y2 |> string
+                        fmt (D dx y2) 
+                        fmt x1|])  
+                    sprintf "Allowing rewrite: $%sd%s = %sd%s$" (fmt n)
+                        (fmt usub)
+                        (fmt ((D dx y2) * n))
+                        (fmt dx) |> trace.Add 
+                    trace.Add("Container function: " + string f2)
+                    substitute n y2 f2, trace
+                | _ -> integral dx innerExpr, trace
+        | _ -> integral dx innerExpr, trace
+
+    match expr with
+    | IsIntegral(f, dx) -> inner dx f
+    | Product [ IsIntegral(f, dx); a ] | Product [ a; IsIntegral(f, dx) ] ->
+        let r, tr = inner dx f in a * r, tr
+    | f -> f, trace
+
+ 
+let rewriteIntegralAsExpectation =
+    function
     | FunctionN(Function.Integral, Product l :: _) as f ->
         maybe {
             let! p = List.tryFind (function
                          | FunctionN(Probability, _) -> true
                          | _ -> false) l
             return FunctionN(Function.Expectation,
-                             [ (Product l) / p; p ]) } |> Option.defaultValue f
-    | f -> f  
+                             [ (Product l) / p
+                               p ])
+        }
+        |> Option.defaultValue f
+    | f -> f
+
+let changeOfVariable dy = function 
+    | IsIntegral(f,_) -> integral dy f
+    | f -> f
 
 module Riemann =
     let toSum x b a f =
@@ -240,3 +326,6 @@ module Riemann =
         x
         |> Expression.toFormattedString
         |> sprintf @"\lim _{n \rightarrow \infty} \sum_{i=1}^{n}%s"
+
+module Expression =
+    let isIntegral = function IsIntegral _ -> true | _ -> false

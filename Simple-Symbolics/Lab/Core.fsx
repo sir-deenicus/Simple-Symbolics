@@ -1217,7 +1217,7 @@ let evalDerivative =
 
 let evalDerivs = Structure.recursiveMap evalDerivative >> Algebraic.simplify true
 
-let D = evalDerivs >> Calculus.differentiate
+let D x e = evalDerivs e |> Calculus.differentiate x
 
 [<RequireQualifiedAccess>]
 type FuncType =

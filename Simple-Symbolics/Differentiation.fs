@@ -21,15 +21,4 @@ let evalDerivative =
 let evalDerivs = Structure.recursiveMap evalDerivative >> Algebraic.simplify true
 
 let D dx e = evalDerivs e |> Calculus.differentiate2 dx
-
-let (|IsProductSelfDerivative|_|) dx p =
-    let derivativeTest dx a b =
-        let r = a / (D dx b)
-        if Expression.isRationalNumber (r) then Some(r, b)
-        else None
-    match p with
-    | [ a; b ] ->
-        match derivativeTest dx a b with
-        | None -> derivativeTest dx b a
-        | r -> r
-    | _ -> None 
+ 

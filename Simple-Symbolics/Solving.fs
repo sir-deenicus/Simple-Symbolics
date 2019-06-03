@@ -4,7 +4,7 @@ open MathNet.Symbolics
 open Core
 open Vars 
 
-let reArrangeEquation0 silent focusVar (left,right) = 
+let reArrangeExprEquationX silent focusVar (left,right) = 
     let rec iter fx ops = 
         match fx with    
         | f when f = focusVar -> f, ops
@@ -45,11 +45,11 @@ let reArrangeEquation0 silent focusVar (left,right) =
     let f, ops = iter left [] 
     f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Algebraic.simplify true      
 
-let reArrangeEquation focusVar (left,right) = reArrangeEquation0 false focusVar (left,right)
+let reArrangeExprEquation focusVar (left,right) = reArrangeExprEquationX false focusVar (left,right)
 
 let rec invertFunction x expression = 
     printfn "%s" (expression |> Infix.format)
-    match reArrangeEquation x (expression, x) with
+    match reArrangeExprEquation x (expression, x) with
      | Identifier (Symbol _) as y, inv when y = x -> inv
      | _, inv -> printfn "Did not completely reduce. Collecting terms";
                  printfn "Is it monomial in x?"
@@ -73,3 +73,10 @@ let completeSquare x  p =
        let a,b,c = coeffs.[2], coeffs.[1], coeffs.[0]
        a * (x + b/(2*a)) ** 2 + c - b**2/(4*a) 
     else failwith "Not quadratic"
+
+
+let reArrangeEquation focusVar (e:Equation) = 
+    reArrangeExprEquation focusVar e.Definition 
+    |> Equation
+
+

@@ -3,11 +3,12 @@
 open MathNet.Symbolics
 open Core
 open Solving
+open Utils
 
 let deriveTrivialEqualitiesSingle (e1, eq) =
     [ yield Equation(e1, eq)
       for var in findVariablesOfExpression eq do
-          match reArrangeEquation0 true var (eq, e1) with
+          match reArrangeExprEquationX true var (eq, e1) with
           | Identifier _ as var, req ->
               yield Equation(var, Algebraic.simplify true req)
           | _ -> () ]

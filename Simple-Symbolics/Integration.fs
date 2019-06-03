@@ -7,14 +7,9 @@ open MathNet
 open Operators
 open Core
 open Core.Vars
+open Utils
 open MathNet.Symbolics.Differentiation
-
-module Option =
-    let mapOrAdd def f =
-        function
-        | None -> Some def
-        | Some y -> Some(f y)
-
+ 
 let integral dx x = FunctionN(Integral, [ x; dx ])
 
 let integratePolynomExpr m n e = e ** (n + 1Q) / (m * (n + 1Q))
@@ -218,7 +213,7 @@ let evalIntegral =
     | f -> f
 
  
-let usubstitution expr =
+let uSubstitution expr =
     let usub = sym "u_{sub}"
 
     let substitute n y (f : FuncType) =
@@ -243,22 +238,24 @@ let usubstitution expr =
     | Product [ a; IsIntegral(f, dx) ] -> a * inner dx f
     | f -> f
 
-let usubstitutionSteps expr =
+let uSubstitutionSteps expr =
     let usub = sym "u_{sub}"
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
-
+    let failtrace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let substitute n y (f : FuncType) =
         let f' = f.WrapExpression usub
         match integratePartialRes usub f' with
         | res, true ->  
             trace.Add("And: ${0}$", [integral usub f' <=> res])
-            n * replaceSymbol y usub res
-        | f, false -> 
-            trace.Add(integral usub f'); f
+            n * replaceSymbol y usub res, trace
+        | res, false ->  
+            failtrace.Add(integral usub f' <=> res)
+            res, failtrace
 
     let inner dx innerExpr =
         match innerExpr with
         | Product [ AsFunction(f1, y1) as x1; AsFunction(f2, y2) as x2 ] ->
+            failtrace.Add ("{0} is not proportional to {1}={2}", [x2; diff dx y1;D dx y1])
             match x2 / (D dx y1) with
             | Number _ as n ->
                 trace.Add
@@ -272,8 +269,9 @@ let usubstitutionSteps expr =
                     (fmt ((D dx y1) * n))
                     (fmt dx) |> trace.Add  
                 trace.Add("Container function: " + string f1) 
-                substitute n y1 f1, trace
+                substitute n y1 f1
             | _ ->
+                failtrace.Add ("{0} is not proportional to {1}={2}", [x1; diff dx y2; D dx y2])
                 match x1 / (D dx y2) with
                 | Number _ as n ->
                     trace.Add
@@ -287,15 +285,15 @@ let usubstitutionSteps expr =
                         (fmt ((D dx y2) * n))
                         (fmt dx) |> trace.Add 
                     trace.Add("Container function: " + string f2)
-                    substitute n y2 f2, trace
-                | _ -> integral dx innerExpr, trace
-        | _ -> integral dx innerExpr, trace
+                    substitute n y2 f2
+                | _ -> integral dx innerExpr, failtrace
+        | _ -> integral dx innerExpr, failtrace
 
     match expr with
     | IsIntegral(f, dx) -> inner dx f
     | Product [ IsIntegral(f, dx); a ] | Product [ a; IsIntegral(f, dx) ] ->
         let r, tr = inner dx f in a * r, tr
-    | f -> f, trace
+    | f -> f, failtrace
 
  
 let rewriteIntegralAsExpectation =

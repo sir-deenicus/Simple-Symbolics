@@ -20,9 +20,11 @@
     <None Include="Lab\integration.fsx" />
     <None Include="Lab\solving.fsx" />
     <None Include="Lab\experiments.fsx" />
+    <Compile Include="Utils.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
+    <Compile Include="Trigonometric.fs" />
     <Compile Include="Differentiation.fs" />
     <Compile Include="Integration.fs" />
     <Compile Include="LinearAlgebra.fs" />

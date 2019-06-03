@@ -2,6 +2,7 @@ module MathNet.Symbolics.LinearAlgebra
 
 open MathNet.Symbolics 
 open Core
+open Utils
     
 let formatGeneric (e:obj) = 
     match e with

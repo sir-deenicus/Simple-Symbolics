@@ -2,64 +2,9 @@
 
 open MathNet.Symbolics
 open MathNet.Numerics
-open System
-
-type Hashset<'a> = System.Collections.Generic.HashSet<'a>
-let safeEval f x = try f x with _ -> x
-let flip f a b = f b a
-let fst3 (a, _, _) = a
-let pairmap f (x, y) = f x, f y
-let standardSymbols = Map []
-let mutable expressionFormater = Infix.format
-let mutable expressionFormat = "Infix"
-
-let fmt e = expressionFormater e
-
-let setInfix() =
-    expressionFormat <- "Infix"
-    expressionFormater <- Infix.format
-    
-let setLatex() =
-    expressionFormat <- "Latex"
-    expressionFormater <- LaTeX.format
-
-let ignoreFirst f _ = f
-let signstr x = if x < 0. then "-" else ""
-
-type MaybeBuilder() =
-    member __.Bind(x, f) =
-        match x with
-        | Some(x) -> f(x)
-        | _ -> None
-    member __.Delay(f) = f()
-    member __.Return(x) = Some x
-    member __.ReturnFrom(x) = x
-
-let maybe = MaybeBuilder()
-
-let smartroundEx n x =
-    if x > -1. && x < 1. && x <> 0. then
-        let p = log10 (abs x)
-        let roundto = int (ceil -p) + n
-        if roundto > 15 then x, roundto
-        else Math.Round(x, roundto), roundto
-    else Math.Round(x, n), n
-
-let smartround n = smartroundEx n >> fst
-
-type StepTrace(s) =
-    let trace = Hashset()
-    do trace.Add s |> ignore
-    member __.Add e =
-        trace.Add(sprintf "$%s$" (expressionFormater e)) |> ignore
-    member __.Add e = trace.Add(sprintf "$%s$" (e.ToString())) |> ignore
-    member __.Add s = trace.Add(s) |> ignore
-    member __.Add (s, parameters) = 
-        String.Format(s, Seq.toArray parameters) 
-        |> trace.Add 
-        |> ignore
-    override __.ToString() =
-        String.concat "\n\n" trace
+open System 
+open MathNet.Symbolics.Utils
+ 
 //==========================================
 
 let symbolString =
@@ -120,8 +65,8 @@ module BigRational =
 
 type Expression with
     member t.ToFormattedString() = expressionFormater t
-    member t.ToFloat() = (Evaluate.evaluate standardSymbols t).RealValue
-    member t.ToComplex() = (Evaluate.evaluate standardSymbols t).ComplexValue
+    member t.ToFloat() = (Evaluate.evaluate (Map.empty) t).RealValue
+    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
 
     member t.ToInt() =
         match t with
@@ -440,6 +385,7 @@ open System.Collections.Generic
 
 let ln = MathNet.Symbolics.Operators.ln
 let arctan = MathNet.Symbolics.Operators.arctan
+let sec = Operators.sec
 let symbol = symbol
 let sym = symbol
 
@@ -1092,19 +1038,15 @@ module Structure =
         | _ -> None
 
     let rec applyInFunction fx =
-        function 
-        | Power(f, n) -> Power(applyInFunction fx f, applyInFunction fx n)
+        function  
         | Function(fn, f) -> Function(fn, applyInFunction fx f)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability,
                             s::applyInFunction fx x::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
             FunctionN(fn,
-                          [ applyInFunction fx x
-                            param ])
-        | Product l -> Product(List.map (applyInFunction fx) l)
-        | Sum l -> Sum(List.map (applyInFunction fx) l)
-        | x -> x
+                            [ applyInFunction fx x;param ]) 
+        | x -> fx x
 
     let rec recursiveMap fx =
         function
@@ -1259,8 +1201,7 @@ let (|ProductHasNumber|_|) =
         match l |> List.filter (Expression.isRationalNumber) with
         | [ Number n ] -> Some(Expression.FromRational n)
         | _ -> None
-    | _ -> None
-
+    | _ -> None 
 
 let (|RationalLiteral|_|) r = function
     | Number n as q when n = BigRational.FromIntFraction r -> Some q

@@ -9,6 +9,17 @@ open Core
 open Core.Vars
 open Utils
 open MathNet.Symbolics.Differentiation
+
+
+let (|IsIntegral|_|) = function
+     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
+     | _ -> None
+      
+module Expression =
+    let isIntegral = function IsIntegral _ -> true | _ -> false
+
+module Integral =
+    let inner = function IsIntegral(f,dx) -> f | f -> f
  
 let integral dx x = FunctionN(Integral, [ x; dx ])
 
@@ -202,17 +213,84 @@ let integratePartialRes x e =
     | Deferred (e,false) -> integral x e, false
 
 let integratePartial x e = fst(integratePartialRes x e)
-
-let (|IsIntegral|_|) = function
-     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
-     | _ -> None
-
+ 
 let evalIntegral =
     function
     | IsIntegral(f, dx) -> integratePartial dx f
+    | f -> f 
+     
+let rec integrateByParts2 order expr = 
+    let doIntegrateByParts dx a b =
+        let u = a 
+        let du = D dx u 
+        let dv = b 
+        let v = evalIntegral (integral dx dv) 
+        u * v - evalIntegral (integral dx (v * du))
+    match expr with
+    | IsIntegral(Product [a;b],dx) -> 
+        if order = 1 then doIntegrateByParts dx a b else doIntegrateByParts dx b a
+    | IsIntegral(f,dx) -> integrateByParts2 order (integral dx (Product [1Q; f]))
+    | f -> f 
+
+let rec integrateByParts expr = 
+    let doIntegrateByParts prev dx a b =
+        let u = a 
+        let du = D dx u 
+        let dv = b 
+        let v = evalIntegral (integral dx dv) 
+        let res = u * v - evalIntegral (integral dx (v * du)) 
+        if Structure.existsRecursive (Expression.isIntegral) res then
+           match prev with 
+           | None -> res, false
+           | Some ex -> if width ex > width res then res, false else ex,false
+        else res, true
+    match expr with
+    | IsIntegral(Product [a;b],dx) -> 
+        let res, ok = doIntegrateByParts None dx a b
+        if ok then res
+        else doIntegrateByParts (Some res) dx b a |> fst
+    | IsIntegral(f,dx) -> integrateByParts (integral dx (Product [1Q; f]))
+    | f -> f  
+
+let substitution substraget expr = 
+    let usub = sym "u_{sub}"
+    let inner dx innerExpr =
+        let du = D dx substraget
+        let expr' = replaceExpression usub substraget innerExpr
+        match integratePartialRes usub (du * expr') with
+        | res, true -> replaceSymbol substraget usub res
+        | f, false -> f   
+    match expr with
+    | IsIntegral(f, dx) -> inner dx f
+    | Product [ IsIntegral(f, dx); a ] 
+    | Product [ a; IsIntegral(f, dx) ] -> a * inner dx f
     | f -> f
 
- 
+let substitutionSteps substraget expr = 
+    let usub = sym "u_{sub}"
+    let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
+    let inner dx innerExpr =
+        let du = D dx substraget
+        let expr' = replaceExpression usub substraget innerExpr
+        trace.Add
+            ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
+            [|  usub <=> substraget |> string;
+                diff dx usub <=> du |> string;
+                fmt (usub) ;
+                fmt du
+                fmt dx|])    
+        let integrand = (du * expr')
+        trace.Add(integral usub expr' <=> integral usub integrand)
+        match integratePartialRes usub integrand with
+        | res, true ->  
+            replaceSymbol substraget usub res, trace
+        | f, false -> f, trace   
+    match expr with
+    | IsIntegral(f, dx) -> inner dx f
+    | Product [ IsIntegral(f, dx); a ] 
+    | Product [ a; IsIntegral(f, dx) ] -> let r, tr = inner dx f in  a * r, tr
+    | f -> f, trace
+  
 let uSubstitution expr =
     let usub = sym "u_{sub}"
 
@@ -237,7 +315,7 @@ let uSubstitution expr =
     | Product [ IsIntegral(f, dx); a ] 
     | Product [ a; IsIntegral(f, dx) ] -> a * inner dx f
     | f -> f
-
+  
 let uSubstitutionSteps expr =
     let usub = sym "u_{sub}"
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
@@ -304,11 +382,30 @@ let rewriteIntegralAsExpectation =
                          | FunctionN(Probability, _) -> true
                          | _ -> false) l
             return FunctionN(Function.Expectation,
-                             [ (Product l) / p
-                               p ])
+                             [ (Product l) / p; p ])
         }
         |> Option.defaultValue f
     | f -> f
+    
+let expectationsDistribution = function
+    | IsExpectation (_, px) -> px
+    | _ -> Undefined
+    
+let expectationsProbInner = function
+    | IsExpectation (_, IsProb x) -> x
+    | _ -> Undefined
+
+let innerProb = function
+    | IsProb x -> x
+    | _ -> Undefined
+
+let rewriteExpectationAsIntegral = function
+    | FunctionN(Function.Expectation, [ expr; distr ]) ->
+        let dx =
+            match Structure.first Expression.isVariable (innerProb distr) with
+            | Some e -> [ e ] | None -> []
+        FunctionN(Function.Integral, (distr * expr) :: dx)
+    | f -> f    
 
 let changeOfVariable dy = function 
     | IsIntegral(f,_) -> integral dy f
@@ -324,6 +421,3 @@ module Riemann =
         x
         |> Expression.toFormattedString
         |> sprintf @"\lim _{n \rightarrow \infty} \sum_{i=1}^{n}%s"
-
-module Expression =
-    let isIntegral = function IsIntegral _ -> true | _ -> false

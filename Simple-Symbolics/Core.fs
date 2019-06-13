@@ -115,6 +115,13 @@ module Expression =
         
     let rewriteAsOne x = Product [ x; x ** -1] 
 
+    let groupSumsByDenominator = function
+        | Sum l ->
+            l |> List.groupBy Rational.denominator
+              |> List.map (snd >> List.sum >> Rational.expand) 
+              |> Sum
+        | f -> f
+
     let toList =
         function
         | Sum l | Product l -> l
@@ -161,6 +168,27 @@ module Expression =
         | Power(e, Number n) -> n < 0N
         | _ -> false
     
+    let cancelAbs =
+        function
+        | Function(Abs, x) -> x
+        | x -> x
+
+
+    let containsLog =
+        function
+        | Function(Ln, _) -> true
+        | _ -> false
+
+    let containsTrig =
+        function
+        | Function(Cos, _) 
+        | Function(Sin, _) 
+        | Function(Acos, _) 
+        | Function(Asin,_) 
+        | Function(Atan,_) 
+         | Function(Tan,_) ->
+            true
+        | _ -> false
 
 let productToConstantsAndVarsGen test =
     function
@@ -333,8 +361,14 @@ type Expression with
             failwith
                 (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
                      (e'.ToFormattedString()) e')
+    static member FullSimplify e =
+        e
+        |> Algebraic.simplify true
+        |> Algebraic.simplify true
+        |> Rational.rationalize
+        |> Algebraic.expand
 
-    static member fullSimplify e =
+    static member FullerSimplify e =
         Trigonometric.simplify e
         |> Algebraic.simplify true
         |> Algebraic.simplify true
@@ -389,54 +423,6 @@ let sec = Operators.sec
 let symbol = symbol
 let sym = symbol
 
-module Logarithm =
-    let expand =
-        function
-        | Function(Ln, Product l) ->
-            Sum(List.map (function
-                    | Power(x, n) when n = -1Q -> -ln x
-                    | x -> ln x) l)
-        | f -> f
-
-    let contract =
-        function
-        | Sum l as f ->
-            let logs, rest =
-                List.partition (function
-                    | Function(Ln, _) -> true
-                    | Product [ n; Function(Ln, _) ] when n = -1Q -> true
-                    | _ -> false) l
-
-            let logs' =
-                logs
-                |> List.map (function
-                       | Product [ n; Function(Ln, x) ] when n = -1Q -> 1 / x
-                       | Function(Ln, x) -> x
-                       | _ -> failwith "never")
-
-            match logs' with
-            | [] -> f
-            | _ -> ln (Product logs') + Sum rest
-        | f -> f
-
-    let bringPowerOut =
-        function
-        | Power(x, n) -> n, x
-        | f -> 1Q, f
-
-    let powerRuleSingle =
-        function
-        | Function(Ln, Product l) ->
-            let ns, xs = List.map bringPowerOut l |> List.unzip
-            Product ns * Function(Ln, Product xs)
-        | Function(Ln, Power(x, n)) -> n * Function(Ln, x)
-        | f -> f
-
-    let rec powerRule =
-        function
-        | Product l -> Product(List.map powerRule l)
-        | Sum l -> Sum(List.map powerRule l)
-        | f -> powerRuleSingle f
 
 type Complex(r : Expression, i : Expression) =
     member __.Real = r
@@ -507,7 +493,7 @@ type Complex(r : Expression, i : Expression) =
         (a * conj) / (b * conj).Real
 
     static member (/) (a : Expression, b : Complex) = (Complex a) / b
-    member c.Simplify() = Complex(Expression.fullSimplify r, Expression.fullSimplify i)
+    member c.Simplify() = Complex(Expression.FullerSimplify r, Expression.FullerSimplify i)
     new(r) = Complex(r, 0Q)
     override t.ToString() =
             match t.Real, t.Imaginary with
@@ -899,12 +885,12 @@ let containsExpression expressionToFind formula =
     iterFindIn (Algebraic.simplifyLite formula)
 
 let evalExpr vars x =
-    replaceSymbols (dict vars) x |> Expression.fullSimplify |> Some  
+    replaceSymbols (dict vars) x |> Expression.FullerSimplify |> Some  
 
 let evalExprNum vars x =
     let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
     if Seq.isEmpty nums then None
-    else let symb = replaceSymbols (dict nums) x |> Expression.fullSimplify
+    else let symb = replaceSymbols (dict nums) x |> Expression.FullerSimplify
          if containsAnyVar symb then None else Some symb 
 
 let rec width =
@@ -944,6 +930,26 @@ module Structure =
         function
         | Sum l | Product l -> List.length l
         | _ -> -1
+    let partition func =
+        function
+        | Sum l -> 
+            let a,b = List.partition func l   
+            List.sum a, List.sum b
+        | Product l -> 
+            let a,b = List.partition func l  
+            List.fold (*) 1Q a, List.fold (*) 1Q b 
+        | f -> if func f then f, undefined else undefined, f
+
+    let filter func =
+        function
+        | Sum l -> 
+            List.filter func l 
+            |> List.sum
+        | Product l -> 
+            List.filter func l   
+            |> List.fold (*) 1Q  
+        | f -> if func f then f else undefined
+
     let exists func =
         function
         | Sum l | Product l | FunctionN(_, l) -> List.exists func l
@@ -1047,7 +1053,16 @@ module Structure =
             FunctionN(fn,
                             [ applyInFunction fx x;param ]) 
         | x -> fx x
-
+    let applyJustInFunctions fx =
+        function  
+        | Function(fn, f) -> Function(fn,fx f)
+        | FunctionN(Probability, s::x::rest) ->
+            FunctionN(Probability,
+                            s::fx x::rest)
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
+            FunctionN(fn,
+                            [fx x;param ]) 
+        | x -> x
     let rec recursiveMap fx =
         function
         | Identifier _ as var -> fx var
@@ -1079,6 +1094,12 @@ module Structure =
         let replaced = replaceExpression placeholder x f
         removeSymbol placeholder replaced
 
+type Expression with
+     static member groupInSumWith var = function
+        | Sum l -> 
+            let haves, nots = List.partition (containsExpression var) l
+            Product[var; haves |> List.sumBy (fun x -> x/var)] + Sum nots
+        | f -> f
 
 type Equation(leq : Expression, req : Expression) =
     member __.Definition = leq, req
@@ -1088,13 +1109,13 @@ type Equation(leq : Expression, req : Expression) =
         [ leq, req
           req, leq ]
     
-    static member mapRight f (eq:Equation) = 
+    static member ApplyToRight f (eq:Equation) = 
         let leq, req = eq.Definition
-        Equation(f leq, f req)
-    static member mapLeft f (eq:Equation) = 
+        Equation(leq, f req)
+    static member ApplyToLeft f (eq:Equation) = 
         let leq, req = eq.Definition
         Equation(f leq, req)
-    static member map (f, eq:Equation) = 
+    static member Apply f (eq:Equation) = 
         let leq, req = eq.Definition
         Equation(f leq, f req)
     static member (-) (eq : Equation, expr : Expression) =
@@ -1108,9 +1129,17 @@ type Equation(leq : Expression, req : Expression) =
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
+module Equation =
+    let swap (eq:Equation) = Equation(swap eq.Definition) 
+    let right (eq:Equation) = eq.Right
+    let left (eq:Equation) = eq.Left
+
 let (<=>) a b = Equation(a, b)
 
 let equals a b = Equation(a, b)
+
+let equationTrace (current:Equation) (instructions : _ list) = 
+    stepTracer string current instructions
 
 module Vars =
     let a = symbol "a"
@@ -1139,15 +1168,23 @@ module Vars =
     let x = symbol "x"
     let y = symbol "y"
     let z = symbol "z"
-    let x0 = symbol "x₀"
-    let x1 = symbol "x₁"
-    let x2 = symbol "x₂"
-    let x3 = symbol "x₃"
-    let v0 = symbol "v₀"
-    let y1 = symbol "y₁"
-    let y2 = symbol "y₂"
-    let phi = symbol "φ"
-    let theta = symbol "θ"
+    let x0 = symbol "x_0"
+    let x1 = symbol "x_1"
+    let x2 = symbol "x_2"
+    let x3 = symbol "x_3"
+    let v0 = symbol "v_0"
+    let y0 = sym "y_0"
+    let y1 = symbol "y_1"
+    let y2 = symbol "y_2"
+
+    let A = sym "A"
+    let B = sym "B"
+    let C = sym "C"
+    let D = sym "B"
+    let T = sym "T"
+    let N = sym "N"
+    let P = sym "P"    
+    let X = sym "X" 
     let π = pi
     let pi = pi
 

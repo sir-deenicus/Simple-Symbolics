@@ -5,10 +5,10 @@ open System
 
 type Hashset<'a> = System.Collections.Generic.HashSet<'a>
 
-type TraceExplain =
+type TraceExplain<'a> =
      | Str of string
-     | Op of (Expression -> Expression) 
-     | Instr of (Expression -> Expression) * string
+     | Op of ('a -> 'a) 
+     | Instr of ('a -> 'a) * string
 
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
@@ -38,7 +38,7 @@ type StepTrace(s) =
     override __.ToString() =
         String.concat "\n\n" trace
 
-let expressionTrace current instructions =
+let stepTracer fmt current instructions =
     let steps = StepTrace("")
 
     let rec loop cnt current =
@@ -52,22 +52,24 @@ let expressionTrace current instructions =
                     current
                 | Op f ->
                     let next = f current
-                    steps.Add(string cnt + ": ${0} = {1}$",
+                    steps.Add(string cnt + ": ${0} \\Longrightarrow {1}$",
                               [ fmt current
                                 fmt next ])
                     next
                 | Instr(f, s) ->
                     let next = f current
-                    steps.Add(string cnt + ": " + s + ": ${0} = {1}$",
+                    steps.Add(string cnt + ": " + s + ": ${0} \\Longrightarrow {1}$",
                               [ fmt current
                                 fmt next ])
                     next
             loop (cnt + 1) next rest
     loop 1 current instructions
 
-
+let expressionTrace = stepTracer fmt
+ 
 let safeEval f x = try f x with _ -> x
 let flip f a b = f b a
+let swap (a,b) = (b,a)
 let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 

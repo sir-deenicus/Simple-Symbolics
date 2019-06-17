@@ -252,43 +252,55 @@ let rec integrateByParts expr =
     | IsIntegral(f,dx) -> integrateByParts (integral dx (Product [1Q; f]))
     | f -> f  
 
-let substitution substraget expr = 
+let substitution substarget expr = 
     let usub = sym "u_{sub}"
     let inner dx innerExpr =
-        let du = D dx substraget
-        let expr' = replaceExpression usub substraget innerExpr
-        match integratePartialRes usub (du * expr') with
-        | res, true -> replaceSymbol substraget usub res
-        | f, false -> f   
+        let du = D dx substarget
+        let innerExprTemp = replaceExpression usub substarget innerExpr
+        if innerExprTemp <> innerExpr then
+            let _, solvefor = Solving.reArrangeExprEquationX true dx (substarget,usub) 
+            let innerExpr' = replaceExpression solvefor dx innerExprTemp 
+            match integratePartialRes usub (du * innerExpr') with
+            | res, true -> replaceSymbol substarget usub res
+            | _, false -> expr  
+        else expr
     match expr with
-    | IsIntegral(f, dx) -> inner dx f
-    | Product [ IsIntegral(f, dx); a ] 
-    | Product [ a; IsIntegral(f, dx) ] -> a * inner dx f
+    | IsIntegral(IsIntegral _, _) -> expr
+    | IsIntegral(f,_) when substarget = f -> expr
+    | IsIntegral(f, dx) -> inner dx f 
     | f -> f
 
-let substitutionSteps substraget expr = 
+let substitutionSteps substarget expr = 
     let usub = sym "u_{sub}"
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let inner dx innerExpr =
-        let du = D dx substraget
-        let expr' = replaceExpression usub substraget innerExpr
-        trace.Add
-            ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
-            [|  usub <=> substraget |> string;
-                diff dx usub <=> du |> string;
-                fmt (usub) ;
-                fmt du
-                fmt dx|])    
-        let integrand = (du * expr')
-        trace.Add(integral usub expr' <=> integral usub integrand)
-        match integratePartialRes usub integrand with
-        | res, true ->  
-            replaceSymbol substraget usub res, trace
-        | f, false -> f, trace   
+        let du = D dx substarget
+        let innerExprTemp = replaceExpression usub substarget innerExpr  
+        if innerExprTemp <> innerExpr then
+            let _, solvefor = Solving.reArrangeExprEquation dx (substarget,usub) 
+            let innerExpr' = replaceExpression solvefor dx innerExprTemp 
+            if innerExpr' <> innerExprTemp then trace.Add (dx <=> solvefor)
+            trace.Add
+                ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
+                [|  usub <=> substarget |> string;
+                    diff dx usub <=> du |> string;
+                    fmt (usub) ;
+                    fmt du
+                    fmt dx|])    
+            let integrand = (du * innerExpr')
+            trace.Add(integral usub innerExpr' <=> integral usub integrand)
+            match integratePartialRes usub integrand with
+            | res, true ->  
+                trace.Add res
+                replaceSymbol substarget usub res, trace
+            | _, false -> trace.Add("failed"); expr, trace   
+        else trace.Add("Substitution not possible"); expr, trace
     match expr with
-    | IsIntegral(f, dx) -> inner dx f
-    | Product [ IsIntegral(f, dx); a ] 
-    | Product [ a; IsIntegral(f, dx) ] -> let r, tr = inner dx f in  a * r, tr
+    | IsIntegral(IsIntegral _, _) -> trace.Add("Nested, skipping"); expr, trace
+    | IsIntegral(f,_) when substarget = f -> 
+        trace.Add ("not a valid substitution")
+        expr, trace
+    | IsIntegral(f, dx) -> inner dx f 
     | f -> f, trace
   
 let uSubstitution expr =

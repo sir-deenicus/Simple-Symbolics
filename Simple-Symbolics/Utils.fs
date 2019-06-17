@@ -37,10 +37,11 @@ type StepTrace(s) =
         |> ignore
     override __.ToString() =
         String.concat "\n\n" trace
+         
 
-let stepTracer fmt current instructions =
+let stepTracer iseq fmt current instructions =
     let steps = StepTrace("")
-
+    let nline = if iseq then "\n\n  " else "  "
     let rec loop cnt current =
         function
         | [] -> current, steps
@@ -52,20 +53,23 @@ let stepTracer fmt current instructions =
                     current
                 | Op f ->
                     let next = f current
-                    steps.Add(string cnt + ": ${0} \\Longrightarrow {1}$",
+                    steps.Add(string cnt + ": ${0}${1}$\\Longrightarrow {2}$",
                               [ fmt current
+                                nline
                                 fmt next ])
                     next
                 | Instr(f, s) ->
                     let next = f current
-                    steps.Add(string cnt + ": " + s + ": ${0} \\Longrightarrow {1}$",
+                    steps.Add(string cnt + ": " + s + ":\n\n${0}${1}$\\Longrightarrow {2}$",
                               [ fmt current
+                                nline
                                 fmt next ])
                     next
             loop (cnt + 1) next rest
     loop 1 current instructions
+     
 
-let expressionTrace = stepTracer fmt
+let expressionTrace = stepTracer false fmt
  
 let safeEval f x = try f x with _ -> x
 let flip f a b = f b a

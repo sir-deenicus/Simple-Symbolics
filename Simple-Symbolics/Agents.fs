@@ -38,6 +38,7 @@ module Replicator =
     open Prelude.Common
     open Prelude.Math
     open EvolutionaryBayes.RegretMinimization
+    open MathNet.Symbolics.Utils
 
     type ExpressionEvolver(equalities, options, startExpression, scorer, ?maxwidth, ?exploresteps) =
         let maxw = defaultArg maxwidth 50
@@ -99,12 +100,12 @@ module Replicator =
                                     Expression.FullSimplify expressionNew :: mem)
                         else return (currentExpression, path, mem)
                 else
-                    let probs =
-                        if expert.First().Total < learnsteps then
-                            Array.zip expert.[0].Weights expert.Actions
-                        else expert.WeightedActions()
-                    let! desc = categorical2 (Array.map swap probs)
-                    let nextExpression = funclookup.[desc] currentExpression
+                    //let probs =
+                    //    if expert.First().Total < learnsteps then
+                    //        Array.zip expert.[0].Weights expert.Actions
+                    //    else expert.WeightedActions()
+                    let! op, desc = uniform choices
+                    let nextExpression = op currentExpression
                     let isnotequal = nextExpression <> currentExpression
                     let width' = if isnotequal then width nextExpression else maxw
                     if isnotequal
@@ -113,7 +114,7 @@ module Replicator =
                               ((=) (Expression.FullSimplify nextExpression)) mem
                           |> not then
                         let msg =
-                            sprintf "%s:\n$%s$\n\n" desc
+                            sprintf "%s:  \n$%s$\n\n" desc
                                 (Expression.toFormattedString nextExpression)
                         
                         expert.Learn 0 (desc, true, float (width'))
@@ -134,12 +135,12 @@ module Replicator =
             let gens = defaultArg generations 50
             sequenceSamples mp (fun e -> (mutate e).Sample()) scorer
                 samplespergen gens
-                (Distributions.uniform [| startExpression, [], [] |])
+                (uniform [| startExpression, [sprintf "Start: $%s$\n\n" (fmt startExpression)], [] |])
 
         member __.SampleChain n =
             expert.Forget()
             MetropolisHastings.sample 1. scorer (fun e -> (mutate e).Sample())
-                (Distributions.uniform [| startExpression, [], [] |]) n
+                (uniform [| startExpression, [], [] |]) n
             |> Sampling.roundAndGroupSamplesWith id
             |> categorical2
 
@@ -154,7 +155,7 @@ module Replicator =
             let pops =
                 evolveSequence mp maxpopsize [] (fun _ e -> (mutate e).Sample())
                     scorer samplespergen gens
-                    (Distributions.uniform [| startExpression, [], [] |])
+                    (uniform [| startExpression, [], [] |])
                 |> List.toArray
                 |> Array.normalizeWeights
                 |> categorical2
@@ -168,6 +169,7 @@ module Replicator =
             |> Array.normalizeWeights
             |> Helpers.Sampling.compactMapSamples id
             |> Array.sortByDescending snd
+
 
 module Searcher =
     open Core
@@ -242,7 +244,7 @@ module Searcher =
                         sw.Stop()
                         do! constrain (good)
                         let msg =
-                            sprintf "%s:\n$%s$\n\n" desc
+                            sprintf "%s:  \n$%s$\n\n" desc
                                 (Expression.toFormattedString nextExpression)
                         return! search ((desc, sw.ElapsedMilliseconds)::steps) strmem
                                     (Expression.FullSimplify nextExpression :: mem)

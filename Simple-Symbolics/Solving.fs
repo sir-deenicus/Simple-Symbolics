@@ -41,7 +41,7 @@ let reArrangeExprEquationX silent focusVar (left,right) =
         | Function(Exp, x) -> 
           if not silent then printfn "log"; 
           iter x (ln::ops)
-        | _ -> failwith "err"
+        | _ -> Undefined, ops //failwith "err"
     let f, ops = iter left [] 
     f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Algebraic.simplify true      
 
@@ -76,7 +76,7 @@ let completeSquare x  p =
 
 
 let reArrangeEquation focusVar (e:Equation) = 
-    reArrangeExprEquation focusVar e.Definition 
+    reArrangeExprEquationX true focusVar e.Definition 
     |> Equation
 
 

@@ -895,6 +895,7 @@ let evalExprNum vars x =
 
 let rec width =
     function
+    | Undefined
     | Constant _
     | Identifier _ -> 1
     | Power(x, n) -> width x + 1 + width n
@@ -906,6 +907,7 @@ let rec width =
 
 let rec depth =
     function
+    | Undefined 
     | Constant _
     | Identifier _ -> 1
     | Power(x, n) -> (max (depth x) (depth n)) + 1
@@ -957,6 +959,7 @@ module Structure =
 
     let rec existsRecursive func =
         function
+        | Undefined as un -> func un
         | Identifier _ as i -> func i
         | Power(p, n) as pow ->
             func pow || existsRecursive func n || existsRecursive func p
@@ -1139,7 +1142,7 @@ let (<=>) a b = Equation(a, b)
 let equals a b = Equation(a, b)
 
 let equationTrace (current:Equation) (instructions : _ list) = 
-    stepTracer string current instructions
+    stepTracer true string current instructions
 
 module Vars =
     let a = symbol "a"

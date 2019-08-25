@@ -271,69 +271,8 @@ Structure.removeExpression ((2Q ** (3 * n + 1) + 5)) zq
 Structure.recursiveMap (fun e ->
     if e = (2Q ** (3 * n + 1) + 5) then 0Q
     else e) (Algebraic.simplifyLite zq)
-
-
-
-type Unitsop =
-    | Reciprocal
-    | Times
-    | Divide
-
-let usefulUnits =
-    [ W, "Power", UnitsDesc.power
-      J, "Energy", UnitsDesc.energy
-      N, "Force", UnitsDesc.force
-      K, "Temperature", UnitsDesc.temperature
-      W / meter ** 2, "Energy flux", UnitsDesc.energyflux
-      meter ** 3, "volume", UnitsDesc.volume
-      meter / sec, "velocity", UnitsDesc.velocity
-      meter / sec ** 2, "Acceleration", UnitsDesc.accel
-      sec, "Time", UnitsDesc.time
-      kg, "mass", UnitsDesc.mass
-      meter, "length", UnitsDesc.length ]
-
-[ for (a, _, _) in usefulUnits do
-      for (b, _, _) in usefulUnits do
-          for (c, _, _) in usefulUnits ->
-              ((a * b) * c).Unit = (a * (b * c)).Unit ]
-|> List.forall id
-[ for (a, _, _) in usefulUnits -> (a * unitless).Unit = a.Unit ]
-|> List.forall id
-[ for (a, _, _) in usefulUnits -> (a * 1 / a).Unit = unitless.Unit ]
-|> List.forall id
-
-let rec unitsPath wasrecip path (curA : Expression) (cur : Units)
-        (target : Units) =
-    cont {
-        let! op = uniform [ Times; Reciprocal; Divide ]
-        do! constrain (not (wasrecip && op = Reciprocal))
-        let! units, desc0, acts = uniform usefulUnits
-        let next, desc, un, curA' =
-            match op with
-            | Times -> cur * units, units.AltUnit, desc0, curA * acts
-            | Divide -> cur / units, units.AltUnit, desc0, curA / acts
-            | Reciprocal -> 1Q / cur, "", "", 1Q / curA
-
-        let perf = (op, un, desc)
-        if next.Unit = target.Unit then
-            return (curA'.ToFormattedString(), List.rev (perf :: path))
-        else
-            return! unitsPath (op = Reciprocal) (perf :: path) curA' next target
-    }
-
-Model(unitsPath false [] 1Q Units.stefan_boltzman unitless)
-    .ImportanceSample(2500, 50)
-|> List.sortByDescending fst
-|> Seq.takeOrMax 5
-Model(unitsPath false [] 1Q unitless W)
-    .ImportanceSample(2500, 50)
-|> List.sortByDescending fst
-|> Seq.takeOrMax 15
-|> Seq.toArray
-Model(unitsPath false [] 1Q J (sec)).ImportanceSample(500, 50)
-|> List.sortByDescending fst
-|> Seq.takeOrMax 5
-(meter / sec) * N / W
+ 
+ 
 
 
 ///////////////
@@ -430,23 +369,7 @@ let findPathUsingEqualities terminationCondition equalities (seen : Hashset<_>)
         }
     search [] startExpression
 
-let rewriteExpectationAsIntegral = function
-    | FunctionN(Function.Expectation, [ expr; distr ]) ->
-        let dx =
-            match Structure.first Expression.isVariable expr with
-            | Some e -> [ e ] | None -> []
-        FunctionN(Function.Integral, (distr * expr) :: dx)
-    | f -> f    
 
-let rewriteIntegralAsExpectation = function
-    | FunctionN(Function.Integral, Product l :: _) ->
-        maybe {
-            let! p = List.tryFind (function
-                         | FunctionN(Probability, _) -> true
-                         | _ -> false) l
-            return FunctionN(Function.Expectation,
-                             [ (Product l) / p; p ]) }
-    | _ -> None
     
 let bringGradientOutIntegral =
     function
@@ -477,7 +400,7 @@ grad (integral x x)
 
 let ez = integral x (prob x * grad x)
 
-
+tk "001021"
 let identityTransform =
     function
     | Product l as prod ->

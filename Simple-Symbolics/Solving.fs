@@ -35,9 +35,15 @@ let reArrangeExprEquationX silent focusVar (left,right) =
         | Function(Tan, x) -> 
           if not silent then printfn "atan"; 
           iter x ((fun x -> Function(Atan, x))::ops)  
+        | Function(Erf, x) ->
+          if not silent then printfn "erf^-1"; 
+          iter x ((fun x -> Function(ErfInv, x))::ops) 
         | Function(Cos, x) -> 
           if not silent then printfn "acos"; 
           iter x ((fun x -> Function(Acos, x))::ops)
+        | Function(Sin, x) -> 
+          if not silent then printfn "asin"; 
+          iter x ((fun x -> Function(Asin, x))::ops)
         | Function(Exp, x) -> 
           if not silent then printfn "log"; 
           iter x (ln::ops)

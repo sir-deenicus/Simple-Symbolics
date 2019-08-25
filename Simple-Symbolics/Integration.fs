@@ -38,17 +38,22 @@ let intFuncStraight =
     | Function(Exp, x) -> Function(Exp, x)
     | _ -> failwith "function unmet"
 
-let extractLinearComponent x ex =
+let extractLinearComponentTest x ex =
     let e' = Polynomial.collectTerms x ex
     let l = Algebraic.summands e'
     let matches, _ = List.partition (containsVar x) l
     match matches with
-    | [ Identifier(Symbol _) as x' ] when x = x' -> 1Q, e'
+    | [ Identifier(Symbol _) as x' ] when x = x' -> Ok (1Q, e')
     | [ Product l ] ->
         match List.filter ((<>) x) l with
-        | [ t ] -> t, e'
-        | _ -> failwith "Could not extract terms in power"
-    | _ -> failwith "Power attempt failed, not a product"
+        | [ t ] -> Ok(t, e')
+        | _ -> Error "Could not extract terms in power"
+    | _ -> Error "Power attempt failed, not a product"
+
+let extractLinearComponent x ex = 
+    match (extractLinearComponentTest x ex) with
+    | Ok r -> r 
+    | Error e -> failwith e
 
 let linearSquared combinator =
     combinator (function
@@ -78,11 +83,13 @@ let integrateSimplePartial x f =
             let n = Sum l'
             match ex with
             | [ Power(e, _) ] ->
-                let m, _ = extractLinearComponent x e
-                let fx =
-                    arctan (e / (sqrt n)) / (m * sqrt n)
-                    |> Algebraic.simplify true
-                Succeeded fx
+                match extractLinearComponentTest x e with
+                | Ok (m,_) -> 
+                    let fx =
+                        arctan (e / (sqrt n)) / (m * sqrt n)
+                        |> Algebraic.simplify true
+                    Succeeded fx
+                | _ -> Deferred (f, false)
             | _ -> Deferred (f, false)
         | f when f = 1 / (sqrt (1 - x ** 2)) -> Succeeded(arcsin x)
         | Power(e, n) as p when not (containsVar x e) && not (containsVar x n) ->
@@ -151,57 +158,57 @@ let integrateSimplePartial x f =
             (*printfn "Can't integrate this %s" (f.ToFormattedString());*) 
     iter f
 
-let rec integrateSimple x =
-    function
-    | Number _ as n -> n * x
-    | Identifier(Symbol _) as vx ->
-        if vx = x then vx ** 2 / 2
-        else vx * x
-    | f when f = 1 / (1 + x ** 2) -> arctan x
-    | Power(Sum l, neg1) when neg1 = -1Q && linearSquared List.exists l ->
-        let ex, l' = linearSquared List.partition l
-        let n = Sum l'
-        match ex with
-        | [ Power(e, _) ] ->
-            let m, _ = extractLinearComponent x e
-            arctan (e / (sqrt n)) / (m * sqrt n) |> Algebraic.simplify true
-        | _ -> failwith "err"
-    | f when f = 1 / (sqrt (1 - x ** 2)) -> arcsin x
-    | Power(e, n) as p when not (containsVar x e) && not (containsVar x n) ->
-        p * x
-    | Power(e, n) as p when not (containsVar x e) && (containsVar x n)
-                            && isLinear x n ->
-        p / (fst (extractLinearComponent x n) * ln (e))
-    | Power(e, n) when not (containsVar x e) && (containsVar x n) ->
-        failwith "Power nolinear in x, fail"
-    | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e ->
-        Function(Ln, e) / fst (extractLinearComponent x e)
-    | Power(Identifier _ as y, n) when x = y && n <> -1Q ->
-        (x ** (n + 1)) / (n + 1)
-    | poly when Polynomial.isMonomial x poly ->
-        let k, mono = Algebraic.separateFactors x poly
-        k * integrateSimple x mono
-    | Power(Sum _ as e, n) when isLinear x e && n <> -1Q ->
-        let t, e' = extractLinearComponent x e
-        integratePolynomExpr t n e'
-    | Power(e, n) as poly when Polynomial.isPolynomial x e && n <> -1Q ->
-        poly
-        |> Algebraic.expand
-        |> Algebraic.summands
-        |> List.map (integrateSimple x)
-        |> Sum
-    | Function(f, (Identifier(Symbol _) as y)) when x <> y -> x * Function(f, y)
-    | Function(f, (Number _ as n)) -> x * Function(f, n)
-    | Function(_, (Identifier(Symbol _))) as f -> intFuncStraight f
-    | Function(_, ex) as f when isLinear x ex ->
-        (intFuncStraight f) / fst (extractLinearComponent x ex)
-    | Sum l -> Sum(List.map (integrateSimple x) l)
-    | Product _ as e ->
-        let k, e' = Algebraic.separateFactors x e
-        if k = 1Q then failwith "Separating factors, no x found. Aborting."
-        else k * integrateSimple x e'
-    | f when not (containsVar x f) -> x * f
-    | x -> failwith "Can't integrate this"
+//let rec integrateSimple x =
+//    function
+//    | Number _ as n -> n * x
+//    | Identifier(Symbol _) as vx ->
+//        if vx = x then vx ** 2 / 2
+//        else vx * x
+//    | f when f = 1 / (1 + x ** 2) -> arctan x
+//    | Power(Sum l, neg1) when neg1 = -1Q && linearSquared List.exists l ->
+//        let ex, l' = linearSquared List.partition l
+//        let n = Sum l'
+//        match ex with
+//        | [ Power(e, _) ] ->
+//            let m, _ = extractLinearComponent x e
+//            arctan (e / (sqrt n)) / (m * sqrt n) |> Algebraic.simplify true
+//        | _ -> failwith "err"
+//    | f when f = 1 / (sqrt (1 - x ** 2)) -> arcsin x
+//    | Power(e, n) as p when not (containsVar x e) && not (containsVar x n) ->
+//        p * x
+//    | Power(e, n) as p when not (containsVar x e) && (containsVar x n)
+//                            && isLinear x n ->
+//        p / (fst (extractLinearComponent x n) * ln (e))
+//    | Power(e, n) when not (containsVar x e) && (containsVar x n) ->
+//        failwith "Power nolinear in x, fail"
+//    | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e ->
+//        Function(Ln, e) / fst (extractLinearComponent x e)
+//    | Power(Identifier _ as y, n) when x = y && n <> -1Q ->
+//        (x ** (n + 1)) / (n + 1)
+//    | poly when Polynomial.isMonomial x poly ->
+//        let k, mono = Algebraic.separateFactors x poly
+//        k * integrateSimple x mono
+//    | Power(Sum _ as e, n) when isLinear x e && n <> -1Q ->
+//        let t, e' = extractLinearComponent x e
+//        integratePolynomExpr t n e'
+//    | Power(e, n) as poly when Polynomial.isPolynomial x e && n <> -1Q ->
+//        poly
+//        |> Algebraic.expand
+//        |> Algebraic.summands
+//        |> List.map (integrateSimple x)
+//        |> Sum
+//    | Function(f, (Identifier(Symbol _) as y)) when x <> y -> x * Function(f, y)
+//    | Function(f, (Number _ as n)) -> x * Function(f, n)
+//    | Function(_, (Identifier(Symbol _))) as f -> intFuncStraight f
+//    | Function(_, ex) as f when isLinear x ex ->
+//        (intFuncStraight f) / fst (extractLinearComponent x ex)
+//    | Sum l -> Sum(List.map (integrateSimple x) l)
+//    | Product _ as e ->
+//        let k, e' = Algebraic.separateFactors x e
+//        if k = 1Q then failwith "Separating factors, no x found. Aborting."
+//        else k * integrateSimple x e'
+//    | f when not (containsVar x f) -> x * f
+//    | x -> failwith "Can't integrate this"
      
 
 let integratePartialRes x e =

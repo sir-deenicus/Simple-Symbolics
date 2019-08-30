@@ -14,14 +14,27 @@ open MathNet.Symbolics.Differentiation
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
      | _ -> None
-      
+
+let (|IsDefiniteIntegral|_|) = function
+     | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
+     | _ -> None
+ 
+let integral dx x = FunctionN(Integral, [ x; dx ])
+
+let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
+ 
 module Expression =
     let isIntegral = function IsIntegral _ -> true | _ -> false
 
 module Integral =
-    let inner = function IsIntegral(f,dx) -> f | f -> f
- 
-let integral dx x = FunctionN(Integral, [ x; dx ])
+    let inner = function IsIntegral(f,_) | IsDefiniteIntegral(f,_,_,_) -> f | f -> f
+    let integratingVar = function 
+        | IsIntegral(_,dx) 
+        | IsDefiniteIntegral(_,dx,_,_) -> Some dx 
+        | _ -> None
+    let toDefinite a b = function
+        | IsIntegral (f, dx) ->  defintegral dx a b f
+        | f -> f
 
 let integratePolynomExpr m n e = e ** (n + 1Q) / (m * (n + 1Q))
 
@@ -47,6 +60,7 @@ let extractLinearComponentTest x ex =
     | [ Product l ] ->
         match List.filter ((<>) x) l with
         | [ t ] -> Ok(t, e')
+        | [Number n; z] when n = -1N -> Ok(-z, e')
         | _ -> Error "Could not extract terms in power"
     | _ -> Error "Power attempt failed, not a product"
 
@@ -74,6 +88,7 @@ let integrateSimplePartial x f =
     let rec iter =
         function
         | Number _ as n -> Succeeded(n * x)
+        | Approximation _ as r -> Succeeded (r * x)
         | Identifier(Symbol _) as vx ->
             if vx = x then Succeeded(vx ** 2 / 2)
             else Succeeded(vx * x)
@@ -225,7 +240,25 @@ let evalIntegral =
     function
     | IsIntegral(f, dx) -> integratePartial dx f
     | f -> f 
-     
+
+let evalDefiniteIntegral =
+    function
+    | IsDefiniteIntegral(f, dx,a,b) as fn -> 
+        match integratePartialRes dx f with
+        | (_, false) -> fn
+        | (e, true) -> replaceSymbol b dx e - replaceSymbol a dx e
+    | f -> f 
+ 
+let evalDefiniteIntegralUsing integrator = function
+    | IsDefiniteIntegral(f, dx,a,b) as fn ->
+        match integrator f with
+            | IsIntegral _ -> fn
+            | e -> replaceSymbol b dx e - replaceSymbol a dx e
+    | f -> f
+ 
+let evalAsDefiniteIntegralAt dx a b e = 
+    replaceSymbol b dx e - replaceSymbol a dx e
+    
 let rec integrateByParts2 order expr = 
     let doIntegrateByParts dx a b =
         let u = a 
@@ -260,16 +293,18 @@ let rec integrateByParts expr =
     | f -> f  
 
 let substitution substarget expr = 
-    let usub = sym "u_{sub}"
+    let usub = symbol "u_{sub}"
     let inner dx innerExpr =
         let du = D dx substarget
         let innerExprTemp = replaceExpression usub substarget innerExpr
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquationX true dx (substarget,usub) 
             let innerExpr' = replaceExpression solvefor dx innerExprTemp 
-            match integratePartialRes usub (du * innerExpr') with
-            | res, true -> replaceSymbol substarget usub res
-            | _, false -> expr  
+            if innerExpr' <> innerExprTemp then 
+                match integratePartialRes usub (du * innerExpr') with
+                | res, true -> replaceSymbol substarget usub res
+                | _, false -> expr  
+            else expr
         else expr
     match expr with
     | IsIntegral(IsIntegral _, _) -> expr
@@ -278,7 +313,7 @@ let substitution substarget expr =
     | f -> f
 
 let substitutionSteps substarget expr = 
-    let usub = sym "u_{sub}"
+    let usub = symbol "u_{sub}"
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let inner dx innerExpr =
         let du = D dx substarget
@@ -286,21 +321,23 @@ let substitutionSteps substarget expr =
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquation dx (substarget,usub) 
             let innerExpr' = replaceExpression solvefor dx innerExprTemp 
-            if innerExpr' <> innerExprTemp then trace.Add (dx <=> solvefor)
-            trace.Add
-                ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
-                [|  usub <=> substarget |> string;
-                    diff dx usub <=> du |> string;
-                    fmt (usub) ;
-                    fmt du
-                    fmt dx|])    
-            let integrand = (du * innerExpr')
-            trace.Add(integral usub innerExpr' <=> integral usub integrand)
-            match integratePartialRes usub integrand with
-            | res, true ->  
-                trace.Add res
-                replaceSymbol substarget usub res, trace
-            | _, false -> trace.Add("failed"); expr, trace   
+            if innerExpr' <> innerExprTemp then 
+                trace.Add (dx <=> solvefor)
+                trace.Add
+                    ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
+                    [|  usub <=> substarget |> string;
+                        diff dx usub <=> du |> string;
+                        fmt (usub) ;
+                        fmt du
+                        fmt dx|])    
+                let integrand = (du * innerExpr')
+                trace.Add(integral usub innerExpr' <=> integral usub integrand)
+                match integratePartialRes usub integrand with
+                | res, true ->  
+                    trace.Add res
+                    replaceSymbol substarget usub res, trace
+                | _, false -> trace.Add("failed"); expr, trace   
+            else trace.Add("Substitution not possible"); expr, trace 
         else trace.Add("Substitution not possible"); expr, trace
     match expr with
     | IsIntegral(IsIntegral _, _) -> trace.Add("Nested, skipping"); expr, trace
@@ -311,7 +348,7 @@ let substitutionSteps substarget expr =
     | f -> f, trace
   
 let uSubstitution expr =
-    let usub = sym "u_{sub}"
+    let usub = symbol "u_{sub}"
 
     let substitute n y (f : FuncType) =
         let f' = f.WrapExpression usub
@@ -336,7 +373,7 @@ let uSubstitution expr =
     | f -> f
   
 let uSubstitutionSteps expr =
-    let usub = sym "u_{sub}"
+    let usub = symbol "u_{sub}"
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let failtrace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let substitute n y (f : FuncType) =
@@ -440,3 +477,10 @@ module Riemann =
         x
         |> Expression.toFormattedString
         |> sprintf @"\lim _{n \rightarrow \infty} \sum_{i=1}^{n}%s"
+
+module Units =
+    let integrate (dx:Units) (fx : Units) = 
+        Units (evalIntegral (integral dx.Quantity fx.Quantity), fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx
+
+    let definiteIntegrate a b (dx:Units) (fx : Units) = 
+        Units (evalDefiniteIntegral (defintegral dx.Quantity a b fx.Quantity), fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx

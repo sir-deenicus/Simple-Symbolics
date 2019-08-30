@@ -417,12 +417,15 @@ let choose n k =
 open Operators
 open System.Collections.Generic
 
-let ln = MathNet.Symbolics.Operators.ln
-let arctan = MathNet.Symbolics.Operators.arctan
+let ln = Operators.ln
+let arctan = Operators.arctan
 let sec = Operators.sec
-let symbol = symbol
-let sym = symbol
 
+let symbol = symbol
+let V = symbol
+let sy = symbol
+let mkSymbolMap l = l |> List.map (fun s -> s, symbol s) |> Map
+ 
 
 type Complex(r : Expression, i : Expression) =
     member __.Real = r
@@ -522,20 +525,12 @@ type Units(q : Expression, u : Expression, ?altUnit) =
 
     member __.AltUnit
         with get () = altunit
-        and set u = altunit <- u
+        and set u = altunit <- u 
+    
+    member t.EvaluateQuantity(m) =
+        Expression.evaluateFloat m q
 
-    member t.Evaluate(m, ?usealt) =
-        Evaluate.evaluate m q,
-        match usealt with
-        | Some false -> u.ToFormattedString()
-        | _ -> t.AltUnit
-
-    member t.Evaluate ?usealt =
-        q.ToFloat(),
-        match usealt with
-        | Some false -> u.ToFormattedString()
-        | _ -> t.AltUnit
-
+    member t.EvaluateQuantity () = q.ToFloat()
     member __.ToAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
     static member Zero = Units(0Q, 0Q)
 
@@ -557,6 +552,10 @@ type Units(q : Expression, u : Expression, ?altUnit) =
     static member (*) (a : Units, b : int) =
         Units(a.Quantity * b, a.Unit, a.AltUnit)
     static member (*) (a : int, b : Units) = Expression.FromInt32 a * b
+
+    static member (*) (a : Units, b : float) =
+        Units(a.Quantity * real b, a.Unit, a.AltUnit)
+    static member (*) (a : float, b : Units) = real a * b
 
     static member (*) (a : Expression, b : Units) =
         Units(a * b.Quantity, b.Unit,
@@ -592,18 +591,24 @@ type Units(q : Expression, u : Expression, ?altUnit) =
                     let q, r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
                     Expression.toSciNumString r q
                 else (a / b).Quantity.ToFormattedString()
+            let space = if expressionFormat = "Infix" then " " else "\\;"    
+            Some(sprintf "%s%s%s" qstr space altunit, qstr.Length)
+        else None
 
-            Some(sprintf "%s %s" qstr altunit, qstr.Length)
+    static member ToUnitQuantity(a : Units, b : Units) =
+        if a.Unit = b.Unit then   
+            Some((a / b).Quantity)
         else None
 
     override t.ToString() =
+        let space = if expressionFormat = "Infix" then " " else "\\;"
         if Expression.isNumber t.Quantity then
             let q, r = t.Quantity.ToFloat() |> smartroundEx 1
             let qstr = Expression.toSciNumString r q
             if t.Unit = 1Q then qstr
-            else sprintf "%s %s" qstr (t.Unit.ToFormattedString())
+            else sprintf "%s%s%s" qstr space (t.Unit.ToFormattedString())
         else
-            sprintf "%s %s" (t.Quantity.ToFormattedString())
+            sprintf "%s%s%s" (t.Quantity.ToFormattedString()) space
                 (t.Unit.ToFormattedString())
 
 module UnitsDesc =
@@ -618,11 +623,24 @@ module UnitsDesc =
     let mass = symbol "mass"
     let length = symbol "length"
     let temperature = symbol "temperature"
+    let current = symbol "current"
 
-module Units =
-    open System.Collections.Generic
+    let Names =
+         set
+          [ "power"
+            "energy"
+            "force"
+            "energyflux"
+            "volume"
+            "velocity"
+            "accel"
+            "time"
+            "mass"
+            "length"
+            "temperature"
+            "current" ]
 
-    let (^) a b = Units(a, b)
+module Units = 
 
     let setAlt alt (u : Units) =
         u.AltUnit <- alt
@@ -645,10 +663,12 @@ module Units =
     //----------
     let gram = Units(1Q, Operators.symbol "g", "g")
     let kg = kilo * gram |> setAlt "kg"
+
     let meter = Units(1Q, Operators.symbol "meters", "meter")
     let km = 1000Q * meter |> setAlt "km"
     let cm = centi * meter |> setAlt "cm"
     let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
+    let yard = 3 * ft
     let inches = 12 * ft
     let au =  150Q * mega * km |> setAlt "AU" 
     //----------
@@ -663,24 +683,36 @@ module Units =
     let years = 52Q * weeks |> setAlt "years"
     //----------
     let N = kg * meter / sec ** 2 |> setAlt "N"
+
     let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
     let kJ = (J * 1000Q) |> setAlt "kJ"
     let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
     let btu = Expression.FromRational(BigRational.fromFloat 1055.06) * J
+
     let W = (J / sec) |> setAlt "W"
+    let watts = W |> setAlt "W"
     let kW = (W * 1000Q) |> setAlt "kW"
+
     let kWh = (kW * hr) |> setAlt "kWh"
+
+    let amps = Units(1Q, Operators.symbol "Amps", "Amps")
+    let C = amps * sec |> setAlt "coulombs"
+    let volt = J / C |> setAlt "volts"
     //----------
     let bits = Units(1Q, Operators.symbol "bits")
     let bytes = 8Q * bits |> setAlt "bytes"
     let gigabytes = giga * bytes |> setAlt "gigabytes"
+
     let flop = Units(1Q, Operators.symbol "flop")
     let exafloatops = exa * flop |> setAlt "exafloatops"
     let terafloatops = tera * flop |> setAlt "terafloatops"
+    
     let flops = flop / sec |> setAlt "flop/s"
     let gigaflops = giga * flops |> setAlt "gigaflop/s"
     let teraflops = tera * flops |> setAlt "teraflop/s"
+
     let usd = Units(1Q, symbol "\\;USD", "\\;USD")
+
     let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
     let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
     let hbar = planck / (2 * pi)
@@ -688,6 +720,10 @@ module Units =
     let stefan_boltzman =
         Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
     let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
+    //==============
+    let integrateWith (integral:Expression->Expression) (dx:Units) (fx : Units) = 
+        Units(integral fx.Quantity, fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx 
+
     let differentiate (dy : Units) (dx : Units) =
         Units
             (Calculus.differentiate dy.Quantity dx.Quantity, dx.Unit / dy.Unit,
@@ -703,6 +739,7 @@ module Units =
           kJ, "Energy"
           mega * J |> setAlt "megajoules", "Energy"
           kWh, "Energy"
+          amps * hr |> setAlt "amp hours", "Charge"
           terafloatops, "computation"
           exafloatops, "computation"
           flop, "computation"
@@ -735,7 +772,7 @@ module Units =
             List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
             |> List.map (fun (u', t) ->
                    let s, len = Units.To(u, u') |> Option.get
-                   len, s + " (" + t + ")")
+                   len, s + space() + "(" + t + ")")
         match matched with
         | [] -> u.ToString()
         | l ->
@@ -743,22 +780,34 @@ module Units =
             |> List.minBy fst
             |> snd
 
-    let rec evaluateUnits (map : IDictionary<Expression, Units>) =
+    let rec replaceUnitPlaceHolders (map : IDictionary<Expression, Units>) =
         function
         | Identifier _ as v when map.ContainsKey v -> map.[v]
-        | Power(x, p) -> (evaluateUnits map x) ** p
-        | Sum l -> List.sumBy (evaluateUnits map) l
+        | Power(x, p) -> (replaceUnitPlaceHolders map x) ** p
+        | Sum l -> List.sumBy (replaceUnitPlaceHolders map) l
         | Product l ->
             l
-            |> List.fold (fun p x -> p * (evaluateUnits map x)) (Units(1Q, 1Q))
+            |> List.fold (fun p x -> p * (replaceUnitPlaceHolders map x)) (Units(1Q, 1Q))
         | f -> Units(f, 1Q)
 
-    let tryEvaluateUnits vars e =
+    let tryreplaceUnitPlaceHolders vars e =
         try
-            let u = evaluateUnits (dict vars) e
-            u.Evaluate() |> ignore
+            let u = replaceUnitPlaceHolders (dict vars) e
+            u.EvaluateQuantity() |> ignore
             Some u
         with _ -> None
+
+    let map f (q:Units) =
+        Units(f q.Quantity, q.Unit )
+         
+    let toUnitQuantity (b : Units) (a : Units) =
+        if a.Unit = b.Unit then   
+            Some((a / b).Quantity)
+        else None
+
+    let toUnitQuantityValue (a : Units) (b : Units) = 
+        toUnitQuantity a b |> Option.get 
+    
 
 let rec containsVar x =
     function
@@ -883,15 +932,6 @@ let containsExpression expressionToFind formula =
             || (List.exists iterFindIn l)
         | _ -> false
     iterFindIn (Algebraic.simplifyLite formula)
-
-let evalExpr vars x =
-    replaceSymbols (dict vars) x |> Expression.FullerSimplify |> Some  
-
-let evalExprNum vars x =
-    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
-    if Seq.isEmpty nums then None
-    else let symb = replaceSymbols (dict nums) x |> Expression.FullerSimplify
-         if containsAnyVar symb then None else Some symb 
 
 let rec width =
     function
@@ -1019,6 +1059,8 @@ module Structure =
 
     let rec recursiveFilter filter =
         function
+        | Number _ as n when not (filter n) -> None
+        | Number _ as n -> Some n
         | Identifier _ as var when not (filter var) -> None
         | Identifier _ as var -> Some var
         | Power(f, n) as p ->
@@ -1144,6 +1186,40 @@ let equals a b = Equation(a, b)
 let equationTrace (current:Equation) (instructions : _ list) = 
     stepTracer true string current instructions
 
+
+let evalExpr vars x =
+    replaceSymbols (dict vars) x |> Expression.FullerSimplify |> Some  
+
+let evalExprNum vars x =
+    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
+    if Seq.isEmpty nums then None
+    else let symb = replaceSymbols (dict nums) x |> Expression.FullerSimplify
+         if containsAnyVar symb then None else Some symb 
+
+let evalExprVars vars x =
+    let v = replaceSymbols (dict vars) x |> Expression.FullerSimplify 
+    maybe {
+        let! v' =
+            Structure.recursiveFilter (
+                function 
+                | Identifier(Symbol s) when Prelude.Common.Strings.strcontains "Var" s || UnitsDesc.Names.Contains s -> true
+                | Number _ -> true 
+                | _ -> false) v
+        if v = v' then return v
+        else return! None
+    }        
+    
+module Rational =
+    let consolidateNumerators = function
+        | Sum l as f -> 
+            let denominators = Hashset(List.map Rational.denominator l)
+            if denominators.Count = 1 then 
+               let d = Seq.head denominators
+               let n = List.map Rational.numerator l |> Sum
+               n / d 
+            else f
+        | f -> f
+
 module Vars =
     let a = symbol "a"
     let b = symbol "b"
@@ -1176,30 +1252,41 @@ module Vars =
     let x2 = symbol "x_2"
     let x3 = symbol "x_3"
     let v0 = symbol "v_0"
-    let y0 = sym "y_0"
+    let y0 = symbol "y_0"
     let y1 = symbol "y_1"
     let y2 = symbol "y_2"
 
-    let A = sym "A"
-    let B = sym "B"
-    let C = sym "C"
-    let D = sym "B"
-    let T = sym "T"
-    let N = sym "N"
-    let P = sym "P"    
-    let X = sym "X" 
+    let A = V"A"
+    let B = V"B"
+    let C = sy "C"
+    let D = sy "D"
+    let M = sy "M"
+    let N = sy "N"
+    let P = sy "P" 
+    let Q = sy "Q" 
+    let T = sy "T"
+    let X = sy "X" 
+    let Y = sy "Y" 
+    let Z = sy "Z" 
     let π = pi
     let pi = pi
 
-let prob x = FunctionN(Probability, [sym "P"; x ])
-let probn s x = FunctionN(Probability, [sym s; x ])
-let condprob x param = FunctionN(Probability, [ sym "P"; x; param ])
-let probparam x param = FunctionN(Probability, [sym "P";  x; param; 0Q ])
+let real x = Approximation (Real x)
+let rational x = Expression.fromFloat x
+let todecimal = function | Number n -> real(float n) | f -> f
+let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
+
+let prob x = FunctionN(Probability, [symbol "P"; x ])
+let probn s x = FunctionN(Probability, [symbol s; x ])
+let condprob x param = FunctionN(Probability, [ symbol "P"; x; param ])
+let probparam x param = FunctionN(Probability, [symbol "P";  x; param; 0Q ])
 
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
 
-let func f = FunctionN(Function.Func, [sym f])
-let fn f x = FunctionN(Function.Func, [sym f;x])
+let func f = FunctionN(Function.Func, [symbol f])
+let fn f x = FunctionN(Function.Func, [symbol f;x])
+
+let runfn fn parameters = fn |> Expression.evaluateFloat parameters |> Option.get
 
 let makeFunc fname = fun x -> fn fname x
  

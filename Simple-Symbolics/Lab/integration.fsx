@@ -292,3 +292,4 @@ let rewriteIntegralAsExpectation = function
 // usubstitution (integral x (x * cos(x**2))) |> writeExpr 
 // usubstitutionSteps (integral x (x * 2 * cos(x))) |> snd |> string |> writeStr
   
+//extractLinearComponentTest x (-a*x + b)

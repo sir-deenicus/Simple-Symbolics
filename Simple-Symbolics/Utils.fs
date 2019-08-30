@@ -10,9 +10,11 @@ type TraceExplain<'a> =
      | Op of ('a -> 'a) 
      | Instr of ('a -> 'a) * string
 
+let [<Literal>] InfixFormat = "Infix"
+
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
-
+let space() = if expressionFormat = InfixFormat then " " else " \\; "
 let fmt e = expressionFormater e
 
 let setInfix() =

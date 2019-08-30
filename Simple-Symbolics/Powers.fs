@@ -45,12 +45,11 @@ module Logarithm =
 
     let internal powerRuleSingleRev =
         function 
-        | Product[a; Function(Ln, x)] -> Function(Ln, x)**a
+        | Product[a; Function(Ln, x)] -> Function(Ln, (x**a))
         | f -> f
 
     let rec powerRuleRev =
-        function
-        | Product[a; Function(Ln, x)] -> Function(Ln, x)**a
+        function 
         | Product l -> Product(List.map powerRuleSingleRev l)
         | Sum l -> Sum(List.map powerRuleSingleRev l)
         | f -> powerRuleSingleRev f

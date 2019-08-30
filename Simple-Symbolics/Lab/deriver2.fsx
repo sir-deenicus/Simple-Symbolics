@@ -400,7 +400,6 @@ grad (integral x x)
 
 let ez = integral x (prob x * grad x)
 
-tk "001021"
 let identityTransform =
     function
     | Product l as prod ->

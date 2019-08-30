@@ -3,6 +3,13 @@
 open MathNet.Symbolics
 open Core.Vars
 open Core
+open System 
+
+Structure.recursiveFilter (
+        function 
+        | Identifier(Symbol s) when String.forall Char.IsUpper s -> true
+        | Number _ -> true 
+        | _ -> false) (f+3Q)
 
 let a1 = Complex(-2Q,sqrt 5Q)
 
@@ -113,3 +120,5 @@ Logarithm.powerRule(ln(x ** 2))
 sqrt 20Q |> Algebraic.simplifySquareRoot
 
 let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get  
+
+Algebraic.consolidateSums (a * b * c + b * c * d + d * f)        

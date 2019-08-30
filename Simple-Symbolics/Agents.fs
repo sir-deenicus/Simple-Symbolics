@@ -178,6 +178,7 @@ module Searcher =
     open Hansei.Core
     open System
     open EvolutionaryBayes.RegretMinimization
+    open Integration
 
     let dispMath x = "$" + x + "$"
 
@@ -322,3 +323,75 @@ module Searcher =
 
     let findPath options transformer equalities targetCondition startExpression =
         findPathGen 50 options transformer equalities targetCondition startExpression
+
+    let uniformSamplerGen maxwidth options mem currentExpression =
+        cont {
+            let! op, desc = uniform options  
+            let nextExpression = op currentExpression
+            let ok =
+                nextExpression <> currentExpression  
+                && width nextExpression < maxwidth
+                && (List.exists ((=) (Expression.FullSimplify nextExpression)) mem
+                    |> not) 
+            return (nextExpression, desc, ok)
+        }
+
+    let integralTerminationCondition e =
+        Structure.existsRecursive (function
+            | IsIntegral _ | IsExpectation _  -> true 
+            | _ -> false) e |> not
+     
+    let shallowOptions =
+        [ Structure.applyJustInFunctions Algebraic.expand, "Expand"
+          Structure.applyJustInFunctions Rational.reduce, "Reduce fractions"
+          Structure.applyJustInFunctions Rational.rationalize, "rationalize terms"
+          Structure.applyJustInFunctions Rational.expand, "expand fractions" 
+          Structure.applyJustInFunctions Logarithm.expand, "apply logarithm product/quotient rule, expand"
+          Structure.applyJustInFunctions Logarithm.contract, "apply logarithm product/quotient rule, contract"
+          Structure.applyJustInFunctions Trigonometric.substitute, "substitute trig expression"
+          Structure.applyJustInFunctions Trigonometric.contract, "contract trig expression"
+          Structure.applyJustInFunctions Trigonometric.expand, "expand trig expression"
+          Structure.applyJustInFunctions Trigonometric.simplify, "simplify trig expression"
+          Structure.applyJustInFunctions Logarithm.powerRule, "apply logarithm power rule" 
+          evalIntegral, "Calculate integral"
+          Algebraic.simplify true, "simplify expression"  ]
+
+    let inline fullsummaryList take f res =
+        let psum = List.sumBy fst res
+        let len = List.length res
+        let take = defaultArg take len
+        let lenmax = min take len
+
+        let v, sffx =
+            if len <> 1 then "are", "s."
+            else "is", "."
+        [ yield sprintf "There %s %d result%s" v len sffx
+    
+          for (i, (p, steps)) in List.zip [ 1..lenmax ] res.[..take - 1] ->
+              sprintf "\n\n__Result %d__: Probability: %A | Relative %A. %s" i p
+                  (p / psum) (f steps
+                              |> String.concat "  \n") ] 
+
+    let fullsummaryConditional conds f (res:(float*'a)list) =
+        let summ = fullsummaryList None f res 
+        let rec iter strs = function
+            | [] -> strs |> List.rev |> String.concat "\n" 
+            | f::fs -> let top = List.filter f (List.tail summ) |> List.head 
+                       iter (top::strs) fs
+        iter [List.head summ] conds
+
+    let inline fullsummary take f res = fullsummaryList take f res |> String.concat "\n" 
+ 
+
+    let findIntegral terminatewith substMaxWidth transformMaxWidth eqs options nsamples expr =
+        Model.ImportanceSample
+            (findPathGen substMaxWidth options (uniformSamplerGen transformMaxWidth)
+                 eqs terminatewith expr, nsamples = nsamples, maxdepth = 50)
+        |> ProbabilitySpace.mapValues id
+        |> List.sortByDescending fst
+
+    type SmartIntegrator () =
+        static member Integrate(expr, ?substMaxWidth, ?transformMaxWidth, ?eqs, ?options, ?nsamples) =
+            findIntegral integralTerminationCondition (defaultArg substMaxWidth 25)
+                (defaultArg transformMaxWidth 25) (defaultArg eqs []) (defaultArg options shallowOptions)
+                    (defaultArg nsamples 100) expr

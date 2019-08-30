@@ -3,6 +3,8 @@
 open MathNet.Symbolics
 open Core
 open Vars 
+open Prelude.Common
+open MathNet.Symbolics
 
 let reArrangeExprEquationX silent focusVar (left,right) = 
     let rec iter fx ops = 
@@ -86,3 +88,43 @@ let reArrangeEquation focusVar (e:Equation) =
     |> Equation
 
 
+let getCandidates (vset : Hashset<_>) vars knowns =
+    knowns
+    |> Seq.filter
+           (fun (v1, e) ->
+           let v1isVar = Expression.isVariable v1
+           v1isVar && not (vset.Contains v1)
+           && vars |> Seq.exists (fun (v, _) -> e |> containsVar v))
+
+let getSolutions evaluate vset vars candidates =
+    [ for (e, e2) in getCandidates vset vars candidates do
+          match evaluate vars e2 with
+          | None -> ()
+          | Some v -> yield e, v ]
+
+let iterativeSolveFilter neq eval vars knowns =          
+    let vset = vars |> Seq.map fst |> Hashset 
+    let rec loop cs tsols (vs:seq<_>) =
+        let candidates = getCandidates vset vs knowns
+        let sols = getSolutions eval vset vs candidates
+        match sols with
+        | [] -> List.concat tsols |> List.rev |> List.filter (fun (a,b) -> neq a b), List.rev cs
+        | sols -> 
+            sols |> List.iter (fst >> vset.Add >> ignore)
+            let vars' = sols @ List.ofSeq vs
+            loop (List.ofSeq candidates::cs) (sols::tsols) vars'
+    loop [] [] vars
+
+let iterativeSolve eval vars knowns = 
+    iterativeSolveFilter (fun _ _ -> true) eval vars knowns
+
+let dispSolvedUnits newline tx =
+    let space = if Utils.expressionFormat = Utils.InfixFormat then " " else " \\; "
+    tx
+    |> List.map
+           (fun (x:Expression, u) ->
+           sprintf "$%s = %s$" (x.ToFormattedString())
+               ((Units.simplifyUnits u).Replace(" ", space)))
+    |> List.sort           
+    |> String.concat newline 
+  

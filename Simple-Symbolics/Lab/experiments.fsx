@@ -121,4 +121,20 @@ sqrt 20Q |> Algebraic.simplifySquareRoot
 
 let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get  
 
-Algebraic.consolidateSums (a * b * c + b * c * d + d * f)        
+
+[ 
+    Algebraic.consolidateSums2 (a * (1/3Q) * b * c - e * b * c) 
+    Algebraic.consolidateSums2 (a * 3Q * b * c - e * b * c) 
+    Algebraic.consolidateSums2 (a * 3Q * b * c + 15Q * e * b * c)
+    Algebraic.consolidateSums2 (a * (1/3Q) * b * c - e * b * c * (1/3Q) ) 
+    Algebraic.consolidateSums2 (a * (1/3Q) * b * c +  e * b * c * (1/3Q) ) 
+    Algebraic.consolidateSums2 (a * (1/3Q) * b +  e * b * (1/3Q) ) 
+    Algebraic.consolidateSums2 (a * (3Q) * b +  e * b * (3Q) ) 
+    Algebraic.consolidateSums2 (a * 3Q * b * c - 3Q * e * f * g)
+    Algebraic.consolidateSums2 (a * 3Q * b * c + 3Q * e * f * g) 
+    Algebraic.consolidateSums2 (a * 1/3Q * b * c + 1/3Q * e * f * g)  
+    Algebraic.consolidateSums2 (a * 3Q * b * c - 15Q * e * f * g) 
+] 
+
+Algebraic.intersectAll [a * b * c * (a + b); a + b]
+Algebraic.intersectAll [a * b * c + (a + b); a + b]

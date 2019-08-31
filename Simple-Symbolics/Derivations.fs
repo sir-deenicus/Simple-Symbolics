@@ -80,3 +80,8 @@ let deriveShallowEqualities eqs =
     let deqs = Hashset(deriveShallowSums eqs)
     deqs.UnionWith(deriveEqualitiesFromProduct eqs)
     Seq.toList deqs
+
+let deriveEqualities eqs =
+    let deqs = Hashset(deriveShallowEqualities eqs)
+    deqs.UnionWith(deriveAndGenerateEqualities eqs)
+    Seq.toList deqs

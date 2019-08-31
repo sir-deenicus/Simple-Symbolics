@@ -144,7 +144,12 @@ module Expression =
 
     let isNumber =
         function
-        | Number _ | Power(Number _, Number _) | Product [ Number _; Constant _ ] ->
+        | Number _ | Constant _
+        | Power(Number _, Number _)  
+        | Power(Constant _, Number _)  
+        | Power(Number _, Constant _)
+        | Power(Constant _, Constant _) 
+        | Product [ Number _; Constant _ ] ->
             true
         | _ -> false
 
@@ -171,8 +176,7 @@ module Expression =
     let cancelAbs =
         function
         | Function(Abs, x) -> x
-        | x -> x
-
+        | x -> x 
 
     let containsLog =
         function
@@ -190,6 +194,44 @@ module Expression =
             true
         | _ -> false
 
+    let toProductList = function
+        | Product l -> l
+        | f -> [f] 
+
+    let consolidateNumerators = function
+        | Sum l as f -> 
+            let denominators = Hashset(List.map Rational.denominator l)
+            if denominators.Count = 1 then 
+               let d = Seq.head denominators
+               let n = List.map Rational.numerator l |> Sum
+               n / d 
+            else f
+        | f -> f
+
+let (|ProductHasNumber|_|) =
+    function
+    | Product l ->
+        match l |> List.filter (Expression.isRationalNumber) with
+        | [ Number n ] -> Some(Expression.FromRational n)
+        | _ -> None
+    | _ -> None 
+
+let (|RationalLiteral|_|) r = function
+    | Number n as q when n = BigRational.FromIntFraction r -> Some q
+    | _ -> None
+
+let (|IntegerLiteral|_|) m = function
+    | Number n as q when n.IsInteger && int n = m -> Some q
+    | _ -> None
+
+let (|IntegerNumber|_|)  = function
+    | Number n as q when n.IsInteger -> Some q
+    | _ -> None
+
+let (|IsNumber|_|) = function
+      | e when Expression.isNumber e -> Some e
+      | _ -> None
+   
 let productToConstantsAndVarsGen test =
     function
     | Number _ as n -> Some(n, [])
@@ -199,8 +241,18 @@ let productToConstantsAndVarsGen test =
     | _ -> None
 
 let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+
 let productToIntConstantsAndVars =
     productToConstantsAndVarsGen Expression.isInteger
+
+let inline rem n d =
+    let rec loop n = if n >= d then loop (n-d) else n
+    loop n   
+
+let rec gcd c d = 
+    match (abs c,abs d) with
+    | (a, n) when n = 0N -> a
+    | (a,b) -> gcd b (rem a b) 
 
 let inline primefactors factor x =
     let rec loop x =
@@ -303,6 +355,7 @@ module Algebraic =
         | Power(Number n, Number m) when m.IsInteger ->
             Expression.FromRational(n ** (int m))
         | Power(x, p) -> Power(simplifyLite x, simplifyLite p)        
+        | Product (n::rest) when n = 1Q -> simplifyLite (Product rest)
         | Product l ->
             Product
                 (List.map simplifyLite
@@ -346,34 +399,11 @@ module Algebraic =
             | Function(f, x) -> Function(f, (simplifyLoop x))
             | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
+            | Product (n::rest) when n = 1Q -> simplifyLoop (Product rest)
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
             | Sum l -> List.map simplifyLoop l |> List.sum
             | x -> x
         simplifyLoop fx |> Rational.reduce
-
-type Expression with
-
-    static member toRational e =
-        let e' = Trigonometric.simplify e |> Algebraic.simplify true
-        match e' with
-        | Number(n) -> n
-        | _ ->
-            failwith
-                (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
-                     (e'.ToFormattedString()) e')
-    static member FullSimplify e =
-        e
-        |> Algebraic.simplify true
-        |> Algebraic.simplify true
-        |> Rational.rationalize
-        |> Algebraic.expand
-
-    static member FullerSimplify e =
-        Trigonometric.simplify e
-        |> Algebraic.simplify true
-        |> Algebraic.simplify true
-        |> Rational.rationalize
-        |> Algebraic.expand
 
 let rec partitions =
     function
@@ -426,88 +456,6 @@ let V = symbol
 let sy = symbol
 let mkSymbolMap l = l |> List.map (fun s -> s, symbol s) |> Map
  
-
-type Complex(r : Expression, i : Expression) =
-    member __.Real = r
-    member __.Imaginary = i
-    member __.Conjugate = Complex(r, -i)
-    member __.Magnitude = sqrt (r ** 2 + i ** 2)
-    member __.ToComplex() = System.Numerics.Complex(r.ToFloat(), i.ToFloat())
-
-    member __.Phase =
-        let x, y = r.ToFloat(), i.ToFloat()
-        if x > 0. then arctan (i / r)
-        elif x < 0. && y >= 0. then Trigonometric.simplify (arctan (i / r) + pi)
-        elif x < 0. && y < 0. then Trigonometric.simplify (arctan (i / r) - pi)
-        elif x = 0. && y > 0. then pi / 2
-        elif x = 0. && y < 0. then -pi / 2
-        else Undefined
-
-    static member Zero = Complex(0Q, 0Q)
-    static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
-    static member magnitude (c:Complex) = c.Magnitude
-    member c.Pow(n : Expression, phase) =
-        let r = c.Magnitude
-        let angle = c.Phase
-        r ** n * Complex(cos (n * (angle + phase))
-                         |> Algebraic.simplify false
-                         |> Trigonometric.simplify,
-                         sin (n * (angle + phase))
-                         |> Algebraic.simplify false
-                         |> Trigonometric.simplify)
-
-    static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
-
-    static member Pow(c : Complex, n : Expression) =
-        let r = c.Magnitude
-        let angle = c.Phase
-        r ** n * Complex(cos (n * angle)
-                         |> Algebraic.simplify false
-                         |> Trigonometric.simplify,
-                         sin (n * angle)
-                         |> Algebraic.simplify false
-                         |> Trigonometric.simplify)
-
-    static member (+) (a : Complex, b : Expression) =
-        Complex(a.Real + b, a.Imaginary)
-    static member (+) (a : Expression, b : Complex) =
-        Complex(a + b.Real, b.Imaginary)
-    static member (+) (a : Complex, b : Complex) =
-        Complex(a.Real + b.Real, a.Imaginary + b.Imaginary) 
-    static member (-) (a : Complex, b : Expression) =
-        Complex(a.Real - b, a.Imaginary)
-    static member (-) (a : Expression, b : Complex) =
-        Complex(a - b.Real, b.Imaginary)
-    static member (-) (a : Complex, b : Complex) =
-        Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
-    static member (*) (a : Complex, b : Complex) =
-        Complex
-            (a.Real * b.Real - a.Imaginary * b.Imaginary,
-             a.Imaginary * b.Real + a.Real * b.Imaginary)
-    static member (*) (a : Complex, b : Expression) =
-        Complex(a.Real * b, a.Imaginary * b)
-    static member (*) (a : Expression, b : Complex) =
-        Complex(a * b.Real, a * b.Imaginary)
-    static member (/) (a : Complex, b : Expression) =
-        Complex(a.Real / b, a.Imaginary / b)
-
-    static member (/) (a : Complex, b : Complex) =
-        let conj = b.Conjugate
-        (a * conj) / (b * conj).Real
-
-    static member (/) (a : Expression, b : Complex) = (Complex a) / b
-    member c.Simplify() = Complex(Expression.FullerSimplify r, Expression.FullerSimplify i)
-    new(r) = Complex(r, 0Q)
-    override t.ToString() =
-            match t.Real, t.Imaginary with
-              | c when c = (0Q, 0Q) -> sprintf "0"
-              | r, _ when r = 0Q -> sprintf "%sⅈ" (t.Imaginary.ToFormattedString())
-              | _ ->
-                sprintf "%s + ⅈ%s" (t.Real.ToFormattedString()) (t.Imaginary.ToFormattedString())
-
-module Complex = 
-    let i = Complex(0Q, 1Q) 
-
 type Units(q : Expression, u : Expression, ?altUnit) =
     let mutable altunit = defaultArg altUnit ("")
 
@@ -780,19 +728,35 @@ module Units =
             |> List.minBy fst
             |> snd
 
-    let rec replaceUnitPlaceHolders (map : IDictionary<Expression, Units>) =
-        function
-        | Identifier _ as v when map.ContainsKey v -> map.[v]
-        | Power(x, p) -> (replaceUnitPlaceHolders map x) ** p
-        | Sum l -> List.sumBy (replaceUnitPlaceHolders map) l
-        | Product l ->
-            l
-            |> List.fold (fun p x -> p * (replaceUnitPlaceHolders map x)) (Units(1Q, 1Q))
-        | f -> Units(f, 1Q)
+    let rec replaceUnitPlaceHolders (defs : seq<Expression * Units>) e =
+        let map = dict defs
+        let unitstest l =
+            let hs = Hashset(l |> List.map (fun (u:Units) -> u.Unit))
+            hs.Count = 1 || (hs.Count = 2 && hs.Contains 1Q)
+        let rec replace = function
+            | Identifier _ as v when map.ContainsKey v -> map.[v]
+            | Power(x, p) -> (replace x) ** p
+            | Sum l -> List.sumBy replace l
+            | Product l ->
+                l
+                |> List.fold (fun p x -> p * (replace x))
+                       (Units(1Q, 1Q))
+            | FunctionN(Max, l) as f ->
+                match List.map replace l with
+                | l' when (l'
+                           |> List.forall
+                                  (fun u -> Expression.isNumber u.Quantity)
+                           && unitstest l') ->
+                    let largest = l' |> List.maxBy (fun u -> u.Quantity.ToFloat())
+                    let units = l' |> List.find (fun u -> u.Unit <> 1Q)
+                    Units(largest.Quantity, units.Unit)
+                | _ -> Units(f, 1Q)
+            | f -> Units(f, 1Q)
+        replace e
 
     let tryreplaceUnitPlaceHolders vars e =
         try
-            let u = replaceUnitPlaceHolders (dict vars) e
+            let u = replaceUnitPlaceHolders vars e
             u.EvaluateQuantity() |> ignore
             Some u
         with _ -> None
@@ -835,15 +799,17 @@ let rec replaceSymbol r x =
     | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
     | x -> x
 
-let rec replaceSymbols (vars : IDictionary<_, _>) =
-    function
-    | Identifier _ as var when vars.ContainsKey var -> vars.[var]
-    | Power(f, n) -> Power(replaceSymbols vars f, replaceSymbols vars n)
-    | Function(fn, f) -> Function(fn, replaceSymbols vars f)
-    | Product l -> Product(List.map (replaceSymbols vars) l)
-    | Sum l -> Sum(List.map (replaceSymbols vars) l)
-    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbols vars) l)
-    | x -> x
+let replaceSymbols (vars : seq<_>) e =
+    let map = dict vars
+    let rec loop = function
+        | Identifier _ as var when map.ContainsKey var -> map.[var]
+        | Power(f, n) -> Power(loop f, loop n)
+        | Function(fn, f) -> Function(fn, loop f)
+        | Product l -> Product(List.map loop l)
+        | Sum l -> Sum(List.map loop l)
+        | FunctionN(fn, l) -> FunctionN(fn, List.map loop l)
+        | x -> x
+    loop e
 
 let rec replaceVariableSymbol replacer =
     function
@@ -1140,11 +1106,66 @@ module Structure =
         removeSymbol placeholder replaced
 
 type Expression with
-     static member groupInSumWith var = function
+    static member groupInSumWith var = function
         | Sum l -> 
             let haves, nots = List.partition (containsExpression var) l
             Product[var; haves |> List.sumBy (fun x -> x/var)] + Sum nots
-        | f -> f
+        | f -> f 
+
+    static member toRational e =
+        let e' = Trigonometric.simplify e |> Algebraic.simplify true
+        match e' with
+        | Number(n) -> n
+        | _ ->
+            failwith
+                (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
+                     (e'.ToFormattedString()) e')
+
+    static member FullSimplify e =
+        e
+        |> Algebraic.simplify true
+        |> Algebraic.simplify true
+        |> Rational.rationalize
+        |> Algebraic.expand
+
+    static member FullerSimplify e =
+        Trigonometric.simplify e
+        |> Algebraic.simplify true
+        |> Algebraic.simplify true
+        |> Rational.rationalize
+        |> Algebraic.expand
+
+    static member isNumericOrVariable anyVar =
+        let keep s =
+            anyVar || Prelude.Common.Strings.strcontains "Var" s
+            || UnitsDesc.Names.Contains s
+        function 
+        | Identifier(Symbol s) when keep s -> true
+        | IsNumber _ -> true 
+        | Function (_, IsNumber _) -> true 
+        | FunctionN(Max, [a;b]) ->
+            match(a,b) with
+            | Identifier(Symbol s), Identifier(Symbol s2) 
+                when keep s && keep s2 -> true
+            | Identifier(Symbol s), IsNumber _   
+            | IsNumber _ , Identifier(Symbol s) 
+                when keep s -> true
+            | Product l, IsNumber _
+            | Sum l, IsNumber _  
+            | Product l, IsNumber _
+            | IsNumber _ , Sum l
+            | IsNumber _, Product l 
+                when List.filter Expression.isVariable l 
+                    |> List.forall (symbolString >> keep) -> true 
+            | Identifier(Symbol s), Sum l
+            | Identifier(Symbol s), Product l
+            | Sum l, Identifier(Symbol s)
+            | Product l, Identifier(Symbol s) when keep s -> true 
+            | IsNumber _ , IsNumber _ -> true
+            | _ -> false
+        | FunctionN(_, l) -> not (List.exists (Expression.isNumber >> not) l)
+        | _ -> false
+
 
 type Equation(leq : Expression, req : Expression) =
     member __.Definition = leq, req
@@ -1185,41 +1206,26 @@ let equals a b = Equation(a, b)
 
 let equationTrace (current:Equation) (instructions : _ list) = 
     stepTracer true string current instructions
-
-
+      
 let evalExpr vars x =
-    replaceSymbols (dict vars) x |> Expression.FullerSimplify |> Some  
+    replaceSymbols vars x |> Expression.FullerSimplify |> Some  
 
 let evalExprNum vars x =
     let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
     if Seq.isEmpty nums then None
-    else let symb = replaceSymbols (dict nums) x |> Expression.FullerSimplify
+    else let symb = replaceSymbols nums x |> Expression.FullSimplify
          if containsAnyVar symb then None else Some symb 
 
-let evalExprVars vars x =
-    let v = replaceSymbols (dict vars) x |> Expression.FullerSimplify 
+let evalExprVarsGen anyVar vars x =
+    let v = replaceSymbols vars x |> Expression.FullSimplify 
+
     maybe {
         let! v' =
-            Structure.recursiveFilter (
-                function 
-                | Identifier(Symbol s) when Prelude.Common.Strings.strcontains "Var" s || UnitsDesc.Names.Contains s -> true
-                | Number _ -> true 
-                | _ -> false) v
+            Structure.recursiveFilter (Expression.isNumericOrVariable anyVar) v
         if v = v' then return v
         else return! None
-    }        
+    }  
     
-module Rational =
-    let consolidateNumerators = function
-        | Sum l as f -> 
-            let denominators = Hashset(List.map Rational.denominator l)
-            if denominators.Count = 1 then 
-               let d = Seq.head denominators
-               let n = List.map Rational.numerator l |> Sum
-               n / d 
-            else f
-        | f -> f
-
 module Vars =
     let a = symbol "a"
     let b = symbol "b"
@@ -1290,6 +1296,9 @@ let runfn fn parameters = fn |> Expression.evaluateFloat parameters |> Option.ge
 
 let makeFunc fname = fun x -> fn fname x
  
+module Ops =
+    let max a b = FunctionN(Function.Max, [a;b])
+
 [<RequireQualifiedAccess>]
 type FuncType =
      | Identity 
@@ -1322,24 +1331,6 @@ let (|IsExpectation|_|) input =
      | FunctionN(Function.Expectation, [x; p]) -> Some(x, p) 
      | _ -> None  
 
-let (|ProductHasNumber|_|) =
-    function
-    | Product l ->
-        match l |> List.filter (Expression.isRationalNumber) with
-        | [ Number n ] -> Some(Expression.FromRational n)
-        | _ -> None
-    | _ -> None 
 
-let (|RationalLiteral|_|) r = function
-    | Number n as q when n = BigRational.FromIntFraction r -> Some q
-    | _ -> None
-
-let (|IntegerLiteral|_|) m = function
-    | Number n as q when n.IsInteger && int n = m -> Some q
-    | _ -> None
-
-let (|IntegerNumber|_|)  = function
-    | Number n as q when n.IsInteger -> Some q
-    | _ -> None
     
 

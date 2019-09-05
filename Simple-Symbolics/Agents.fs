@@ -342,17 +342,17 @@ module Searcher =
             | _ -> false) e |> not
      
     let shallowOptions =
-        [ Structure.applyJustInFunctions Algebraic.expand, "Expand"
-          Structure.applyJustInFunctions Rational.reduce, "Reduce fractions"
-          Structure.applyJustInFunctions Rational.rationalize, "rationalize terms"
-          Structure.applyJustInFunctions Rational.expand, "expand fractions" 
-          Structure.applyJustInFunctions Logarithm.expand, "apply logarithm product/quotient rule, expand"
-          Structure.applyJustInFunctions Logarithm.contract, "apply logarithm product/quotient rule, contract"
-          Structure.applyJustInFunctions Trigonometric.substitute, "substitute trig expression"
-          Structure.applyJustInFunctions Trigonometric.contract, "contract trig expression"
-          Structure.applyJustInFunctions Trigonometric.expand, "expand trig expression"
-          Structure.applyJustInFunctions Trigonometric.simplify, "simplify trig expression"
-          Structure.applyJustInFunctions Logarithm.powerRule, "apply logarithm power rule" 
+        [ Structure.applyInFunctions Algebraic.expand, "Expand"
+          Structure.applyInFunctions Rational.reduce, "Reduce fractions"
+          Structure.applyInFunctions Rational.rationalize, "rationalize terms"
+          Structure.applyInFunctions Rational.expand, "expand fractions" 
+          Structure.applyInFunctions Logarithm.expand, "apply logarithm product/quotient rule, expand"
+          Structure.applyInFunctions Logarithm.contract, "apply logarithm product/quotient rule, contract"
+          Structure.applyInFunctions Trigonometric.substitute, "substitute trig expression"
+          Structure.applyInFunctions Trigonometric.contract, "contract trig expression"
+          Structure.applyInFunctions Trigonometric.expand, "expand trig expression"
+          Structure.applyInFunctions Trigonometric.simplify, "simplify trig expression"
+          Structure.applyInFunctions Logarithm.powerRule, "apply logarithm power rule" 
           evalIntegral, "Calculate integral"
           Algebraic.simplify true, "simplify expression"  ]
 

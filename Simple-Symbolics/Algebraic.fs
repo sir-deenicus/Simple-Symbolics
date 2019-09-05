@@ -51,7 +51,20 @@ module Rational =
 
 module Algebraic =
     open Core
-
+    let multiplyAsUnityBy m = function
+        | Product (Power(x,n)::rest) ->
+            Product (m::Power(Algebraic.expand (x*m),n)::rest)
+        | Power(x, n) ->
+            Product[m;Power(Algebraic.expand (x*m),n)]        
+        | Product l as p -> 
+            let parted =
+                List.partition (function | Power(_,_) -> true | _ -> false) l
+            match parted with
+            | [Power(x,n)], rest -> 
+                Product (m::Power(Algebraic.expand (x*m),n)::rest)
+            | _ -> p
+        | f -> f
+ 
     let dividesHeuristic a b = width (a / b) < width a
 
     let consolidateSums =

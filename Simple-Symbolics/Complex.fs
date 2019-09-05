@@ -1,4 +1,8 @@
-﻿module MathNet.Symbolics.Complex 
+﻿namespace MathNet.Symbolics
+
+open Core
+open Core.Vars
+open Core.Constants
 
 type Complex(r : Expression, i : Expression) =
     member __.Real = r

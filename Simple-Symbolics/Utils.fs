@@ -3,7 +3,9 @@
 open MathNet.Symbolics
 open System
 
-type Hashset<'a> = System.Collections.Generic.HashSet<'a>
+open FSharp.Data 
+open Prelude.Math
+open Prelude.Common
 
 type TraceExplain<'a> =
      | Str of string
@@ -33,6 +35,11 @@ type StepTrace(s) =
         trace.Add(sprintf "$%s$" (expressionFormater e)) |> ignore
     member __.Add e = trace.Add(sprintf "$%s$" (e.ToString())) |> ignore
     member __.Add s = trace.Add(s) |> ignore
+    member __.Add (s, asText, parameters) = 
+        String.Format(s, Seq.toArray parameters 
+                        |> Array.map (asText>>fun a -> a:>obj)) 
+        |> trace.Add 
+        |> ignore
     member __.Add (s, parameters) = 
         String.Format(s, Seq.toArray parameters) 
         |> trace.Add 
@@ -78,20 +85,9 @@ let flip f a b = f b a
 let swap (a,b) = (b,a)
 let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
-
+let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
-
-type MaybeBuilder() =
-    member __.Bind(x, f) =
-        match x with
-        | Some(x) -> f(x)
-        | _ -> None
-    member __.Delay(f) = f()
-    member __.Return(x) = Some x
-    member __.ReturnFrom(x) = x
-
-let maybe = MaybeBuilder()
 
 module Option =
     let mapOrAdd def f =
@@ -107,5 +103,51 @@ let smartroundEx n x =
         else Math.Round(x, roundto), roundto
     else Math.Round(x, n), n
 
+let smartround2 r x =
+    if abs x < 1. then 
+        let p = (log10 (abs x)) |> abs |> ceil
+        let pten = 10. ** p
+        let x' = x * pten
+        (round r x')/pten
+    else round r x
+    
 let smartround n = smartroundEx n >> fst
 
+let real x = Approximation (Real x)
+
+let todecimal = function | Number n -> real(float n) | f -> f
+let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
+
+//========================
+let currencycacheloc = "currencycache.json"
+
+type CurrencyProvider = FSharp.Data.JsonProvider<"currencyTemplate.json">
+
+let downloadCurrencyRates() =
+    use wc = new Net.WebClient()
+    try
+        let data =
+            wc.DownloadData "https://www.mycurrency.net/US.json"
+            |> Strings.DecodeFromUtf8Bytes
+        IO.File.WriteAllText(currencycacheloc, data)
+        data
+        |> CurrencyProvider.Parse
+        |> Some
+    with _ ->
+        if IO.File.Exists currencycacheloc then
+            IO.File.ReadAllText currencycacheloc
+            |> CurrencyProvider.Parse
+            |> Some
+        else None
+
+let currencyMap =
+    match downloadCurrencyRates() with
+    | None -> Map.empty
+    | Some currencyRates ->
+        currencyRates.Rates
+        |> Array.map (fun r ->
+               r.CurrencyCode,
+               (1M / r.Rate)
+               |> float
+               |> smartround2 2)
+        |> Map

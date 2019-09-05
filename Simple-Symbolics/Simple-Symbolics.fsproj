@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="simpleintegrator.txt" />
     <Compile Include="AssemblyInfo.fs" />
     <Content Include="Changes.txt" />
     <None Include="Lab\simplesolve.fsx" />
@@ -37,7 +38,9 @@
   <ItemGroup>
     <PackageReference Include="EvolutionaryBayes" Version="0.1.6" />
     <PackageReference Include="FParsec" Version="1.0.3" />
+    <PackageReference Include="FSharp.Data" Version="3.1.1" />
     <PackageReference Include="Hansei" Version="0.2.6" />
+    <PackageReference Include="IntSharpCore" Version="1.0.1" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
     <PackageReference Include="MathNet.Symbolic.Ext" Version="0.22.3" />
   </ItemGroup> 

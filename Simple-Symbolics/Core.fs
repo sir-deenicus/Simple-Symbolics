@@ -4,6 +4,7 @@ open MathNet.Symbolics
 open MathNet.Numerics
 open System 
 open MathNet.Symbolics.Utils
+open Prelude.Common
  
 //==========================================
 
@@ -95,7 +96,7 @@ module Expression =
             elif x < 0. then Some(floor (log10 -x))
             else None
         match npow with
-        | Some n when n > 6. ->
+        | Some n when n < -4. || n > 6. ->
             let pow10 = Power(10Q, Expression.FromInt32(int n))
             let num = Math.Round(x / (10. ** n), 2)
             let prefix = if abs num = 1. then sprintf "%s" (signstr num) else sprintf "%s × " (num.ToString("N2"))
@@ -144,8 +145,9 @@ module Expression =
 
     let isNumber =
         function
-        | Number _ | Constant _
+        | Number _ | Constant _ | Approximation _
         | Power(Number _, Number _)  
+        | Power(Approximation _, Number _)  
         | Power(Constant _, Number _)  
         | Power(Number _, Constant _)
         | Power(Constant _, Constant _) 
@@ -170,7 +172,13 @@ module Expression =
 
     let isNegativePower =
         function
-        | Power(e, Number n) -> n < 0N
+        | Power(_, Number n) -> n < 0N
+        | _ -> false
+
+    let isNegativeNumber =
+        function
+        | Approximation (Real r) -> r < 0. 
+        | Number n -> n < 0N
         | _ -> false
     
     let cancelAbs =
@@ -572,6 +580,7 @@ module UnitsDesc =
     let length = symbol "length"
     let temperature = symbol "temperature"
     let current = symbol "current"
+    let currency = V"currency" 
 
     let Names =
          set
@@ -608,6 +617,7 @@ module Units =
     let exa = 10Q ** 18
     //----------Temperature
     let K = Units(1Q, symbol "K", "K")
+    let celsius = Units(real -273.15, symbol "K", "°C") 
     //----------
     let gram = Units(1Q, Operators.symbol "g", "g")
     let kg = kilo * gram |> setAlt "kg"
@@ -627,8 +637,11 @@ module Units =
     let hrs = hr |> setAlt "hrs"
     let days = 24Q * hr |> setAlt "days"
     let day = days |> setAlt "day"
+    let month = 30.4167 * day |> setAlt "month"
+    let months = month
     let weeks = 7Q * days |> setAlt "weeks"
     let years = 52Q * weeks |> setAlt "years"
+    let year = years |> setAlt "year"
     //----------
     let N = kg * meter / sec ** 2 |> setAlt "N"
 
@@ -644,8 +657,10 @@ module Units =
     let kWh = (kW * hr) |> setAlt "kWh"
 
     let amps = Units(1Q, Operators.symbol "Amps", "Amps")
+    let amp = amps |> setAlt "amp"
     let C = amps * sec |> setAlt "coulombs"
-    let volt = J / C |> setAlt "volts"
+    let volt = J / C |> setAlt "volt"
+    let volts = volt |> setAlt "volts"
     //----------
     let bits = Units(1Q, Operators.symbol "bits")
     let bytes = 8Q * bits |> setAlt "bytes"
@@ -659,7 +674,7 @@ module Units =
     let gigaflops = giga * flops |> setAlt "gigaflop/s"
     let teraflops = tera * flops |> setAlt "teraflop/s"
 
-    let usd = Units(1Q, symbol "\\;USD", "\\;USD")
+    let usd = Units(1Q, symbol "USD", "USD")
 
     let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
     let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
@@ -769,9 +784,52 @@ module Units =
             Some((a / b).Quantity)
         else None
 
+    let toUnitOption (a : Units) (b : Units) = 
+        if a.Unit = b.Unit then   
+            Some((a / b).Quantity)
+        else None
+
+    let toUnitOptionValue (a : Units) (b : Units) = 
+        toUnitOption a b |> Option.get 
+
     let toUnitQuantityValue (a : Units) (b : Units) = 
         toUnitQuantity a b |> Option.get 
-    
+
+    let toCelsius (u:Units) = 
+        if u.Unit = V"K" then
+            Some(u.Quantity - 273.15)
+        else None
+    let inline celsiusToFahrenheit c =
+        Expression.toFloat(c * 9Q/5Q + 32Q)
+    let fahrenheitToCelsius f =
+        5Q/9Q * (f - 32Q) |> Expression.toFloat
+    let fromCelsius (x:float) =
+        (x + 273.15) * K
+
+let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
+    let map = dict defs 
+    let rec replace = function
+        | Identifier _ as v when map.ContainsKey v -> Some map.[v]
+        | Sum l -> 
+            List.map replace l 
+            |> List.filterMap Option.isSome Option.get 
+            |> List.sum 
+            |> Some
+        | Product l ->
+            List.map replace l 
+            |> List.filterMap Option.isSome Option.get 
+            |> List.fold (*)
+                    (IntSharp.Types.Interval.FromDoublePrecise 1.)
+            |> Some
+        | FunctionN(Max, l) ->
+            match l with
+            | l' when (l' |> List.forall Expression.isNumber) ->
+                let largest = l' |> List.map (fun x -> x.ToFloat()) |> List.max
+                IntSharp.Types.Interval.FromDoubleWithEpsilonInflation largest
+                |> Some
+            | _ -> None
+        | _ -> None
+    replace e 
 
 let rec containsVar x =
     function
@@ -850,8 +908,9 @@ let replaceExpression replacement expressionToFind formula =
     let rec iterReplaceIn =
         function
         | Identifier _ as var when var = expressionToFind -> replacement
-        | FunctionN _ | Power _ | Function _ as expr when expr = expressionToFind ->
-            replacement
+        | FunctionN _ | Power _ | Function _ | Number _ | Constant _ as expr 
+            when expr = expressionToFind ->
+                replacement
         | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)
         | Function(f, fx) -> Function(f, iterReplaceIn fx)
         | Product l ->
@@ -1054,25 +1113,23 @@ module Structure =
             if filter fn then Some fn else None   
         | _ -> None
 
-    let rec applyInFunction fx =
+    let rec applyInFunctionsRec fx =
         function  
-        | Function(fn, f) -> Function(fn, applyInFunction fx f)
+        | Function(fn, f) -> Function(fn, applyInFunctionsRec fx f)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability,
-                            s::applyInFunction fx x::rest)
+                        s::applyInFunctionsRec fx x::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
-            FunctionN(fn,
-                            [ applyInFunction fx x;param ]) 
+            FunctionN(fn, [ applyInFunctionsRec fx x;param ]) 
         | x -> fx x
-    let applyJustInFunctions fx =
+    let applyInFunctions fx =
         function  
         | Function(fn, f) -> Function(fn,fx f)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability,
                             s::fx x::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
-            FunctionN(fn,
-                            [fx x;param ]) 
+            FunctionN(fn, [fx x;param ]) 
         | x -> x
     let rec recursiveMap fx =
         function
@@ -1089,8 +1146,8 @@ module Structure =
                           [ recursiveMap fx x
                             param ]))
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
-        | x -> fx x
- 
+        | x -> fx x 
+
     let mapfirst func expr =
         let mutable isdone = false
         recursiveMap (function
@@ -1098,7 +1155,7 @@ module Structure =
                 let f' = func f
                 isdone <- f' <> f
                 f'
-            | f -> f) expr
+            | f -> f) expr 
 
     let removeExpression x f =
         let placeholder = symbol "__PLACE_HOLDER__"
@@ -1137,7 +1194,7 @@ type Expression with
 
     static member isNumericOrVariable anyVar =
         let keep s =
-            anyVar || Prelude.Common.Strings.strcontains "Var" s
+            anyVar || Strings.strcontains "Var" s
             || UnitsDesc.Names.Contains s
         function 
         | Identifier(Symbol s) when keep s -> true
@@ -1160,7 +1217,10 @@ type Expression with
             | Identifier(Symbol s), Sum l
             | Identifier(Symbol s), Product l
             | Sum l, Identifier(Symbol s)
-            | Product l, Identifier(Symbol s) when keep s -> true 
+            | Product l, Identifier(Symbol s) 
+                when keep s && 
+                    List.filter Expression.isVariable l 
+                    |> List.forall (symbolString >> keep) -> true 
             | IsNumber _ , IsNumber _ -> true
             | _ -> false
         | FunctionN(_, l) -> not (List.exists (Expression.isNumber >> not) l)
@@ -1195,6 +1255,86 @@ type Equation(leq : Expression, req : Expression) =
     override __.ToString() =
         leq.ToFormattedString() + " = " + req.ToFormattedString()
 
+module InEquality =
+    type Comparer =
+        | Lesser 
+        | Greater
+        | Geq
+        | Leq
+        override t.ToString() = 
+            match t with
+            | Lesser -> "<"
+            | Greater -> ">"
+            | Leq -> match expressionFormat with InfixFormat -> " ≤ " | _ -> " \\leq "
+            | Geq -> match expressionFormat with InfixFormat -> " ≥ " | _ -> " \\geq "
+    let flipComparer = function
+    | Lesser -> Greater
+    | Greater -> Lesser
+    | Leq -> Geq    
+    | Geq -> Leq
+
+type InEquality(comparer:InEquality.Comparer, leq : Expression, req : Expression) =
+    member __.Definition = leq, req
+    member __.Left = leq
+    member __.Right = req
+    member __.InEqualities =
+        [ leq, req
+          req, leq ] 
+    override __.ToString() =
+        leq.ToFormattedString() + string comparer + req.ToFormattedString()
+
+type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
+    member __.Definition = leq, req
+    member __.Left = leq
+    member __.Right = req
+    member __.Comparer = comparer
+
+    member __.InEqualities =
+        [ leq, req
+          req, leq ]
+    override __.ToString() =
+        (Units.simplifyUnits leq) + string comparer + (Units.simplifyUnits req)
+    member __.ToStringAs(u:Units) =
+        let ul, _ = Units.To(leq, u).Value
+        let rl, _ = Units.To(req, u).Value
+        ul + string comparer + rl   
+    member __.Flip() =
+        InEqualityU(InEquality.flipComparer comparer, req, leq)
+    member __.FlipSign() =
+        InEqualityU(InEquality.flipComparer comparer, leq, req)
+    member i.ApplyToRight f = InEqualityU(i.Comparer, i.Left, f i.Right)
+    member i.ApplyToLeft f = InEqualityU(i.Comparer, f i.Left, i.Right)
+    member i.Apply f = InEqualityU(i.Comparer, f i.Left, f i.Right)
+    static member (+) (eq : InEqualityU, expr : Units) =
+        InEqualityU(eq.Comparer, eq.Left + expr, eq.Right + expr)
+    static member (+) (eq : InEqualityU, expr : Expression) =
+        eq + (expr * Units.unitless)
+    static member (-) (eq : InEqualityU, expr : Units) =
+        InEqualityU(eq.Comparer, eq.Left - expr, eq.Right - expr)
+    static member (/) (eq : InEqualityU, expr : Expression) =
+        eq / (expr * Units.unitless)
+    static member (/) (eq : InEqualityU, expr : Units) =
+        let c = if Expression.isNegativeNumber expr.Quantity then 
+                    InEquality.flipComparer eq.Comparer
+                else eq.Comparer
+        InEqualityU(c, eq.Left / expr, eq.Right / expr)
+
+type InEqualityU with
+    static member applyToRight f (i:InEqualityU) =
+        InEqualityU(i.Comparer, i.Left, f i.Right)
+    static member applyToLeft f (i:InEqualityU) =
+        i.ApplyToLeft f
+    static member apply f (i:InEqualityU) = i.Apply f 
+
+let lequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Leq,a,b)
+let gequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Geq,a,b)
+let ltu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Lesser,a,b)
+let gtu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Greater,a,b)        
+let leq a b = InEquality(InEquality.Comparer.Leq,a,b)
+let geq a b = InEquality(InEquality.Comparer.Geq,a,b)
+let lt a b = InEquality(InEquality.Comparer.Lesser,a,b)
+let gt a b = InEquality(InEquality.Comparer.Greater,a,b)
+
 module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
     let right (eq:Equation) = eq.Right
@@ -1217,15 +1357,16 @@ let evalExprNum vars x =
          if containsAnyVar symb then None else Some symb 
 
 let evalExprVarsGen anyVar vars x =
-    let v = replaceSymbols vars x |> Expression.FullSimplify 
-
+    let v = replaceSymbols vars x |> Expression.FullSimplify  
     maybe {
         let! v' =
             Structure.recursiveFilter (Expression.isNumericOrVariable anyVar) v
         if v = v' then return v
         else return! None
     }  
-    
+
+let evalExprVars vars x = evalExprVarsGen false vars x     
+
 module Vars =
     let a = symbol "a"
     let b = symbol "b"
@@ -1264,23 +1405,23 @@ module Vars =
 
     let A = V"A"
     let B = V"B"
-    let C = sy "C"
-    let D = sy "D"
-    let M = sy "M"
-    let N = sy "N"
-    let P = sy "P" 
-    let Q = sy "Q" 
-    let T = sy "T"
-    let X = sy "X" 
-    let Y = sy "Y" 
-    let Z = sy "Z" 
-    let π = pi
-    let pi = pi
+    let C = V "C"
+    let D = V "D"
+    let M = V "M"
+    let N = V "N"
+    let P = V "P" 
+    let Q = V "Q" 
+    let T = V "T"
+    let X = V "X" 
+    let Y = V "Y" 
+    let Z = V "Z" 
 
-let real x = Approximation (Real x)
+module Constants =
+    let π = pi
+    let pi = pi 
+    let e = Constant Constant.E
+   
 let rational x = Expression.fromFloat x
-let todecimal = function | Number n -> real(float n) | f -> f
-let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
 
 let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probn s x = FunctionN(Probability, [symbol s; x ])

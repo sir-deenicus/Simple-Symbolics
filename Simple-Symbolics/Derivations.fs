@@ -2,8 +2,8 @@
 
 open MathNet.Symbolics
 open Core
-open Solving
-open Utils
+open Solving 
+open Prelude.Common
 
 let deriveTrivialEqualitiesSingle (e1, eq) =
     [ yield Equation(e1, eq)

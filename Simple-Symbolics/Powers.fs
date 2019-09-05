@@ -69,3 +69,13 @@ module Exponents =
         | Power(b, (Sum l)) ->
             Core.Algebraic.simplifyLite (List.map (fun e -> b ** e) l |> Product)
         | f -> f
+
+    let replaceExpWithE = function
+    | Function(Exp, x) -> 
+        Power(Constant (Constant.E),x)
+    | f -> f
+
+    let replaceEWithExp = function
+        | Power(Constant (Constant.E),x) -> 
+            Function(Exp, x)
+        | f -> f

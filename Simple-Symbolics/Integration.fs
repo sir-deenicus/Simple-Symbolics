@@ -9,7 +9,7 @@ open Core
 open Core.Vars
 open Utils
 open MathNet.Symbolics.Differentiation
-
+open Prelude.Common
 
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
@@ -172,60 +172,7 @@ let integrateSimplePartial x f =
         | f -> Deferred (f,false)
             (*printfn "Can't integrate this %s" (f.ToFormattedString());*) 
     iter f
-
-//let rec integrateSimple x =
-//    function
-//    | Number _ as n -> n * x
-//    | Identifier(Symbol _) as vx ->
-//        if vx = x then vx ** 2 / 2
-//        else vx * x
-//    | f when f = 1 / (1 + x ** 2) -> arctan x
-//    | Power(Sum l, neg1) when neg1 = -1Q && linearSquared List.exists l ->
-//        let ex, l' = linearSquared List.partition l
-//        let n = Sum l'
-//        match ex with
-//        | [ Power(e, _) ] ->
-//            let m, _ = extractLinearComponent x e
-//            arctan (e / (sqrt n)) / (m * sqrt n) |> Algebraic.simplify true
-//        | _ -> failwith "err"
-//    | f when f = 1 / (sqrt (1 - x ** 2)) -> arcsin x
-//    | Power(e, n) as p when not (containsVar x e) && not (containsVar x n) ->
-//        p * x
-//    | Power(e, n) as p when not (containsVar x e) && (containsVar x n)
-//                            && isLinear x n ->
-//        p / (fst (extractLinearComponent x n) * ln (e))
-//    | Power(e, n) when not (containsVar x e) && (containsVar x n) ->
-//        failwith "Power nolinear in x, fail"
-//    | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e ->
-//        Function(Ln, e) / fst (extractLinearComponent x e)
-//    | Power(Identifier _ as y, n) when x = y && n <> -1Q ->
-//        (x ** (n + 1)) / (n + 1)
-//    | poly when Polynomial.isMonomial x poly ->
-//        let k, mono = Algebraic.separateFactors x poly
-//        k * integrateSimple x mono
-//    | Power(Sum _ as e, n) when isLinear x e && n <> -1Q ->
-//        let t, e' = extractLinearComponent x e
-//        integratePolynomExpr t n e'
-//    | Power(e, n) as poly when Polynomial.isPolynomial x e && n <> -1Q ->
-//        poly
-//        |> Algebraic.expand
-//        |> Algebraic.summands
-//        |> List.map (integrateSimple x)
-//        |> Sum
-//    | Function(f, (Identifier(Symbol _) as y)) when x <> y -> x * Function(f, y)
-//    | Function(f, (Number _ as n)) -> x * Function(f, n)
-//    | Function(_, (Identifier(Symbol _))) as f -> intFuncStraight f
-//    | Function(_, ex) as f when isLinear x ex ->
-//        (intFuncStraight f) / fst (extractLinearComponent x ex)
-//    | Sum l -> Sum(List.map (integrateSimple x) l)
-//    | Product _ as e ->
-//        let k, e' = Algebraic.separateFactors x e
-//        if k = 1Q then failwith "Separating factors, no x found. Aborting."
-//        else k * integrateSimple x e'
-//    | f when not (containsVar x f) -> x * f
-//    | x -> failwith "Can't integrate this"
-     
-
+      
 let integratePartialRes x e =
     match (integrateSimplePartial x e) with 
     | Partial(s, def, true) -> s + def, false
@@ -389,7 +336,8 @@ let uSubstitutionSteps expr =
     let inner dx innerExpr =
         match innerExpr with
         | Product [ AsFunction(f1, y1) as x1; AsFunction(f2, y2) as x2 ] ->
-            failtrace.Add ("{0} is not proportional to {1}={2}", [x2; diff dx y1;D dx y1])
+            failtrace.Add ("${0}$ is not proportional to ${1}={2}$",fmt, 
+                            [x2; diff dx y1;D dx y1])
             match x2 / (D dx y1) with
             | Number _ as n ->
                 trace.Add
@@ -405,7 +353,8 @@ let uSubstitutionSteps expr =
                 trace.Add("Container function: " + string f1) 
                 substitute n y1 f1
             | _ ->
-                failtrace.Add ("{0} is not proportional to {1}={2}", [x1; diff dx y2; D dx y2])
+                failtrace.Add ("${0}$ is not proportional to ${1}={2}$", fmt, 
+                                [x1; diff dx y2; D dx y2])
                 match x1 / (D dx y2) with
                 | Number _ as n ->
                     trace.Add

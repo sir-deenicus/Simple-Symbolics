@@ -1,6 +1,9 @@
-
-#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Release\net47"
-#I @"C:\Users\cybernetic\source\repos\Simple-Symbolics\Simple-Symbolics\bin\Release\net47"
+#r "netstandard"
+#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Debug\net47"
+#r "hansei.core.dll"
+#r "hansei.dll"
+#r @"C:\Users\cybernetic\Code\Libs\net4+\Fsharp.data\FSharp.Data.dll"
+#I @"C:\Users\cybernetic\source\repos\Simple-Symbolics\Simple-Symbolics\bin\Debug\net47"
 #r @"C:\Users\cybernetic\source\repos\Prelude\Prelude\bin\Release\net47\prelude.dll"
 #r @"C:\Users\cybernetic\source\repos\EvolutionaryBayes\EvolutionaryBayes\bin\Debug\net47\EvolutionaryBayes.dll"
 #r @"MathNet.Numerics.dll" 
@@ -8,11 +11,9 @@
 #r @"MathNet.Symbolic.Ext.dll"
 #r @"Simple-Symbolics.dll"
 #r @"C:\Users\cybernetic\Documents\Papers\LiterateUtils\LiterateUtils\bin\Release\net47\LiterateUtils.dll"
-#r "hansei.continuation.dll"
-#r "hansei.dll"
+
 #time "on"
 //#load "..\disputil.fsx"
-
 
 open Prelude.Math
 open System
@@ -37,21 +38,15 @@ open Searcher
 open MathNet.Symbolics.Core
 open Prelude.Common
 
-open Units
-69.65 + 17. + 16.75
+//Utils.useDir <- @"C:\Users\cybernetic\Jupyter-Notebooks\"
+
+open Units 
 
 type Unitsop =
     | Reciprocal
     | Times
-    | Divide
-
-module UnitsDesc = 
-    let density = symbol "density"
-
-module Units =
-    let liter = 1000 * cm ** 3
-
-open Units
+    | Divide 
+     
 
 let usefulUnits =
     [ W, "Power", UnitsDesc.power
@@ -86,7 +81,7 @@ let rec unitsPath wasrecip path (curA : Expression) (cur : Units)
             return! unitsPath (op = Reciprocal) (perf :: path) curA' next target
     }
 
-Model.ImportanceSample(unitsPath false [] 1Q unitless Units.stefan_boltzman, 2000, 120)
+Model.ImportanceSample(unitsPath false [] UnitsDesc.energyflux (W / meter ** 2)  Units.stefan_boltzman, 2000, 100)
 |> List.sortByDescending fst
 |> Seq.takeOrMax 5
 
@@ -104,21 +99,24 @@ Model.ImportanceSample(unitsPath false [] UnitsDesc.volume (meter **3) kg, 200, 
 //
 
 let aa0, _ , cc0 =
-    unitsPath false [] UnitsDesc.energy J W// 1Q unitless Units.stefan_boltzman//  UnitsDesc.energy J W
-    |> Thunk |> best_first_sample_dist None None 0.01 100. 120 200 200
+    unitsPath false [] 1Q unitless Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
+    |> Thunk |> best_first_sample_dist None (Some 5) true None 0.01 8. 121 2 100
+
+let aa0, _ , cc0 =
+    unitsPath false [] UnitsDesc.energyflux (W / meter ** 2) Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
+    |> Thunk |> best_first_sample_dist None None false (None) 0.01 64. 121 64 12000
 
 let aa, bb , cc =
     unitsPath false [] UnitsDesc.volume liter kg
-    |> Thunk |> best_first_sample_dist None None 0. 50. 20 20 200
+    |> Thunk |> best_first_sample_dist None None false None 0.01 4. 20 2 200
 
 let aa', _ , cc' =
     bb
-    |> Reified |> best_first_sample_dist None (Some cc) 0. 50. 10 20 200
+    |> Reified |> best_first_sample_dist None None false (Some cc) 0.01 4. 120 2 200
 
 cc0 |> keyValueSeqtoPairArray |> Array.sortByDescending snd |> Array.filter (snd >> (<>) -1.) //|> Array.length
-cc.Count
+cc0.Count
 
-aa
+aa0
 |> ProbabilitySpace.mapValues fst
 |> List.sortByDescending fst
-8./55032. * 100.|> round 2

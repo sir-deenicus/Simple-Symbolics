@@ -119,30 +119,34 @@ let todecimal = function | Number n -> real(float n) | f -> f
 let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
 
 //========================
+ 
 let currencycacheloc = "currencycache.json"
 
-type CurrencyProvider = FSharp.Data.JsonProvider<"currencyTemplate.json">
+let [<Literal>] CurrencyTemplate = """{"baseCountry":"US","baseCurrency":"USD","rates":[{"id":432,"name":"Nigeria","name_zh":"尼日利亚","code":"NG","currency_name":"Naira","currency_name_zh":"尼日利亚奈拉","currency_code":"NGN","rate":362.63,"hits":22345,"selected":0,"top":0},{"id":449,"name":"Singapore","name_zh":"新加坡","code":"SG","currency_name":"Dollar","currency_name_zh":"新币","currency_code":"SGD","rate":1.3909,"hits":1115270,"selected":0,"top":0}]}"""
 
-let downloadCurrencyRates() =
+type CurrencyProvider = FSharp.Data.JsonProvider<CurrencyTemplate>
+ 
+let downloadCurrencyRates(useDir) =
     use wc = new Net.WebClient()
+    let currencycachepath = pathCombine useDir currencycacheloc
     try
         let data =
             wc.DownloadData "https://www.mycurrency.net/US.json"
             |> Strings.DecodeFromUtf8Bytes
-        IO.File.WriteAllText(currencycacheloc, data)
+        IO.File.WriteAllText(currencycachepath, data)
         data
         |> CurrencyProvider.Parse
         |> Some
-    with _ ->
-        if IO.File.Exists currencycacheloc then
-            IO.File.ReadAllText currencycacheloc
+    with _ -> 
+        if IO.File.Exists currencycachepath then
+            IO.File.ReadAllText currencycachepath
             |> CurrencyProvider.Parse
             |> Some
         else None
 
-let currencyMap =
-    match downloadCurrencyRates() with
-    | None -> Map.empty
+let buildCurrencyMap(useDir) =
+    match downloadCurrencyRates(useDir) with
+    | None -> Dict()
     | Some currencyRates ->
         currencyRates.Rates
         |> Array.map (fun r ->
@@ -150,4 +154,25 @@ let currencyMap =
                (1M / r.Rate)
                |> float
                |> smartround2 2)
-        |> Map
+        |> Dict.ofSeq        
+
+let mutable currencyMap = Dict()
+
+let rebuildCurrencyMap(dir) = currencyMap <- buildCurrencyMap dir
+
+rebuildCurrencyMap ""
+
+let checkCurrency eps c = 
+    match currencyMap.tryFind c with 
+    | None -> nan
+    | Some v -> v + eps
+
+type WorldBankHelper() =
+    let data = WorldBankData.GetDataContext()
+    member t.Countries = data.Countries
+
+module Currencies =
+    let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
+        c.Indicators
+         .``GDP per capita, PPP (current international $)`` 
+         |> Seq.last

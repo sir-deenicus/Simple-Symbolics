@@ -125,6 +125,8 @@ module Expression =
 
     let toList =
         function
+        | FunctionN(Max,l)
+        | FunctionN(Min,l)
         | Sum l | Product l -> l
         | x -> [ x ]
 
@@ -136,6 +138,12 @@ module Expression =
     let isSum =
         function
         | Sum _ -> true
+        | _ -> false
+
+    let isMinOrMax =
+        function
+        | FunctionN (Min,_) 
+        | FunctionN (Max,_) -> true
         | _ -> false
 
     let isRationalNumber =
@@ -372,6 +380,16 @@ module Algebraic =
             Sum
                 (List.map simplifyLite
                      (collectNestedSumOrProduct Expression.isSum l))
+        | FunctionN(Max, l) -> 
+            FunctionN(
+                Max,
+                (List.map simplifyLite
+                     (collectNestedSumOrProduct Expression.isMinOrMax l)))
+        | FunctionN(Min, l) -> 
+            FunctionN(
+                Min,
+                (List.map simplifyLite
+                     (collectNestedSumOrProduct Expression.isMinOrMax l)))
         | FunctionN(fn, l) -> FunctionN(fn, List.map simplifyLite l)
         | Function(fn, f) -> Function(fn, simplifyLite f) 
         | x -> x
@@ -581,6 +599,11 @@ module UnitsDesc =
     let temperature = symbol "temperature"
     let current = symbol "current"
     let currency = V"currency" 
+    let charge = V"charge"
+    let naira = V"naira"
+    let bpound = V"gbp"
+    let dollar = V"dollar"
+    let density = symbol "density"
 
     let Names =
          set
@@ -598,6 +621,7 @@ module UnitsDesc =
             "current" ]
 
 module Units = 
+    open FSharp.Data
 
     let setAlt alt (u : Units) =
         u.AltUnit <- alt
@@ -625,10 +649,12 @@ module Units =
     let meter = Units(1Q, Operators.symbol "meters", "meter")
     let km = 1000Q * meter |> setAlt "km"
     let cm = centi * meter |> setAlt "cm"
-    let ft = Expression.FromRational(BigRational.fromFloat 0.3048) * meter
-    let yard = 3 * ft
-    let inches = 12 * ft
+    let ft =  0.3048  * meter |> setAlt "ft"
+    let yard = 3 * ft |> setAlt "yards"
+    let inches = 12 * ft |> setAlt "inches"
     let au =  150Q * mega * km |> setAlt "AU" 
+
+    let liter = 1000 * cm ** 3 |> setAlt "L" 
     //----------
     let sec = Units(1Q, Operators.symbol "sec", "sec")
     let minute = 60Q * sec |> setAlt "minute"
@@ -662,7 +688,7 @@ module Units =
     let volt = J / C |> setAlt "volt"
     let volts = volt |> setAlt "volts"
     //----------
-    let bits = Units(1Q, Operators.symbol "bits")
+    let bits = Units(1Q, Operators.symbol "bits", "bits")
     let bytes = 8Q * bits |> setAlt "bytes"
     let gigabytes = giga * bytes |> setAlt "gigabytes"
 
@@ -673,9 +699,17 @@ module Units =
     let flops = flop / sec |> setAlt "flop/s"
     let gigaflops = giga * flops |> setAlt "gigaflop/s"
     let teraflops = tera * flops |> setAlt "teraflop/s"
-
+    //==============
     let usd = Units(1Q, symbol "USD", "USD")
 
+    let internal setCurrency eps curr = 
+        (checkCurrency eps curr) * usd |> setAlt curr
+    
+    let currencyFriction = 1e-04
+
+    let mutable ngn = setCurrency 1e-04 "NGN"
+    let mutable gbp = setCurrency 8e-03 "GBP"
+    //==============
     let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
     let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
     let hbar = planck / (2 * pi)
@@ -782,16 +816,8 @@ module Units =
     let toUnitQuantity (b : Units) (a : Units) =
         if a.Unit = b.Unit then   
             Some((a / b).Quantity)
-        else None
-
-    let toUnitOption (a : Units) (b : Units) = 
-        if a.Unit = b.Unit then   
-            Some((a / b).Quantity)
-        else None
-
-    let toUnitOptionValue (a : Units) (b : Units) = 
-        toUnitOption a b |> Option.get 
-
+        else None 
+          
     let toUnitQuantityValue (a : Units) (b : Units) = 
         toUnitQuantity a b |> Option.get 
 
@@ -799,16 +825,29 @@ module Units =
         if u.Unit = V"K" then
             Some(u.Quantity - 273.15)
         else None
+
     let inline celsiusToFahrenheit c =
         Expression.toFloat(c * 9Q/5Q + 32Q)
+
     let fahrenheitToCelsius f =
         5Q/9Q * (f - 32Q) |> Expression.toFloat
+
     let fromCelsius (x:float) =
         (x + 273.15) * K
+
+    let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
+        if s.Unit = usd.Unit then 
+            let _, gdpsource = Currencies.getGDPperCapita sourcecountry  
+            let _, gdptarget = Currencies.getGDPperCapita targetcountry 
+            s.Quantity/gdpsource * gdptarget * usd
+        else failwith "Not a currency"
 
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 
     let rec replace = function
+        | IsNumber n -> 
+            IntSharp.Types.Interval.FromDoubleWithEpsilonInflation (n.ToFloat())
+            |> Some
         | Identifier _ as v when map.ContainsKey v -> Some map.[v]
         | Sum l -> 
             List.map replace l 
@@ -1334,6 +1373,7 @@ let leq a b = InEquality(InEquality.Comparer.Leq,a,b)
 let geq a b = InEquality(InEquality.Comparer.Geq,a,b)
 let lt a b = InEquality(InEquality.Comparer.Lesser,a,b)
 let gt a b = InEquality(InEquality.Comparer.Greater,a,b)
+ 
 
 module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
@@ -1422,6 +1462,7 @@ module Constants =
     let e = Constant Constant.E
    
 let rational x = Expression.fromFloat x
+let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
 
 let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probn s x = FunctionN(Probability, [symbol s; x ])
@@ -1439,6 +1480,13 @@ let makeFunc fname = fun x -> fn fname x
  
 module Ops =
     let max a b = FunctionN(Function.Max, [a;b])
+    let min a b = 
+        match (a,b) with
+        | PositiveInfinity, _ -> b
+        | _, PositiveInfinity -> a
+        | a , b when a = b -> a
+        | Number n, Number m -> Expression.FromRational (min n m)
+        | _ -> FunctionN(Function.Min, [a;b])
 
 [<RequireQualifiedAccess>]
 type FuncType =

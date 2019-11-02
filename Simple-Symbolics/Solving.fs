@@ -5,6 +5,7 @@ open Core
 open Vars
 open Prelude.Common
 open MathNet.Symbolics
+open Utils
 
 let reArrangeExprEquationX silent focusVar (left, right) =
     let rec iter fx ops =
@@ -142,10 +143,18 @@ let iterativeSolveFilter neq eval vars knowns =
 let iterativeSolve eval vars knowns =
     iterativeSolveFilter (fun _ _ -> true) eval vars knowns
 
-let dispSolvedUnits newline tx =
+let dispSolvedUnitsA matches newline tx =
+    let lookup = dict matches
     tx
     |> List.map
-           (fun (x : Expression, u) ->
-           sprintf "$%s = %s$" (x.ToFormattedString()) (Units.simplifyUnits u))
+           (fun (x : Expression, u:Units) ->
+            let asunit = 
+                match lookup.tryFindIt u.Unit with 
+                | Some u' -> (Units.toUnitQuantityValue u' u |> fmt) + space() + u'.AltUnit 
+                | _ -> Units.simplifyUnits u
+
+            sprintf "$%s = %s$" (x.ToFormattedString()) asunit)
     |> List.sort
     |> String.concat newline
+
+let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx

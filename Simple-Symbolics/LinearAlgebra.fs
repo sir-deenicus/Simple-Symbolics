@@ -162,3 +162,4 @@ module Matrix =
     let inline inverse (m : Matrix<_>) = Matrix(inverse m.AsList)
     let inline identity n = Matrix(identityM 0Q 1Q n)
     let inline identity2 zero one n = Matrix(identityM zero one n)
+ 

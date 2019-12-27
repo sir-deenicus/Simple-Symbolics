@@ -22,6 +22,10 @@ let (|IsDefiniteIntegral|_|) = function
 let integral dx x = FunctionN(Integral, [ x; dx ])
 
 let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
+
+let rewriteIntegralAsSum = function 
+   | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> PSigma.sum(Product[x;V("\Delta " + sdx)],dx,V"",V"",Expression.PositiveInfinity)     
+   | x -> x
  
 module Expression =
     let isIntegral = function IsIntegral _ -> true | _ -> false

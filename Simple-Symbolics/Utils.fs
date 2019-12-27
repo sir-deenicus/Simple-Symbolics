@@ -16,6 +16,7 @@ let [<Literal>] InfixFormat = "Infix"
 
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
+
 let space() = if expressionFormat = InfixFormat then " " else " \\; "
 let fmt e = expressionFormater e
 
@@ -25,8 +26,7 @@ let setInfix() =
     
 let setLatex() =
     expressionFormat <- "Latex"
-    expressionFormater <- LaTeX.format
-
+    expressionFormater <- LaTeX.format 
 
 type StepTrace(s) =
     let trace = Hashset()
@@ -45,8 +45,7 @@ type StepTrace(s) =
         |> trace.Add 
         |> ignore
     override __.ToString() =
-        String.concat "\n\n" trace
-         
+        String.concat "\n\n" trace 
 
 let stepTracer iseq fmt current instructions =
     let steps = StepTrace("")
@@ -75,8 +74,7 @@ let stepTracer iseq fmt current instructions =
                                 fmt next ])
                     next
             loop (cnt + 1) next rest
-    loop 1 current instructions
-     
+    loop 1 current instructions 
 
 let expressionTrace = stepTracer false fmt
  
@@ -119,6 +117,30 @@ let todecimal = function | Number n -> real(float n) | f -> f
 let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
 
 //========================
+
+let grad x = FunctionN(Gradient, [x])
+let gradn var x = FunctionN(Gradient, [x;var] )
+let diff dx x = FunctionN(Derivative, [x;dx])
+let pdiff dx x = FunctionN(PartialDerivative, [x;dx]) 
+
+let (|IsDerivative|_|) = function
+     | FunctionN(PartialDerivative, [ x; dx ])
+     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+     | _ -> None  
+
+let (|IsDerivativeStrict|_|) = function
+    | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+    | _ -> None   
+
+let func f = FunctionN(Function.Func, [Operators.symbol f])
+let fn f x = FunctionN(Function.Func, [Operators.symbol f;x]) 
+let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
+ 
+let (|IsFunction|_|) = function
+    | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
+    | _ -> None  
+     
+//===
  
 let currencycacheloc = "currencycache.json"
 
@@ -176,3 +198,5 @@ module Currencies =
         c.Indicators
          .``GDP per capita, PPP (current international $)`` 
          |> Seq.last
+
+//querying OEIS http://oeis.org/search?fmt=text&q=3,5,7,9,11&start=10

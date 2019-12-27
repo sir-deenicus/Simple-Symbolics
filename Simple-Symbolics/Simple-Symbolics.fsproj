@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net47;netstandard2.0;netcoreapp2.1</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.2.1</Version>
+    <Version>0.2.5</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
@@ -38,13 +38,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EvolutionaryBayes" Version="0.1.8" />
+    <PackageReference Include="EvolutionaryBayes" Version="0.2.4" />
     <PackageReference Include="FParsec" Version="1.0.3" />
-    <PackageReference Include="FSharp.Data" Version="3.1.1" />
-    <PackageReference Include="Hansei" Version="0.3.2.1" />
+    <PackageReference Include="FSharp.Data" Version="3.3.2" />
+    <PackageReference Include="Hansei" Version="0.3.2.2" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.22.4" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.23.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.7.0" />
   </ItemGroup> 
 
 </Project>

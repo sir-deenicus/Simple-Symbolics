@@ -30,7 +30,7 @@ module Expression =
 
 module Replicator =
     open EvolutionaryBayes.ParticleFilters
-    open Helpers
+    open EvolutionaryBayes.Helpers
     open EvolutionaryBayes.ProbMonad
     open EvolutionaryBayes
     open Distributions
@@ -67,10 +67,10 @@ module Replicator =
                 || (desc.Contains "trig" && containsTrig)) options
             |> List.toArray
         
-        let expert = Expert(reward, Array.map snd choices)
+        //let expert = Expert(reward, Array.map snd choices)
 
-        let funclookup = Dict.ofSeq(Array.map swap choices) 
-        do expert.New 0
+        //let funclookup = Dict.ofSeq(Array.map swap choices) 
+        //do expert.New 0
 
         let mutate (currentExpression, path, mem) =
             dist {
@@ -117,58 +117,58 @@ module Replicator =
                             sprintf "%s:  \n$%s$\n\n" desc
                                 (Expression.toFormattedString nextExpression)
                         
-                        expert.Learn 0 (desc, true, float (width'))
+                        //expert.Learn 0 (desc, true, float (width'))
                         return (nextExpression, (msg :: path),
                                 Expression.FullSimplify nextExpression :: mem)
                     else  
-                        expert.Learn 0 (desc, false, 0.)
+                        //expert.Learn 0 (desc, false, 0.)
                         return (currentExpression, path, mem)
             }
 
-        member __.Expert = expert
+        //member __.Expert = expert
 
-        member __.SequenceSamples(?mutateprob, ?samplespergen,
-                                  ?generations) =
-            expert.Forget()
-            let mp = defaultArg mutateprob 0.4
-            let samplespergen = defaultArg samplespergen 500
-            let gens = defaultArg generations 50
-            sequenceSamples mp (fun e -> (mutate e).Sample()) scorer
-                samplespergen gens
-                (uniform [| startExpression, [sprintf "Start: $%s$\n\n" (fmt startExpression)], [] |])
+        //member __.SequenceSamples(?mutateprob, ?samplespergen,
+        //                          ?generations) =
+        //    expert.Forget()
+        //    let mp = defaultArg mutateprob 0.4
+        //    let samplespergen = defaultArg samplespergen 500
+        //    let gens = defaultArg generations 50
+        //    sequenceSamples mp (fun e -> (mutate e).Sample()) scorer
+        //        samplespergen gens
+        //        (uniform [| startExpression, [sprintf "Start: $%s$\n\n" (fmt startExpression)], [] |])
 
-        member __.SampleChain n =
-            expert.Forget()
-            MetropolisHastings.sample 1. scorer (fun e -> (mutate e).Sample())
-                (uniform [| startExpression, [], [] |]) n
-            |> Sampling.roundAndGroupSamplesWith id
-            |> categorical2
+        //member __.SampleChain n =
+        //    expert.Forget()
+        //    MetropolisHastings.sample 1. scorer (fun e -> (mutate e).Sample())
+        //        (uniform [| startExpression, [], [] |]) n
+        //    |> Sampling.roundAndGroupSamplesWith id
+        //    |> categorical2
 
-        member __.EvolveSequence(?mutateprob, ?maxpopsize, ?samplespergen,
-                                 ?generations) =
-            expert.Forget()
-            let mp = defaultArg mutateprob 0.4
-            let maxpopsize = defaultArg maxpopsize 250
-            let samplespergen = defaultArg samplespergen 500
-            let gens = defaultArg generations 50
+        //member __.EvolveSequence(?mutateprob, ?maxpopsize, ?samplespergen,
+        //                         ?generations) =
+        //    expert.Forget()
+        //    let mp = defaultArg mutateprob 0.4
+        //    let maxpopsize = defaultArg maxpopsize 250
+        //    let samplespergen = defaultArg samplespergen 500
+        //    let gens = defaultArg generations 50
 
-            let pops =
-                evolveSequence mp maxpopsize [] (fun _ e -> (mutate e).Sample())
-                    scorer samplespergen gens
-                    (uniform [| startExpression, [], [] |])
-                |> List.toArray
-                |> Array.normalizeWeights
-                |> categorical2
-            dist { let! pop = pops
-                   let! memberx = pop
-                   return memberx }
+        //    let pops =
+        //        evolveSequence mp maxpopsize [] (fun _ e -> (mutate e).Sample())
+        //            scorer samplespergen gens
+        //            (uniform [| startExpression, [], [] |])
+        //        |> List.toArray
+        //        |> Array.normalizeWeights
+        //        |> categorical2
+        //    dist { let! pop = pops
+        //           let! memberx = pop
+        //           return memberx }
 
-        member __.SampleFrom n (dist : Distribution<_>) =
-            dist.SampleN(n)
-            |> Array.map (fun x -> x, scorer x)
-            |> Array.normalizeWeights
-            |> Helpers.Sampling.compactMapSamples id
-            |> Array.sortByDescending snd
+        //member __.SampleFrom n (dist : Distribution<_>) =
+        //    dist.SampleN(n)
+        //    |> Array.map (fun x -> x, scorer x)
+        //    |> Array.normalizeWeights
+        //    |> Helpers.Sampling.compactMapSamples id
+        //    |> Array.sortByDescending snd
 
 
 module Searcher =
@@ -182,7 +182,7 @@ module Searcher =
 
     let dispMath x = "$" + x + "$"
 
-    let findPathR (expert:Expert<int,_,_>) maxwidth options transformer equalities targetCondition startExpression =
+    let findPathR (expert:RegretLearner<int,_,_>) maxwidth options transformer equalities targetCondition startExpression =
         let varprob =
             match equalities with
             | [] -> 0.
@@ -205,7 +205,7 @@ module Searcher =
             cont {
                 if targetCondition currentExpression then
                     let fsteps = List.rev steps
-                    fsteps |> List.iter (fun step -> expert.Learn 0 (currentExpression, step))
+                    fsteps |> List.iter (fun step -> expert.Learn(0, (currentExpression, step)))
                     return currentExpression, List.rev path, fsteps
                 else
                     let! replace = bernoulli varprob

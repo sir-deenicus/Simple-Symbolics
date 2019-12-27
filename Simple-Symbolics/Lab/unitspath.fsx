@@ -1,5 +1,5 @@
 #r "netstandard"
-#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Debug\net47"
+#I @"C:\Users\cybernetic\source\repos\Hansei\Hansei\bin\Debug\net47" 
 #r "hansei.core.dll"
 #r "hansei.dll"
 #r @"C:\Users\cybernetic\Code\Libs\net4+\Fsharp.data\FSharp.Data.dll"
@@ -97,26 +97,20 @@ Model.ImportanceSample(unitsPath false [] UnitsDesc.volume (meter **3) kg, 200, 
 |> Seq.takeOrMax 10
 |> Seq.toArray
 //
-
-let aa0, _ , cc0 =
-    unitsPath false [] 1Q unitless Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
-    |> Thunk |> best_first_sample_dist None (Some 5) true None 0.01 8. 121 2 100
-
-let aa0, _ , cc0 =
-    unitsPath false [] UnitsDesc.energyflux (W / meter ** 2) Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
-    |> Thunk |> best_first_sample_dist None None false (None) 0.01 64. 121 64 12000
-
-let aa, bb , cc =
-    unitsPath false [] UnitsDesc.volume liter kg
-    |> Thunk |> best_first_sample_dist None None false None 0.01 4. 20 2 200
-
-let aa', _ , cc' =
-    bb
-    |> Reified |> best_first_sample_dist None None false (Some cc) 0.01 4. 120 2 200
-
-cc0 |> keyValueSeqtoPairArray |> Array.sortByDescending snd |> Array.filter (snd >> (<>) -1.) //|> Array.length
-cc0.Count
-
-aa0
-|> ProbabilitySpace.mapValues fst
+Model.ImportanceSample(unitsPath false [] 1Q unitless Units.stefan_boltzman, 1200, 100)
 |> List.sortByDescending fst
+|> Seq.takeOrMax 10
+|> Seq.toArray
+
+
+
+let aa0 =
+    unitsPath false [] 1Q unitless Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
+    //unitsPath false [] UnitsDesc.volume (meter **3) kg
+    |> best_first_sample_dist None None 32. 100 16 40 4500
+    //|> fun v -> v.Values
+    //|> List.sortBy fst
+aa0.Paths |> keyValueSeqtoPairArray
+unitsPath false [] UnitsDesc.energyflux (W / meter ** 2) Units.stefan_boltzman//  UnitsDesc.energy J W// UnitsDesc.energy J W
+      
+unitsPath false [] UnitsDesc.volume liter kg 

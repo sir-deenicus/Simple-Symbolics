@@ -7,6 +7,69 @@ open Prelude.Common
 open MathNet.Symbolics
 open Utils
 
+let reArrangeExprInequalityX silent focusVar (left, right) =
+    let rec iter doflip fx ops =
+        match fx with
+        | f when f = focusVar -> doflip, f, ops
+        | Power(f, p) ->
+            if not silent then printfn "raise to power"
+            iter doflip f ((fun (x : Expression) -> x ** (1 / p)) :: ops)
+        | Sum [] | Sum [ _ ] | Product [] | Product [ _ ] -> doflip, fx, ops
+        | Product l ->
+            if not silent then printfn "divide"
+            let matched, novar = List.partition (containsVar focusVar) l 
+            match novar with 
+            | [v] when Expression.isNumber v -> 
+                let doflip = Expression.isNegativeNumber v
+                let ops' =
+                    match novar with
+                    | [] -> ops
+                    | _ -> (fun x -> x / (Product novar)) :: ops
+                match matched with
+                | [] -> doflip,fx, ops'
+                | [ h ] -> iter doflip h ops'
+                | hs -> doflip,Product hs, ops'
+            | _ -> doflip,Undefined, ops
+        | Sum l ->
+            if not silent then printfn "subtract"
+            let matched, novar = List.partition (containsVar focusVar) l
+
+            let ops' =
+                match novar with
+                | [] -> ops
+                | _ -> (fun x -> x - (Sum novar)) :: ops
+            match matched with
+            | [] -> doflip,fx, ops'
+            | [ h ] -> iter doflip h ops'
+            | hs -> doflip,Sum hs, ops'
+        | Function(Ln, x) ->
+            if not silent then printfn "exponentiate"
+            iter doflip x (exp :: ops)
+        | Function(Tan, x) ->
+            if not silent then printfn "atan"
+            iter doflip x ((fun x -> Function(Atan, x)) :: ops)
+        | Function(Erf, x) ->
+            if not silent then printfn "erf^-1"
+            iter doflip x ((fun x -> Function(ErfInv, x)) :: ops)
+        | Function(Cos, x) ->
+            if not silent then printfn "acos"
+            iter doflip x ((fun x -> Function(Acos, x)) :: ops)
+        | Function(Sin, x) ->
+            if not silent then printfn "asin"
+            iter doflip x ((fun x -> Function(Asin, x)) :: ops)
+        | Function(Exp, x) ->
+            if not silent then printfn "log"
+            iter doflip x (ln :: ops)
+        | _ -> doflip,Undefined, ops //failwith "err"
+
+    let doflip, f, ops = iter false left []
+    doflip,
+    f,
+    ops
+    |> List.rev
+    |> List.fold (fun e f -> f e) right
+    |> Algebraic.simplify true
+
 let reArrangeExprEquationX silent focusVar (left, right) =
     let rec iter fx ops =
         match fx with
@@ -69,6 +132,11 @@ let reArrangeExprEquationX silent focusVar (left, right) =
 let reArrangeExprEquation focusVar (left, right) =
     reArrangeExprEquationX false focusVar (left, right)
 
+let reArrangeInEquality focusVar (e : InEquality) =
+    let f,l,r = reArrangeExprInequalityX true focusVar e.Definition 
+    let c' = if f then InEquality.flipComparer e.Comparer else e.Comparer
+    InEquality(c', l , r)
+
 let rec invertFunction x expression =
     printfn "%s" (expression |> Infix.format)
     match reArrangeExprEquation x (expression, x) with
@@ -84,7 +152,7 @@ let rec invertFunction x expression =
             printfn "no"
             inv
 
-let quadraticSolve p =
+let quadraticSolve x p =
     if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
         let coeffs = Polynomial.coefficients x p
         let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]

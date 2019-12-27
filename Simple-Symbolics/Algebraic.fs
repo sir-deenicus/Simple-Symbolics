@@ -179,16 +179,20 @@ module Algebraic =
              | [] -> Seq.toList curset
         loop (List.tail l)
 
-    let consolidateSumsSimple = 
+    let consolidateSumsSimpleGen f = 
         function
         | Sum l as s -> 
             match intersectAllSimple l with
             | [] -> s
             | [factor] ->  
-                Product[factor ; s/factor |> Algebraic.expand ]
+                Product[factor ; f factor s ]
             | product -> 
                 let p = Product product
-                Product[p ; s/p |> Algebraic.expand ] 
+                Product[p ; f p s ] 
         | f -> f
     
+    let consolidateSumsSimple =
+        consolidateSumsSimpleGen (fun p s -> Algebraic.expand (s / p))
+
+    let consolidateSumsSimple2 = consolidateSumsSimpleGen Expression.groupInSumWith
      

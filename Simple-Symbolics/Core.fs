@@ -25,6 +25,16 @@ module List =
         [ for x in xs do
               if filter x then yield map x ]
 
+let rec replaceSymbol r x =
+    function
+    | Identifier _ as var when var = x -> r
+    | Power(f, n) -> Power(replaceSymbol r x f, replaceSymbol r x n)
+    | Function(fn, f) -> Function(fn, replaceSymbol r x f)
+    | Product l -> Product(List.map (replaceSymbol r x) l)
+    | Sum l -> Sum(List.map (replaceSymbol r x) l)
+    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
+    | x -> x
+
 module BigRational =
     open Microsoft.FSharp.Core.Operators
 
@@ -183,11 +193,10 @@ module Expression =
         | Power(_, Number n) -> n < 0N
         | _ -> false
 
-    let isNegativeNumber =
-        function
-        | Approximation (Real r) -> r < 0. 
-        | Number n -> n < 0N
-        | _ -> false
+    let isNegativeNumber n =
+        if isNumber n then
+            n.ToFloat() < 0.
+        else false
     
     let cancelAbs =
         function
@@ -206,7 +215,7 @@ module Expression =
         | Function(Acos, _) 
         | Function(Asin,_) 
         | Function(Atan,_) 
-         | Function(Tan,_) ->
+        | Function(Tan,_) ->
             true
         | _ -> false
 
@@ -250,7 +259,7 @@ let (|IsNumber|_|) = function
    
 let productToConstantsAndVarsGen test =
     function
-    | Number _ as n -> Some(n, [])
+    | Number _ as n when test n -> Some(n, [])
     | Product p ->
         let nums, vars = List.partition test p
         Some(List.fold (*) 1Q nums, vars)
@@ -269,6 +278,15 @@ let rec gcd c d =
     match (abs c,abs d) with
     | (a, n) when n = 0N -> a
     | (a,b) -> gcd b (rem a b) 
+
+let rec factorial (n : BigRational) =
+    if n <= 1N then 1N
+    else n * factorial (n - 1N)
+
+let rec factorialSymbolic (e : Expression) =
+    match e with 
+    | Number m when m < 15N -> Number(factorial m)
+    | _ -> failwith "Must be a number < 15"
 
 let inline primefactors factor x =
     let rec loop x =
@@ -409,8 +427,7 @@ module Algebraic =
                 | Some x' -> x'
                 | None -> Power(simplifyLoop x, n)
             | Power(x, n) -> Power(simplifyLoop x, simplifyLoop n)
-            | Function(Atan, Number n) when n = 1N ->
-                MathNet.Symbolics.Operators.pi / 4
+            | Function(Atan, Number n) when n = 1N -> Operators.pi / 4
             | Function(Atan, Number n) when n = 0N -> 0Q
             | Function(Cos, Product [ Number n; Constant Pi ]) when n = (1N / 2N) ->
                 0Q
@@ -423,6 +440,22 @@ module Algebraic =
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
+            | IsDerivative(IsFunction(Identifier(Symbol f),x,e),dx) -> fxn f x (diff dx (simplifyLoop e))   
+            | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
+                FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
+            | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]) as expr ->
+                match simplifyLoop a, simplifyLoop b with
+                | Number n, Number m ->
+                    match f with
+                    | SumOver ->
+                        List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ] |> simplifyLoop
+                    | ProductOver ->
+                        List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                    | _ -> expr
+                | _ -> expr
+            | FunctionN(Choose,[Number n;Number k]) -> 
+                if n < k then 0Q  
+                else Number(factorial n/(factorial k * factorial(n - k)))
             | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
             | Product (n::rest) when n = 1Q -> simplifyLoop (Product rest)
@@ -453,22 +486,16 @@ let primeFactorsPartialExpr =
     >> Option.map (fst
                    >> groupPowers (fun x -> Sum [ x ])
                    >> Product)
+                    
 
-let rec factorial (n : BigRational) =
-    if n = 1N then 1N
-    else n * factorial (n - 1N)
-
-let rec factorialSymb (e : Expression) =
-    match e with 
-    | Number m when m < 15N -> Number(factorial m)
-    | _ -> failwith "Must be a number < 15"
-
-let choose n k = 
-    let bn, bk = BigRational.FromInt n, BigRational.FromInt k
-    if k = 0 || n = k then 1Q 
+let chooseN n k = 
+    if k < n then 0Q
     else
-        factorial bn / (factorial bk * (factorial (bn - bk))) 
-        |> Expression.FromRational
+        let bn, bk = BigRational.FromInt n, BigRational.FromInt k
+        if k = 0 || n = k then 1Q 
+        else
+            factorial bn / (factorial bk * (factorial (bn - bk))) 
+            |> Expression.FromRational
     
 open Operators
 open System.Collections.Generic
@@ -886,15 +913,7 @@ let rec containsAnyVar =
     | Product l | Sum l | FunctionN(_, l) -> List.exists containsAnyVar l
     | _ -> false
 
-let rec replaceSymbol r x =
-    function
-    | Identifier _ as var when var = x -> r
-    | Power(f, n) -> Power(replaceSymbol r x f, replaceSymbol r x n)
-    | Function(fn, f) -> Function(fn, replaceSymbol r x f)
-    | Product l -> Product(List.map (replaceSymbol r x) l)
-    | Sum l -> Sum(List.map (replaceSymbol r x) l)
-    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
-    | x -> x
+
 
 let replaceSymbols (vars : seq<_>) e =
     let map = dict vars
@@ -1217,6 +1236,9 @@ type Expression with
                 (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
                      (e'.ToFormattedString()) e')
 
+    static member Simplify e =
+        Algebraic.simplify true e
+
     static member FullSimplify e =
         e
         |> Algebraic.simplify true
@@ -1316,12 +1338,36 @@ type InEquality(comparer:InEquality.Comparer, leq : Expression, req : Expression
     member __.Definition = leq, req
     member __.Left = leq
     member __.Right = req
+    member __.Comparer = comparer
     member __.InEqualities =
         [ leq, req
           req, leq ] 
     override __.ToString() =
         leq.ToFormattedString() + string comparer + req.ToFormattedString()
-
+     member __.Flip() =
+        InEquality(InEquality.flipComparer comparer, req, leq) 
+    member i.ApplyToRight f = InEquality(i.Comparer, i.Left, f i.Right)
+    member i.ApplyToLeft f = InEquality(i.Comparer, f i.Left, i.Right)
+    member i.Apply f = InEquality(i.Comparer, f i.Left, f i.Right)
+    static member (*) (eq : InEquality, expr : Expression) =
+        if Expression.isNumber expr then
+            let c = if Expression.isNegativeNumber expr then 
+                        InEquality.flipComparer eq.Comparer
+                    else eq.Comparer
+            InEquality(c, eq.Left * expr, eq.Right * expr)
+        else eq
+    static member (+) (eq : InEquality, expr : Expression) =
+        InEquality(eq.Comparer, eq.Left + expr, eq.Right + expr) 
+    static member (-) (eq : InEquality, expr : Expression) =
+        InEquality(eq.Comparer, eq.Left - expr, eq.Right - expr) 
+    static member (/) (eq : InEquality, expr : Expression) =
+        if Expression.isNumber expr then
+            let c = if Expression.isNegativeNumber expr then 
+                        InEquality.flipComparer eq.Comparer
+                    else eq.Comparer
+            InEquality(c, eq.Left / expr, eq.Right / expr)
+        else eq
+        
 type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
     member __.Definition = leq, req
     member __.Left = leq
@@ -1338,9 +1384,7 @@ type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
         let rl, _ = Units.To(req, u).Value
         ul + string comparer + rl   
     member __.Flip() =
-        InEqualityU(InEquality.flipComparer comparer, req, leq)
-    member __.FlipSign() =
-        InEqualityU(InEquality.flipComparer comparer, leq, req)
+        InEqualityU(InEquality.flipComparer comparer, req, leq) 
     member i.ApplyToRight f = InEqualityU(i.Comparer, i.Left, f i.Right)
     member i.ApplyToLeft f = InEqualityU(i.Comparer, f i.Left, i.Right)
     member i.Apply f = InEqualityU(i.Comparer, f i.Left, f i.Right)
@@ -1353,10 +1397,12 @@ type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
     static member (/) (eq : InEqualityU, expr : Expression) =
         eq / (expr * Units.unitless)
     static member (/) (eq : InEqualityU, expr : Units) =
-        let c = if Expression.isNegativeNumber expr.Quantity then 
-                    InEquality.flipComparer eq.Comparer
-                else eq.Comparer
-        InEqualityU(c, eq.Left / expr, eq.Right / expr)
+        if Expression.isNumber expr.Quantity then
+            let c = if Expression.isNegativeNumber expr.Quantity then 
+                        InEquality.flipComparer eq.Comparer
+                    else eq.Comparer
+            InEqualityU(c, eq.Left / expr, eq.Right / expr)
+        else eq
 
 type InEqualityU with
     static member applyToRight f (i:InEqualityU) =
@@ -1464,19 +1510,114 @@ module Constants =
 let rational x = Expression.fromFloat x
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
 
+type Prob () =
+    static member prob(x) = FunctionN(Probability, [symbol "P"; x ])
+    static member prob(s,x) = FunctionN(Probability, [symbol s; x ]) 
+
+    
+let choose n k = FunctionN(Choose, [n;k])
+let binomial n k = FunctionN(Choose, [n;k])
 let prob x = FunctionN(Probability, [symbol "P"; x ])
-let probn s x = FunctionN(Probability, [symbol s; x ])
-let condprob x param = FunctionN(Probability, [ symbol "P"; x; param ])
+let probc x param = FunctionN(Probability, [ symbol "P"; x; param ])
 let probparam x param = FunctionN(Probability, [symbol "P";  x; param; 0Q ])
 
+type PSigma(expr) =
+    member private __.op operator y = function
+        | FunctionN(f, [fx;var;start;elem; stop]) -> 
+            FunctionN(f, [operator fx y;var;start;elem; stop])
+        | x -> x
+
+    static member sum fx = FunctionN(SumOver, [fx;V"";V"";V"";V""])
+    static member sum (fx,start) = FunctionN(SumOver, [fx;Vars.i;start;V"="; Vars.n])
+    static member sum (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start;V"="; stop])
+    static member sum (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;V"="; stop])
+    static member sum (fx,var,elem,start,stop) = FunctionN(SumOver, [fx;var;start;elem; stop])
+    static member prod fx = FunctionN(ProductOver, [fx;Vars.i;0Q;V"="; Vars.n])
+    static member (/) (a:PSigma, b : Expression) = b * (a.op (/) b a.Expression)
+
+    static member Evaluate(expr, ?parameters) =
+        match expr, parameters with
+        | FunctionN(SumOver, [ fx; var; Number n; Identifier(Symbol "="); Number m ]), _ ->
+            List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+        | FunctionN(ProductOver, [ fx; var; Number n; Identifier(Symbol "="); Number m ]), _ ->
+            List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+        | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]), Some p ->
+            let lookup = dict p
+
+            let runvar e =
+                e
+                |> replaceSymbols [ for (a, b) in p -> a, fromRational b ]
+                |> Expression.toRational
+
+            let n, m =
+                match Expression.FullSimplify a, Expression.FullSimplify b with
+                | Number n, Number m -> n, m
+                | Number n, y -> n, runvar y
+                | x, Number m -> lookup.[x], m
+                | _ -> lookup.[a], runvar b
+
+            match f with
+            | SumOver ->
+                List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+            | ProductOver ->
+                List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+            | _ -> expr
+        | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]), None ->
+            match Expression.FullSimplify a, Expression.FullSimplify b with
+            | Number n, Number m ->
+                match f with
+                | SumOver ->
+                    List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                | ProductOver ->
+                    List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                | _ -> expr
+            | _ -> expr
+        | _ -> expr  
+    member __.Expression = expr 
+    member __.Evaluate( ?parameters ) = 
+        match parameters with 
+        | None -> PSigma.Evaluate(expr) 
+        | Some par -> PSigma.Evaluate(expr, par)
+
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
+  
+type Func(?varname, ?expr, ?functionName) =
+    static member fn fname = FunctionN(Function.Func, [symbol fname])
+    static member make fname = fun x -> FunctionN(Function.Func, [symbol fname; x])
+    static member fn (fname,x) = FunctionN(Function.Func, [symbol fname;x])
+    static member fn (x) = FunctionN(Function.Func, [symbol "f";x])
+    static member fn (fname,x,expr) = FunctionN(Function.Func, [symbol fname;x;expr])
+    static member fn (x,expr) = FunctionN(Function.Func, [symbol "f";x;expr])
+    static member JustName (fn, ?keepInputVar) =
+        match fn, keepInputVar with
+         | FunctionN (Function.Func, fname :: _), Some false
+         | FunctionN (Function.Func, fname :: _), None -> FunctionN (Function.Func, [fname]) 
+         | FunctionN (Function.Func, fname :: x:: _), Some true -> FunctionN (Function.Func, [fname;x]) 
+         | e, _ -> e
+    static member Internal (fn) =
+        match fn with
+        | FunctionN (Function.Func, [_;_;x]) -> x
+        | e -> e
+    static member Apply (f,x) =
+        match f with 
+        | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> fn fname x
+        | FunctionN(Function.Func, [_;Identifier _ as y;expr]) ->
+            replaceExpression x y expr
+        | _ -> failwith "Not a function"
+    member __.Function =
+        match (varname,expr, functionName) with
+        | None, None, Some (f:string) -> Func.fn f
+        | Some xb, None, Some f -> Func.fn(f,xb)
+        | Some xb, Some e, Some f -> Func.fn(f,xb,e)
+        | Some xb, Some e, None -> Func.fn("f",xb,e)
+        | None, Some e, None -> Func.fn("f",Vars.x,e)
+        | _ -> failwith "error in function created"
 
-let func f = FunctionN(Function.Func, [symbol f])
-let fn f x = FunctionN(Function.Func, [symbol f;x])
-
-let runfn fn parameters = fn |> Expression.evaluateFloat parameters |> Option.get
-
-let makeFunc fname = fun x -> fn fname x
+    member __.Run(params) = 
+        match(expr) with
+        | None -> None 
+        | Some e -> Expression.evaluateFloat params e
+    member f.Apply(x) = Func.Apply(f.Function, x)
  
 module Ops =
     let max a b = FunctionN(Function.Max, [a;b])

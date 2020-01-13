@@ -44,6 +44,7 @@ type StepTrace(s) =
         String.Format(s, Seq.toArray parameters) 
         |> trace.Add 
         |> ignore
+    member __.Trace = trace
     override __.ToString() =
         String.concat "\n\n" trace 
 
@@ -87,6 +88,9 @@ let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
 
+module Hashset =
+    let union (h1:Hashset<_>) h2 = h1.UnionWith(h2); h1
+
 module Option =
     let mapOrAdd def f =
         function
@@ -115,7 +119,8 @@ let real x = Approximation (Real x)
 
 let todecimal = function | Number n -> real(float n) | f -> f
 let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
-
+let degreeToRadians deg = 1/180Q * Operators.pi * deg
+let radiansToDegree rad = (180Q * rad)/Operators.pi
 //========================
 
 let grad x = FunctionN(Gradient, [x])
@@ -133,13 +138,21 @@ let (|IsDerivativeStrict|_|) = function
     | _ -> None   
 
 let func f = FunctionN(Function.Func, [Operators.symbol f])
-let fn f x = FunctionN(Function.Func, [Operators.symbol f;x]) 
+let funcx f x = FunctionN(Function.Func, [Operators.symbol f;x])
+let fx x = FunctionN(Function.Func, [Operators.symbol "f";x]) 
+let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
 let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
  
+let hold x = Id x
+
 let (|IsFunction|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
     | _ -> None  
-     
+
+let (|IsFunctionWithParams|_|) = function
+    | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,Some fx)
+    | FunctionN(Func, [ f;x ]) -> Some(f,x,None)
+    | _ -> None       
 //===
  
 let currencycacheloc = "currencycache.json"

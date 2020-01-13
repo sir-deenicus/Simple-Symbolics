@@ -426,6 +426,7 @@ module Algebraic =
                 match simplifySquareRoot expr with
                 | Some x' -> x'
                 | None -> Power(simplifyLoop x, n)
+            | Power(a, FunctionN(Log,[b;c])) when a = b -> simplifyLoop c
             | Power(x, n) -> Power(simplifyLoop x, simplifyLoop n)
             | Function(Atan, Number n) when n = 1N -> Operators.pi / 4
             | Function(Atan, Number n) when n = 0N -> 0Q
@@ -438,8 +439,11 @@ module Algebraic =
             | Function(Sin, Product [ Number n; Constant Pi ]) when n = 1N / 4N ->
                 1Q / sqrt (2Q)
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
+            | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x 
+            | FunctionN(Log, [a;b]) when a = b -> 1Q
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
+            | IsFunction(_,_, (IsNumber _ as n)) -> simplifyLoop n
             | IsDerivative(IsFunction(Identifier(Symbol f),x,e),dx) -> fxn f x (diff dx (simplifyLoop e))   
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
@@ -460,6 +464,7 @@ module Algebraic =
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
             | Product (n::rest) when n = 1Q -> simplifyLoop (Product rest)
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
+            | Id x -> simplifyLoop x
             | Sum l -> List.map simplifyLoop l |> List.sum
             | x -> x
         simplifyLoop fx |> Rational.reduce
@@ -943,16 +948,20 @@ let rec replaceVariableSymbol replacer =
         FunctionN(fn, List.map (replaceVariableSymbol replacer) l)
     | x -> x
 
+
 let rec findVariablesOfExpression =
     function
-    | Identifier _ as var -> [ var ]
-    | Power(x, n) -> findVariablesOfExpression x @ findVariablesOfExpression n
+    | Identifier _ as var -> Hashset([ var ])
+    | Power(x, n) -> findVariablesOfExpression x |> Hashset.union (findVariablesOfExpression n)
+    | IsFunctionWithParams(_,x,_) -> Hashset([x])
     | Product l | Sum l | FunctionN(_, l) ->
-        List.collect findVariablesOfExpression l
+        Hashset(Seq.collect findVariablesOfExpression l)
     | Function(_, x) -> findVariablesOfExpression x
-    | _ -> []
+    | _ -> Hashset []
 
-let replaceExpression replacement expressionToFind formula =
+let getFirstVariable x = Seq.head (findVariablesOfExpression x)
+
+let replaceExpressionRaw autosimplify replacement expressionToFind formula =
     let tryReplaceCompoundExpression replacement
         (expressionToFindContentSet : Hashset<_>) (expressionList : _ list) =
         let expressionListSet = Hashset expressionList
@@ -986,7 +995,10 @@ let replaceExpression replacement expressionToFind formula =
         | FunctionN(fn, l) ->
             FunctionN (fn, List.map iterReplaceIn l)
         | x -> x
-    iterReplaceIn (Algebraic.simplifyLite formula) |> Algebraic.simplify true
+    let newexpr = iterReplaceIn (Algebraic.simplifyLite formula)  
+    if autosimplify then Algebraic.simplify true newexpr else newexpr
+
+let replaceExpression = replaceExpressionRaw true 
 
 let containsExpression expressionToFind formula =
     let tryFindCompoundExpression (expressionToFindContentSet : Hashset<_>)
@@ -1205,6 +1217,21 @@ module Structure =
                             param ]))
         | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
         | x -> fx x 
+
+    let recursiveMapLocation depth breadth fx e = 
+        let rec loop d b =
+            function
+            | Identifier _ as var when d = depth && b = breadth -> fx var
+            | Power(f, n) when d = depth && b = breadth -> fx (Power(f, n))
+            | Power(f, n) -> Power(loop (d+1) 0 f, loop (d+1) 1 n) 
+            | Function(fn, f) when d = depth && b = breadth -> fx (Function(fn, f))
+            | Function(fn, f) -> Function(fn, loop (d+1) 0 f)
+            | Product l when d = depth && b = breadth -> fx (Product l)
+            | Product l -> Product(List.mapi (loop (d+1)) l)
+            | Sum l when d = depth && b = breadth -> fx (Sum l)
+            | Sum l -> Sum(List.mapi (loop (d+1)) l) 
+            | x -> x 
+        loop 0 0 e
 
     let mapfirst func expr =
         let mutable isdone = false
@@ -1430,6 +1457,10 @@ let (<=>) a b = Equation(a, b)
 
 let equals a b = Equation(a, b)
 
+let eqapply = Equation.Apply >> Op
+
+let eqapplys (s,f) = Instr(Equation.Apply f, s)
+
 let equationTrace (current:Equation) (instructions : _ list) = 
     stepTracer true string current instructions
       
@@ -1480,6 +1511,9 @@ module Vars =
     let x = symbol "x"
     let y = symbol "y"
     let z = symbol "z"
+    let t0 = symbol "t_0"
+    let t1 = symbol "t_1"
+    let t2 = symbol "t_2"
     let x0 = symbol "x_0"
     let x1 = symbol "x_1"
     let x2 = symbol "x_2"
@@ -1497,10 +1531,15 @@ module Vars =
     let N = V "N"
     let P = V "P" 
     let Q = V "Q" 
+    let R = V"R"
+    let S = V"S"
     let T = V "T"
+    let U = V"U" 
     let X = V "X" 
     let Y = V "Y" 
     let Z = V "Z" 
+
+    let ofChar c = symbol (string c)
 
 module Constants =
     let π = pi
@@ -1600,7 +1639,7 @@ type Func(?varname, ?expr, ?functionName) =
         | e -> e
     static member Apply (f,x) =
         match f with 
-        | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> fn fname x
+        | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> funcx fname x
         | FunctionN(Function.Func, [_;Identifier _ as y;expr]) ->
             replaceExpression x y expr
         | _ -> failwith "Not a function"

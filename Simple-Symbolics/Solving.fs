@@ -42,6 +42,9 @@ let reArrangeExprInequalityX silent focusVar (left, right) =
             | [] -> doflip,fx, ops'
             | [ h ] -> iter doflip h ops'
             | hs -> doflip,Sum hs, ops'
+        | FunctionN(Log, [b;x]) ->
+            if not silent then printfn "exponentiate"
+            iter doflip x ((fun x -> b ** x) :: ops)
         | Function(Ln, x) ->
             if not silent then printfn "exponentiate"
             iter doflip x (exp :: ops)
@@ -102,6 +105,9 @@ let reArrangeExprEquationX silent focusVar (left, right) =
             | [] -> fx, ops'
             | [ h ] -> iter h ops'
             | hs -> Sum hs, ops'
+        | FunctionN(Log, [b;x]) ->
+            if not silent then printfn "exponentiate"
+            iter x ((fun x -> b ** x) :: ops)
         | Function(Ln, x) ->
             if not silent then printfn "exponentiate"
             iter x (exp :: ops)

@@ -11,6 +11,8 @@ let formatGeneric (e : obj) =
 
 let inline dot a b = List.map2 (*) a b |> List.sum
 
+let dotc a b = List.map2 (fun x (y:Complex) -> x * y.Conjugate) a b |> List.sum
+
 let parts = Array.map (flip (-) 1) [| 2; 3; 3; 2; 3; 1; 1; 3; 1; 2; 2; 1 |]
 
 let inline crossproduct (v1 : _ []) (v2 : _ []) =
@@ -28,6 +30,17 @@ let inline matrixmatrixmult (m1 : _ list list) (m2 : _ list list) =
     let m2T = List.transpose m2
     [ for r in m1 ->
           [ for c in m2T -> dot r c ] ]
+
+let vecmatrixmultc (v : _ list) (m : _ list list) =
+    [ for r in List.transpose m -> dotc v r ]
+
+let matrixvecmultc (m : _ list list) (v : _ list) =
+    [ for r in m -> dotc v r ]
+
+let matrixmatrixmultc (m1 : _ list list) (m2 : _ list list) =
+    let m2T = List.transpose m2
+    [ for r in m1 ->
+          [ for c in m2T -> dotc r c ] ]
 
 let identityM zero one n =
     [ for r in 1..n ->
@@ -97,7 +110,7 @@ let inline inverse m =
     let cT = adjugate m
     List.map (List.map ((*) (1Q / (det m)))) cT
 
-type Vector<'a>(l : 'a list) =
+type Vector<'a when 'a: equality>(l : 'a list) =
     member __.AsList = l
     member __.Item
         with get (index) = l.[index]
@@ -111,22 +124,35 @@ type Vector<'a>(l : 'a list) =
         Vector(List.map ((*) b) a.AsList)
     static member inline (*) (a : Vector<_>, b : Vector<_>) =
         dot a.AsList b.AsList
+    static member inline (/) (a : Vector<_>, b : Expression) =
+        Vector(List.map (fun x -> x/b) a.AsList)
+    static member inline (/) (a : Vector<_>, b : Complex) =
+        Vector(List.map (fun x -> x/b) a.AsList)
     static member inline (-) (a : Vector<_>, b : Vector<_>) =
         Vector(List.map2 (-) a.AsList b.AsList)
     static member inline (+) (a : Vector<_>, b : Vector<_>) =
         Vector(List.map2 (+) a.AsList b.AsList)
     static member inline (<*>) (a : Vector<_>, b : Vector<_>) =
         Vector(List.map2 (*) a.AsList b.AsList)
+    static member (*) (a : Vector<Complex>, b : Vector<Complex>) =
+        List.map2 (fun z1 (z2:Complex) -> z1 * z2.Conjugate) a.AsList b.AsList
+        |> List.sum
     override t.ToString() =
         let br1, br2 =
             if expressionFormat = "Infix" then "[", "]"
             else "\\left[", "\\right]"
         sprintf "%s%s%s" br1
             (List.map formatGeneric t.AsList |> String.concat ",") br2
+    override t.GetHashCode () = hash t.AsList
+    override v.Equals(o) =
+        match o with
+        | :? Vector<'a> as w -> v.AsList = w.AsList
+        | _ -> false
 
 module Vector =
     let toList (v : Vector<_>) = v.AsList
     let map f (v : Vector<_>) = Vector(List.map f v.AsList)
+    let map2 f (v : Vector<_>) (v2 : Vector<_>) = Vector(List.map2 f v.AsList v2.AsList)
     let inline lpNorm (p : Expression) (v : Vector<_>) =
         (v.AsList |> List.sumBy (fun x -> (abs x) ** p)) ** (1 / p)
 
@@ -150,10 +176,17 @@ type Matrix<'a>(l : 'a list list) =
     static member inline (*) (a : Matrix<_>, b : Matrix<_>) =
         Matrix(matrixmatrixmult a.AsList b.AsList)
     override t.ToString() =
-        sprintf "\n%s"
-            (String.concat "\n"
-                 (List.map (List.map formatGeneric >> String.concat ", ")
-                      t.AsList))
+        if Utils.expressionFormat = "Infix" then
+            sprintf "\n%s"
+                (String.concat "\n"
+                     (List.map (List.map formatGeneric >> String.concat ", ")
+                          t.AsList))
+        else
+            sprintf "\\begin{bmatrix}\n%s\n\\end{bmatrix}"
+                (String.concat "\\\\ \n"
+                     (List.map
+                          (List.map (fun v -> sprintf "{%s}" (formatGeneric v))
+                           >> String.concat " & ") t.AsList))
 
 module Matrix =
     let toList (m : Matrix<_>) = m.AsList
@@ -162,4 +195,8 @@ module Matrix =
     let inline inverse (m : Matrix<_>) = Matrix(inverse m.AsList)
     let inline identity n = Matrix(identityM 0Q 1Q n)
     let inline identity2 zero one n = Matrix(identityM zero one n)
- 
+    let inline transpose (m:Matrix<_>) = Matrix(List.transpose m.AsList)
+    let reshape (r,c) (vs:_ seq) =
+        let avs = Seq.toArray vs
+        Matrix ([for x in 0..r-1 -> [for y in 0..c-1 -> avs.[x * c + y]]])
+

@@ -2,7 +2,7 @@
 open Core
 
 module Logarithm =
-    
+
     let expand =
         function
         | Function(Ln, Product l) ->
@@ -30,11 +30,12 @@ module Logarithm =
             match logs' with
             | [] -> f
             | _ -> ln (Product logs') + Sum rest
-        | f -> f 
+        | f -> f
 
     let internal powerRuleSingle =
-        function 
+        function
         | Function(Ln, Power(x, n)) -> n * Function(Ln, x)
+        | FunctionN(Log, [b; Power(x, n)]) -> n * FunctionN(Log, [b;x])
         | f -> f
 
     let rec powerRule =
@@ -43,16 +44,17 @@ module Logarithm =
         | Sum l -> Sum(List.map powerRule l)
         | f -> powerRuleSingle f
 
-    let internal powerRuleSingleRev =
-        function 
+    let internal powerRuleSingleBackwards =
+        function
         | Product[a; Function(Ln, x)] -> Function(Ln, (x**a))
+        | Product[a; FunctionN(Log, [b;x])] -> FunctionN(Log,[b; (x**a)])
         | f -> f
 
-    let rec powerRuleRev =
-        function 
-        | Product l -> Product(List.map powerRuleSingleRev l)
-        | Sum l -> Sum(List.map powerRuleSingleRev l)
-        | f -> powerRuleSingleRev f
+    let rec powerRuleBackwards =
+        function
+        | Product l -> Product(List.map powerRuleSingleBackwards l)
+        | Sum l -> Sum(List.map powerRuleSingleBackwards l)
+        | f -> powerRuleSingleBackwards f
 
 module Exponents =
     let movePowerLeft nInt =

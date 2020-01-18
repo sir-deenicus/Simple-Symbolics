@@ -3,6 +3,7 @@ module MathNet.Symbolics.LinearAlgebra
 open MathNet.Symbolics
 open Core
 open Utils
+open NumberTheory
 
 let formatGeneric (e : obj) =
     match e with

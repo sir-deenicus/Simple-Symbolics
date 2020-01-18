@@ -21,7 +21,7 @@ type Tropicalf (e:float) =
     override __.ToString() = string e
 
 type Tropical (e:Expression) =
-    member __.Value = Algebraic.simplifyLite e
+    member __.Value = Expression.simplifyLite e
     static member (+) (l : Tropical, r : Tropical) =
         Tropical(Ops.min l.Value r.Value)
     static member (+) (l : Tropical, r : float) =

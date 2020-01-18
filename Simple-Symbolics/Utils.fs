@@ -2,8 +2,7 @@
 
 open MathNet.Symbolics
 open System
-
-open FSharp.Data 
+open Microsoft.FSharp 
 open Prelude.Math
 open Prelude.Common
 
@@ -12,12 +11,18 @@ type TraceExplain<'a> =
      | Op of ('a -> 'a) 
      | Instr of ('a -> 'a) * string
 
+module List =
+    let filterMap filter map xs =
+        [ for x in xs do
+              if filter x then yield map x ]
+
 let [<Literal>] InfixFormat = "Infix"
 
 let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
 
 let space() = if expressionFormat = InfixFormat then " " else " \\; "
+let newline() = if expressionFormat = InfixFormat then "\n" else "\n \\\\ "
 let fmt e = expressionFormater e
 
 let setInfix() =
@@ -48,7 +53,7 @@ type StepTrace(s) =
     override __.ToString() =
         String.concat "\n\n" trace 
 
-let stepTracer iseq fmt current instructions =
+let stepTracer isverbose iseq fmt current instructions =
     let steps = StepTrace("")
     let nline = if iseq then "\n\n  " else "  "
     let rec loop cnt current =
@@ -63,21 +68,21 @@ let stepTracer iseq fmt current instructions =
                 | Op f ->
                     let next = f current
                     steps.Add(string cnt + ": ${0}${1}$\\Longrightarrow {2}$",
-                              [ fmt current
+                              [ (if isverbose || cnt = 1 then fmt current else space())
                                 nline
                                 fmt next ])
                     next
                 | Instr(f, s) ->
                     let next = f current
                     steps.Add(string cnt + ": " + s + ":\n\n${0}${1}$\\Longrightarrow {2}$",
-                              [ fmt current
+                              [ (if isverbose || cnt = 1 then fmt current else space())
                                 nline
                                 fmt next ])
                     next
             loop (cnt + 1) next rest
     loop 1 current instructions 
 
-let expressionTrace = stepTracer false fmt
+let expressionTrace = stepTracer true false fmt
  
 let safeEval f x = try f x with _ -> x
 let flip f a b = f b a
@@ -97,17 +102,22 @@ module Option =
         | None -> Some def
         | Some y -> Some(f y)
 
+let inline absf x = Core.Operators.abs x
+let inline logf x = Core.Operators.log x
+let inline expf x = Core.Operators.exp x
+let inline log10f x = Core.Operators.log10 x
+
 let smartroundEx n x =
     if x > -1. && x < 1. && x <> 0. then
-        let p = log10 (abs x)
+        let p = log10f (absf x)
         let roundto = int (ceil -p) + n
         if roundto > 15 then x, roundto
         else Math.Round(x, roundto), roundto
     else Math.Round(x, n), n
 
 let smartround2 r x =
-    if abs x < 1. then 
-        let p = (log10 (abs x)) |> abs |> ceil
+    if absf x < 1. then 
+        let p = (log10f (absf x)) |> absf |> ceil
         let pten = 10. ** p
         let x' = x * pten
         (round r x')/pten
@@ -142,8 +152,9 @@ let funcx f x = FunctionN(Function.Func, [Operators.symbol f;x])
 let fx x = FunctionN(Function.Func, [Operators.symbol "f";x]) 
 let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
 let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
- 
+let limit var lim x = FunctionN(Limit, [var;lim;x]) 
 let hold x = Id x
+let negateId x = (Operators.negate(Algebraic.expand(Operators.negate x)))
 
 let (|IsFunction|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
@@ -155,61 +166,6 @@ let (|IsFunctionWithParams|_|) = function
     | _ -> None       
 //===
  
-let currencycacheloc = "currencycache.json"
 
-let [<Literal>] CurrencyTemplate = """{"baseCountry":"US","baseCurrency":"USD","rates":[{"id":432,"name":"Nigeria","name_zh":"尼日利亚","code":"NG","currency_name":"Naira","currency_name_zh":"尼日利亚奈拉","currency_code":"NGN","rate":362.63,"hits":22345,"selected":0,"top":0},{"id":449,"name":"Singapore","name_zh":"新加坡","code":"SG","currency_name":"Dollar","currency_name_zh":"新币","currency_code":"SGD","rate":1.3909,"hits":1115270,"selected":0,"top":0}]}"""
-
-type CurrencyProvider = FSharp.Data.JsonProvider<CurrencyTemplate>
- 
-let downloadCurrencyRates(useDir) =
-    use wc = new Net.WebClient()
-    let currencycachepath = pathCombine useDir currencycacheloc
-    try
-        let data =
-            wc.DownloadData "https://www.mycurrency.net/US.json"
-            |> Strings.DecodeFromUtf8Bytes
-        IO.File.WriteAllText(currencycachepath, data)
-        data
-        |> CurrencyProvider.Parse
-        |> Some
-    with _ -> 
-        if IO.File.Exists currencycachepath then
-            IO.File.ReadAllText currencycachepath
-            |> CurrencyProvider.Parse
-            |> Some
-        else None
-
-let buildCurrencyMap(useDir) =
-    match downloadCurrencyRates(useDir) with
-    | None -> Dict()
-    | Some currencyRates ->
-        currencyRates.Rates
-        |> Array.map (fun r ->
-               r.CurrencyCode,
-               (1M / r.Rate)
-               |> float
-               |> smartround2 2)
-        |> Dict.ofSeq        
-
-let mutable currencyMap = Dict()
-
-let rebuildCurrencyMap(dir) = currencyMap <- buildCurrencyMap dir
-
-rebuildCurrencyMap ""
-
-let checkCurrency eps c = 
-    match currencyMap.tryFind c with 
-    | None -> nan
-    | Some v -> v + eps
-
-type WorldBankHelper() =
-    let data = WorldBankData.GetDataContext()
-    member t.Countries = data.Countries
-
-module Currencies =
-    let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
-        c.Indicators
-         .``GDP per capita, PPP (current international $)`` 
-         |> Seq.last
 
 //querying OEIS http://oeis.org/search?fmt=text&q=3,5,7,9,11&start=10

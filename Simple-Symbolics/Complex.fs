@@ -4,6 +4,7 @@ open Core
 open Core.Vars
 open Core.Constants
 open MathNet.Numerics
+open MathNet.Symbolics.NumberTheory
 
 type Complex(r : Expression, i : Expression) =
     member __.Real = r
@@ -28,10 +29,10 @@ type Complex(r : Expression, i : Expression) =
         let r = c.Magnitude
         let angle = c.Phase
         r ** n * Complex(cos (n * (angle + phase))
-                         |> Algebraic.simplify false
+                         |> Expression.simplify false
                          |> Trigonometric.simplify,
                          sin (n * (angle + phase))
-                         |> Algebraic.simplify false
+                         |> Expression.simplify false
                          |> Trigonometric.simplify)
 
     static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
@@ -42,10 +43,10 @@ type Complex(r : Expression, i : Expression) =
             let r = c.Magnitude
             let angle = c.Phase
             r ** n * Complex(cos (n * angle)
-                             |> Algebraic.simplify false
+                             |> Expression.simplify false
                              |> Trigonometric.simplify,
                              sin (n * angle)
-                             |> Algebraic.simplify false
+                             |> Expression.simplify false
                              |> Trigonometric.simplify)
 
     static member (+) (a : Complex, b : Expression) =

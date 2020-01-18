@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="un-needed.txt" />
     <None Include="MathNotes\Calculus\limits.fsx" />
     <None Include="MathNotes\Calculus\differentials.fsx" />
     <None Include="MathNotes\readme.md" />
@@ -26,8 +27,11 @@
     <None Include="Lab\solving.fsx" />
     <None Include="Lab\experiments.fsx" />
     <Compile Include="Utils.fs" />
+    <Compile Include="Numbers.fs" />
     <Compile Include="Core.fs" />
+    <Compile Include="CurrencyUtils.fs" />
     <Compile Include="Powers.fs" />
+    <Compile Include="Summation.fs" />
     <Compile Include="Algebraic.fs" />
     <Compile Include="Complex.fs" />
     <Compile Include="Tropical.fs" />

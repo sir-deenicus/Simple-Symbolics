@@ -17,7 +17,7 @@ module Rational =
             | Identifier(Symbol _) as v -> [ v ]
             | Product _ as p ->
                 p
-                |> Algebraic.simplifyLite
+                |> Expression.simplifyLite
                 |> Expression.toList
                 |> List.filter Expression.isVariable
             | _ -> []
@@ -33,7 +33,7 @@ module Rational =
             | Power(Product l, n) -> Power(Product(List.filter f l), n)
             | Product _ as p ->
                 p
-                |> Algebraic.simplifyLite
+                |> Expression.simplifyLite
                 |> Expression.toList
                 |> List.filter f
                 |> Product
@@ -51,6 +51,8 @@ module Rational =
 
 module Algebraic =
     open Core
+    open NumberTheory
+    let rewriteAsOne x = Product [ x; x ** -1] 
     let multiplyAsUnityBy m = function
         | Product (Power(x,n)::rest) ->
             Product (m::Power(Algebraic.expand (x*m),n)::rest)
@@ -67,38 +69,39 @@ module Algebraic =
  
     let dividesHeuristic a b = width (a / b) < width a
 
-    let consolidateSums =
-        function
+    let consolidateSums chooser = function
         | Sum l ->
-            let a = List.toArray l
+            let exprlist = List.toArray l
 
             let divides =
-                [| for i in 0..a.Length - 2 do
-                       for j in i + 1..a.Length - 1 do
-                           let d = (a.[i] / a.[j])
+                [| for i in 0..exprlist.Length - 2 do
+                       for j in i + 1..exprlist.Length - 1 do
+                           let d = (exprlist.[i] / exprlist.[j])
 
                            let xr =
-                               a.[i] / Rational.numerator d
+                               exprlist.[i] / Rational.numerator d
                                |> abs
                                |> Expression.cancelAbs
                            if xr <> 1Q then yield xr |]
+                |> Hashset
+                |> Seq.toArray
 
-            let gsums, fsums =
-                divides
-                |> Array.fold (fun (curexpr, leftovers) divider ->
-                       let pass, fail =
-                           List.partition (fun x -> dividesHeuristic x divider)
-                               leftovers
-                       let divisibles = List.map (fun x -> x / divider) pass
+            let divisor = chooser divides
 
-                       let divisiblessum =
-                           if divisibles.Length > 1 then Sum divisibles
-                           else divisibles.[0]
-                       (Product [ divider; divisiblessum ] :: curexpr, fail))
-                       ([], l)
+            let divisibles, undivisible =
+                exprlist
+                |> Array.groupBy (fun x -> Rational.denominator (x / divisor) = 1Q)
+                |> Array.partition fst
 
-            Sum(gsums @ fsums)
-        | f -> f
+            let divided =
+                divisibles.[0]
+                |> snd
+                |> Array.map (fun x -> x / divisor)
+                |> List.ofArray
+                |> Sum
+
+            divisor * divided + Sum (List.ofArray (snd undivisible.[0]))
+        | x -> x 
 
     let intersectAll l =
         let getNumber =

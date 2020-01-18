@@ -10,6 +10,7 @@ open Core.Vars
 open Utils
 open MathNet.Symbolics.Differentiation
 open Prelude.Common
+open NumberTheory
 
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
@@ -24,7 +25,9 @@ let integral dx x = FunctionN(Integral, [ x; dx ])
 let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 
 let rewriteIntegralAsSum = function 
-   | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> PSigma.sum(Product[x;V("\Delta " + sdx)],dx,V"",V"",Expression.PositiveInfinity)     
+   | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> 
+        let delta = if Utils.InfixFormat = "Infix" then "Δ" else "\\Delta "
+        PiSigma.Σ(Product[x;V(delta + sdx)],dx,V"",V"",Expression.PositiveInfinity)     
    | x -> x
  
 module Expression =
@@ -106,7 +109,7 @@ let integrateSimplePartial x f =
                 | Ok (m,_) -> 
                     let fx =
                         arctan (e / (sqrt n)) / (m * sqrt n)
-                        |> Algebraic.simplify true
+                        |> Expression.simplify true
                     Succeeded fx
                 | _ -> Deferred (f, false)
             | _ -> Deferred (f, false)

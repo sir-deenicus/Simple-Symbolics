@@ -4,13 +4,14 @@ open MathNet.Symbolics
 open Core
 open Solving 
 open Prelude.Common
+open NumberTheory
 
 let deriveTrivialEqualitiesSingle (e1, eq) =
     [ yield Equation(e1, eq)
       for var in findVariablesOfExpression eq do
           match reArrangeExprEquationX true var (eq, e1) with
           | Identifier _ as var, req ->
-              yield Equation(var, Algebraic.simplify true req)
+              yield Equation(var, Expression.simplify true req)
           | _ -> () ]
 
 let deriveTrivialEqualities eqs =

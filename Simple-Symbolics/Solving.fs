@@ -3,9 +3,9 @@
 open MathNet.Symbolics
 open Core
 open Vars
-open Prelude.Common
-open MathNet.Symbolics
+open Prelude.Common 
 open Utils
+open MathNet.Symbolics.NumberTheory
 
 let reArrangeExprInequalityX silent focusVar (left, right) =
     let rec iter doflip fx ops =
@@ -71,12 +71,14 @@ let reArrangeExprInequalityX silent focusVar (left, right) =
     ops
     |> List.rev
     |> List.fold (fun e f -> f e) right
-    |> Algebraic.simplify true
+    |> Expression.simplify true
 
 let reArrangeExprEquationX silent focusVar (left, right) =
     let rec iter fx ops =
         match fx with
         | f when f = focusVar -> f, ops
+        | Power(n, x) when containsVar focusVar x -> 
+            iter x ((fun x -> ln x / ln n)::ops)
         | Power(f, p) ->
             if not silent then printfn "raise to power"
             iter f ((fun (x : Expression) -> x ** (1 / p)) :: ops)
@@ -122,7 +124,7 @@ let reArrangeExprEquationX silent focusVar (left, right) =
             iter x ((fun x -> Function(Acos, x)) :: ops)
         | Function(Sin, x) ->
             if not silent then printfn "asin"
-            iter x ((fun x -> Function(Asin, x)) :: ops)
+            iter x ((fun x -> Function(Asin, x)) :: ops) 
         | Function(Exp, x) ->
             if not silent then printfn "log"
             iter x (ln :: ops)
@@ -133,13 +135,13 @@ let reArrangeExprEquationX silent focusVar (left, right) =
     ops
     |> List.rev
     |> List.fold (fun e f -> f e) right
-    |> Algebraic.simplify true
+    |> Expression.simplify true
 
 let reArrangeExprEquation focusVar (left, right) =
     reArrangeExprEquationX false focusVar (left, right)
 
 let reArrangeInEquality focusVar (e : InEquality) =
-    let f,l,r = reArrangeExprInequalityX true focusVar e.Definition 
+    let f,l,r = reArrangeExprInequalityX true focusVar (e.Left, e.Right) 
     let c' = if f then InEquality.flipComparer e.Comparer else e.Comparer
     InEquality(c', l , r)
 
@@ -162,8 +164,8 @@ let quadraticSolve x p =
     if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
         let coeffs = Polynomial.coefficients x p
         let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
-        Algebraic.simplify true ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
-        Algebraic.simplify true ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
+        Expression.simplify true ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
+        Expression.simplify true ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
     else failwith "Not quadratic"
 
 let completeSquare x p =
@@ -232,3 +234,47 @@ let dispSolvedUnitsA matches newline tx =
     |> String.concat newline
 
 let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx
+
+let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
+
+let rec tryFactorizePolynomial x fx =
+    let constant = Polynomial.coefficient x 0 fx
+    let deg = Polynomial.degree x fx
+    if (constant = 0Q || constant = Operators.undefined) && deg.ToInt() < 2 then [], []
+    elif deg.ToInt() = 1 then
+        let coeff = Polynomial.coefficient x 1 fx
+        [ -constant / coeff ], []
+    elif constant = 0Q || constant = Operators.undefined then
+        let fx', _ = Polynomial.divide x fx x
+        let sols, eq = tryFactorizePolynomial x fx'
+        removeDuplicates(0Q :: sols),  (x::fx'::eq)
+    else
+        let factors = factorsExpr (abs constant)
+
+        let results, polynomials' =
+            List.unzip
+                [ for f in (List.map ((*) -1) factors) @ factors do
+                      let n = f.ToFloat()
+                      let value =
+                          Expression.evaluateFloat [ x, n ] fx |> Option.get
+                      if value = 0. then
+                          yield (f, Polynomial.divide x fx (x - f) |> fst) ]
+
+        let sols, eq = List.map (tryFactorizePolynomial x) polynomials' |> List.unzip
+        results @ List.concat sols
+        |> removeDuplicates,
+
+        polynomials' @ List.concat eq
+        |> removeDuplicates
+
+let factorizePolynomial x fx =
+    let sols, res = tryFactorizePolynomial x fx
+    let v = Product res
+    let f = // hack
+        if List.isEmpty res || Algebraic.expand v = fx then v
+        else
+            let q, _ = Polynomial.divide x (Algebraic.expand v) fx
+            res |> List.filter ((<>) q) |> Product
+    sols, f
+    
+let factorizedPolynomial x fx = factorizePolynomial x fx |> snd

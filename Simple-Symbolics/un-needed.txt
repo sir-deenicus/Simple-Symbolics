@@ -1,0 +1,144 @@
+﻿An over elaborated way to check if negative
+    let isNegative =
+        function
+        | Number n -> n < 0N
+        | Constant _   
+        | Power(Constant _, Constant _) 
+        | Power(Constant _, _) -> false
+        | Approximation (Real a) ->  a < 0.
+        | Power(Number n, Number p) -> n < 0N && abs(int p) % 2 <> 0  
+        | Power(Approximation (Real r), Number p) -> r < 0. && abs(int p) % 2 <> 0  
+        | Power(Number n, Constant _)
+        | Product [ Number n; Constant _ ] -> n < 0N
+        | _ -> false
+
+====
+
+Duplicated inequality, which is more effort duplication or generic code?
+
+type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
+    member __.Definition = leq, req
+    member __.Left = leq
+    member __.Right = req
+    member __.Comparer = comparer
+
+    member __.InEqualities =
+        [ leq, req
+          req, leq ]
+    override __.ToString() =
+        (Units.simplifyUnits leq) + string comparer + (Units.simplifyUnits req)
+    member __.ToStringAs(u:Units) =
+        let ul, _ = Units.To(leq, u).Value
+        let rl, _ = Units.To(req, u).Value
+        ul + string comparer + rl   
+    member __.Flip() =
+        InEqualityU(InEquality.flipComparer comparer, req, leq) 
+    member i.ApplyToRight f = InEqualityU(i.Comparer, i.Left, f i.Right)
+    member i.ApplyToLeft f = InEqualityU(i.Comparer, f i.Left, i.Right)
+    member i.Apply f = InEqualityU(i.Comparer, f i.Left, f i.Right)
+    static member (+) (eq : InEqualityU, expr : Units) =
+        InEqualityU(eq.Comparer, eq.Left + expr, eq.Right + expr)
+    static member (+) (eq : InEqualityU, expr : Expression) =
+        eq + (expr * Units.unitless)
+    static member (-) (eq : InEqualityU, expr : Units) =
+        InEqualityU(eq.Comparer, eq.Left - expr, eq.Right - expr)
+    static member (/) (eq : InEqualityU, expr : Expression) =
+        eq / (expr * Units.unitless)
+    static member (/) (eq : InEqualityU, expr : Units) =
+        if Expression.isNumber expr.Quantity then
+            let c = if Expression.isNegativeNumber expr.Quantity then 
+                        InEquality.flipComparer eq.Comparer
+                    else eq.Comparer
+            InEqualityU(c, eq.Left / expr, eq.Right / expr)
+        else eq
+
+type InEqualityU with
+    static member applyToRight f (i:InEqualityU) =
+        InEqualityU(i.Comparer, i.Left, f i.Right)
+    static member applyToLeft f (i:InEqualityU) =
+        i.ApplyToLeft f
+    static member apply f (i:InEqualityU) = i.Apply f 
+
+let lequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Leq,a,b)
+let gequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Geq,a,b)
+let ltu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Lesser,a,b)
+let gtu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Greater,a,b)  
+
+Generic version: 
+
+type InEquality<'a>(toExpression, zero,times, comparer:InEquality.Comparer, leq : 'a, req : 'a) =
+    let conditions = Hashset<InEquality<'a>>()
+    let varsigns = Dict<Expression, InEquality.NumSign>()
+
+    member __.Definition = leq, comparer, req
+    member __.Left = leq
+    member __.Right = req
+    member __.Comparer = comparer
+    member __.VarSigns = varsigns
+    member __.Conditions = Seq.toArray conditions 
+    member __.ToExpression = toExpression
+    member __.Zero = zero
+    member __.Times = times
+    member __.GetSign =
+        match toExpression req with 
+        | IsNumber n ->
+            if Expression.isNegativeNumber n then
+                Some(InEquality.Negative)
+            else Some(InEquality.Positive)
+        | _ -> None   
+
+    //override __.ToString() =
+        //leq.ToFormattedString() + string comparer + req.ToFormattedString()
+        //+ newline() + (Seq.map string conditions |> String.concat (newline()))
+
+    //member __.Flip() =
+    //    InEquality(toExpression, zero, InEquality.flipComparer comparer, req, leq) 
+    //member i.ApplyToRight f = InEquality(toExpression, zero, i.Comparer, i.Left, f i.Right)
+    //member i.ApplyToLeft f = InEquality(toExpression, zero, i.Comparer, f i.Left, i.Right)
+    //member i.Apply f = InEquality(toExpression, zero, i.Comparer, f i.Left, f i.Right)
+    member i.AddCondition (c:InEquality<_>) = 
+        match toExpression c.Left with 
+        | Identifier _ as x ->
+            match c.GetSign with
+            | None -> ()
+            | Some s -> varsigns.Add(x, s)
+        | _ -> ()
+        conditions.Add c |> ignore
+    static member decideComparison (eq:InEquality<_>, x: 'a) =
+        let expr = eq.ToExpression x
+        let isnum = Expression.isNumber expr
+
+        let c, safe =
+            match Expression.isNegativeNumber expr, eq.VarSigns.tryFind expr with
+            | false, Some InEquality.Negative | true, _ ->
+                InEquality.flipComparer eq.Comparer, true
+            | false, Some InEquality.Positive | _ when isnum -> eq.Comparer, true
+            | _ -> eq.Comparer, false
+
+        if not safe then
+            eq.AddCondition(eq.To( InEquality.Comparer.Greater, x, eq.Zero))
+        else if not isnum then
+            let compop =
+                match eq.VarSigns.[expr] with
+                | InEquality.Positive -> InEquality.Comparer.Greater
+                | InEquality.Negative -> InEquality.Comparer.Lesser
+                | _ -> InEquality.Comparer.Geq
+            eq.AddCondition(eq.To(compop, x, eq.Zero))
+        c
+    member i.To(comparer,l,r) = InEquality(toExpression, zero, times, comparer,l,r)
+    static member (*) (eq : InEquality<_>, expr:'a) = 
+        eq.To(InEquality.decideComparison(eq,expr), eq.Times eq.Left expr, eq.Times eq.Right expr)
+    
+    //static member (+) (eq : InEquality<_>, expr : 'a) =
+    //    InEquality(toExpression, eq.Comparer, eq.Left + expr, eq.Right + expr) 
+    //static member (-) (eq : InEquality<_>, expr : 'a) =
+    //    InEquality(toExpression, eq.Comparer, eq.Left - expr, eq.Right - expr) 
+    //static member (/) (eq : InEquality<_>, expr : 'a) =   
+    //    InEquality(toExpression, InEquality.decideComparison(eq,expr), eq.Left / expr, eq.Right / expr) 
+         
+let leq a b = InEquality(id,0Q, InEquality.Comparer.Leq,a,b)
+let geq a b = InEquality(id, 0Q,InEquality.Comparer.Geq,a,b)
+let lt a b = InEquality(id, 0Q,InEquality.Comparer.Lesser,a,b)
+let gt a b = InEquality(id, 0Q,InEquality.Comparer.Greater,a,b) 
+
+Might be better to go the replace route?

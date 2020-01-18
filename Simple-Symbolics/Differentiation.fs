@@ -9,9 +9,9 @@ let evalDerivative =
     | IsDerivative(f, dx) -> Calculus.differentiate2 dx f
     | f -> f
 
-let evalAllDerivativeExprs = Structure.recursiveMap evalDerivative >> Algebraic.simplify true
+let evalAllDerivativeExprs = Structure.recursiveMap evalDerivative >> Expression.simplify true
 
-let D dx e = e |> Calculus.differentiate2 dx |> Algebraic.simplify true
+let D dx e = e |> Calculus.differentiate2 dx |> Expression.simplify true
  
 let Dx = evalAllDerivativeExprs
 

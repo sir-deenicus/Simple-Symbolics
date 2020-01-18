@@ -5,7 +5,7 @@ open MathNet.Numerics
 open System 
 open MathNet.Symbolics.Utils
 open Prelude.Common
- 
+open MathNet.Symbolics.NumberTheory
 //==========================================
 
 let symbolString =
@@ -14,17 +14,12 @@ let symbolString =
     | _ -> ""
 
 let isSpecializedFunction = function
-        | Probability
-        | Gradient
-        | Integral 
-        | Expectation -> true
-        | _ -> false
-
-module List =
-    let filterMap filter map xs =
-        [ for x in xs do
-              if filter x then yield map x ]
-
+    | Probability
+    | Gradient
+    | Integral 
+    | Expectation -> true
+    | _ -> false
+ 
 let rec replaceSymbol r x =
     function
     | Identifier _ as var when var = x -> r
@@ -34,88 +29,16 @@ let rec replaceSymbol r x =
     | Sum l -> Sum(List.map (replaceSymbol r x) l)
     | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
     | x -> x
+        
+let rec containsVar x =
+    function
+    | Identifier _ as sy when sy = x -> true
+    | Power(p, n) -> containsVar x n || containsVar x p
+    | Function(_, fx) -> containsVar x fx
+    | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
+    | _ -> false 
 
-module BigRational =
-    open Microsoft.FSharp.Core.Operators
-
-    let almostZero x = (floor x) / x > 0.999999
-
-    let fromFloatDouble (df : float) =
-        let rec countDigits n x =
-            let x' = x * 10.
-            if almostZero x' then n + 1
-            else countDigits (n + 1) x'
-        if almostZero df then BigRational.FromBigInt(Numerics.BigInteger df)
-        else
-            let dpart = df - floor df
-            let dpow = countDigits 0 dpart
-            let pow10 = Numerics.BigInteger 10 ** int dpow
-            BigRational.FromBigIntFraction
-                (Numerics.BigInteger(df * double pow10), pow10)
-
-    ///limited by range of decimal (which is used as a less noisy alternative to floats)
-    let fromFloat (f : float) =
-        let df = decimal f
-        if df = floor df then BigRational.FromBigInt(Numerics.BigInteger df)
-        else
-            let decimalpart = string (df - floor df)
-            let pow10 = Numerics.BigInteger 10 ** (decimalpart.Length - 2)
-            BigRational.FromBigIntFraction
-                (Numerics.BigInteger(df * decimal pow10), pow10)
-
-    let fromFloatRepeating (f : float) =
-        let df = decimal f
-        let len = float ((string (df - floor df)).Length - 2)
-        let pow10 = decimal (10. ** len)
-        if abs f < 1. then
-            BigRational.FromIntFraction
-                (int (df * pow10), int (floor (pow10 - df)))
-        else
-            BigRational.FromIntFraction
-                (int (df * pow10 - floor df), int (pow10 - 1M))
-
-type Expression with
-    member t.ToFormattedString() = expressionFormater t
-    member t.ToFloat() = (Evaluate.evaluate (Map.empty) t).RealValue
-    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
-
-    member t.ToInt() =
-        match t with
-        | Number n -> int n
-        | _ -> failwith "not a number"
-
-    member t.Rational() =
-        match t with
-        | Number n -> n
-        | _ -> failwith "not a number"
-
-module Expression =
-    let fromFloatDouble f =
-        BigRational.fromFloatDouble f |> Expression.FromRational
-    let fromFloat f = BigRational.fromFloat f |> Expression.FromRational
-    let fromFloatRepeating f =
-        BigRational.fromFloatRepeating f |> Expression.FromRational
-    let toFloat (x : Expression) = x.ToFloat()
-    let toInt (i : Expression) = i.ToInt()
-    let toPlainString = Infix.format
-    let toFormattedString (e : Expression) = e.ToFormattedString()
- 
-    let toSciNumString r (x : float) =
-        let npow =
-            if x > 0. then Some(floor (log10 x))
-            elif x < 0. then Some(floor (log10 -x))
-            else None
-        match npow with
-        | Some n when n < -4. || n > 6. ->
-            let pow10 = Power(10Q, Expression.FromInt32(int n))
-            let num = Math.Round(x / (10. ** n), 2)
-            let prefix = if abs num = 1. then sprintf "%s" (signstr num) else sprintf "%s × " (num.ToString("N2"))
-            sprintf "%s%s" prefix
-                (pow10.ToFormattedString())
-        | _ ->
-            if r > 6 then string x
-            else x.ToString("N" + string r)
-
+module Expression =  
     let evaluateFloat vars expr =
         let map =
             Seq.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
@@ -123,16 +46,7 @@ module Expression =
         try
             Some(let v = Evaluate.evaluate symbvals expr in v.RealValue)
         with _ -> None
-        
-    let rewriteAsOne x = Product [ x; x ** -1] 
-
-    let groupSumsByDenominator = function
-        | Sum l ->
-            l |> List.groupBy Rational.denominator
-              |> List.map (snd >> List.sum >> Rational.expand) 
-              |> Sum
-        | f -> f
-
+    
     let toList =
         function
         | FunctionN(Max,l)
@@ -156,28 +70,6 @@ module Expression =
         | FunctionN (Max,_) -> true
         | _ -> false
 
-    let isRationalNumber =
-        function
-        | Number _ -> true
-        | _ -> false
-
-    let isNumber =
-        function
-        | Number _ | Constant _ | Approximation _
-        | Power(Number _, Number _)  
-        | Power(Approximation _, Number _)  
-        | Power(Constant _, Number _)  
-        | Power(Number _, Constant _)
-        | Power(Constant _, Constant _) 
-        | Product [ Number _; Constant _ ] ->
-            true
-        | _ -> false
-
-    let isInteger =
-        function
-        | Number n when n.IsInteger -> true
-        | _ -> false
-
     let isVariable =
         function
         | Identifier _ -> true
@@ -191,17 +83,7 @@ module Expression =
     let isNegativePower =
         function
         | Power(_, Number n) -> n < 0N
-        | _ -> false
-
-    let isNegativeNumber n =
-        if isNumber n then
-            n.ToFloat() < 0.
-        else false
-    
-    let cancelAbs =
-        function
-        | Function(Abs, x) -> x
-        | x -> x 
+        | _ -> false  
 
     let containsLog =
         function
@@ -221,130 +103,38 @@ module Expression =
 
     let toProductList = function
         | Product l -> l
-        | f -> [f] 
+        | f -> [f]   
 
-    let consolidateNumerators = function
-        | Sum l as f -> 
-            let denominators = Hashset(List.map Rational.denominator l)
-            if denominators.Count = 1 then 
-               let d = Seq.head denominators
-               let n = List.map Rational.numerator l |> Sum
-               n / d 
-            else f
-        | f -> f
+    let expandSumsOrProducts f = function
+        | Sum l -> l |> List.map f |> Sum
+        | Product l -> l |> List.map f |> Product
+        | x -> x
 
-let (|ProductHasNumber|_|) =
-    function
-    | Product l ->
-        match l |> List.filter (Expression.isRationalNumber) with
-        | [ Number n ] -> Some(Expression.FromRational n)
-        | _ -> None
-    | _ -> None 
+    let extractConstant f = function
+        | Product (c::l) when Expression.isNumber c ->
+            match l with
+            | [] -> c
+            | [x] -> c * f x
+            | _ -> c * f (Product l)
+        | x -> x
 
-let (|RationalLiteral|_|) r = function
-    | Number n as q when n = BigRational.FromIntFraction r -> Some q
-    | _ -> None
+    let extractNonVariables x f = function
+        | Product l ->
+            let hasvar, consts = List.partition (containsVar x) l
+            let consts' =
+                match consts with
+                | [] -> 1Q
+                | [ x ] -> x
+                | _ -> Product consts
 
-let (|IntegerLiteral|_|) m = function
-    | Number n as q when n.IsInteger && int n = m -> Some q
-    | _ -> None
+            let vars =
+                match hasvar with
+                | [] -> 1Q
+                | [ x ] -> x
+                | _ -> Product hasvar
+            consts' * f vars
+        | v -> if containsVar x v then f v else v * f 1Q
 
-let (|IntegerNumber|_|)  = function
-    | Number n as q when n.IsInteger -> Some q
-    | _ -> None
-
-let (|IsNumber|_|) = function
-      | e when Expression.isNumber e -> Some e
-      | _ -> None
-   
-let productToConstantsAndVarsGen test =
-    function
-    | Number _ as n when test n -> Some(n, [])
-    | Product p ->
-        let nums, vars = List.partition test p
-        Some(List.fold (*) 1Q nums, vars)
-    | _ -> None
-
-let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
-
-let productToIntConstantsAndVars =
-    productToConstantsAndVarsGen Expression.isInteger
-
-let inline rem n d =
-    let rec loop n = if n >= d then loop (n-d) else n
-    loop n   
-
-let rec gcd c d = 
-    match (abs c,abs d) with
-    | (a, n) when n = 0N -> a
-    | (a,b) -> gcd b (rem a b) 
-
-let rec factorial (n : BigRational) =
-    if n <= 1N then 1N
-    else n * factorial (n - 1N)
-
-let rec factorialSymbolic (e : Expression) =
-    match e with 
-    | Number m when m < 15N -> Number(factorial m)
-    | _ -> failwith "Must be a number < 15"
-
-let inline primefactors factor x =
-    let rec loop x =
-        match factor x with
-        | [ one ] -> [ one ]
-        | [ x; _ ] -> [ x ]
-        | _ :: (nextfactor :: _) -> //first number is the largest, = input
-            let r = x / nextfactor
-            let f1, f2 = loop r, loop nextfactor
-            f1 @ f2
-        | _ -> failwith "unexpected error"
-    loop x
-
-let inline factors toint f x =
-    let x' = toint x
-    let sqrtx = int (sqrt (float x'))
-    [ for n in 1..sqrtx do
-          let m = x' / n
-          if x' % n = 0 then
-              yield f n
-              if m <> n then yield f m ]
-    |> List.sortByDescending toint
-
-let factorsExpr = abs >> factors Expression.toInt Expression.FromInt32
-
-let groupPowers singletonLift pl =
-    List.groupBy id pl
-    |> List.map (fun (x, l) ->
-           if l.Length = 1 then singletonLift x
-           else Power(x, Expression.FromInt32(List.length l)))
-
-let primefactorsPartial x =
-    match productToIntConstantsAndVars x with
-    | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
-    | None -> None
-
-let rec simplifyRationals (roundto : int) =
-    function
-    | Number n as num ->
-        let f = float n
-        let pf = abs f
-        if pf > 10000. || pf < 0.0001 then
-            let p10 = floor (log10 pf)
-            let x = Math.Round(f / 10. ** p10, roundto) |> Expression.fromFloat
-            Product [ x
-                      Power(10Q, p10 |> Expression.fromFloat) ]
-        else num
-    | Power(x, n) -> Power(simplifyRationals roundto x, n)
-    | Sum l -> Sum(List.map (simplifyRationals roundto) l)
-    | Product l -> Product(List.map (simplifyRationals roundto) l)
-    | Function(f, x) -> Function(f, simplifyRationals roundto x)
-    | x -> x
-
-module Algebraic =
-    let radicalRationalize x =
-        let den = Rational.denominator x
-        let num = Rational.numerator x
-        num * den / (den * den)
     let simplifyNumericPower =
         function
         | Power(Number n, Number m) when m.IsInteger ->
@@ -366,21 +156,15 @@ module Algebraic =
             | None -> None
             | Some(pfl, n) ->
                 let n, (outr, inr) =
-                    n,
-                    pfl
-                    |> groupPowers id
-                    |> List.map sqRootGrouping
-                    |> List.unzip
+                    n, pfl |> groupPowers id |> List.map sqRootGrouping |> List.unzip
 
                 let isneg = n.ToInt() < 0
-                Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then
-                                                                      -1Q
-                                                                  else 1Q) inr))
+                Some(List.fold (*) 1Q outr * sqrt (List.fold (*) (if isneg then -1Q else 1Q) inr))
         | _ -> None
 
     let collectNestedSumOrProduct test l =
         let innersums, rest = List.partition test l
-        let ls = List.collect Expression.toList innersums
+        let ls = List.collect toList innersums
         ls @ rest
 
     let rec simplifyLite =
@@ -393,21 +177,21 @@ module Algebraic =
         | Product l ->
             Product
                 (List.map simplifyLite
-                     (collectNestedSumOrProduct Expression.isProduct l))
+                     (collectNestedSumOrProduct isProduct l))
         | Sum l ->
             Sum
                 (List.map simplifyLite
-                     (collectNestedSumOrProduct Expression.isSum l))
+                     (collectNestedSumOrProduct isSum l))
         | FunctionN(Max, l) -> 
             FunctionN(
                 Max,
                 (List.map simplifyLite
-                     (collectNestedSumOrProduct Expression.isMinOrMax l)))
+                     (collectNestedSumOrProduct isMinOrMax l)))
         | FunctionN(Min, l) -> 
             FunctionN(
                 Min,
                 (List.map simplifyLite
-                     (collectNestedSumOrProduct Expression.isMinOrMax l)))
+                     (collectNestedSumOrProduct isMinOrMax l)))
         | FunctionN(fn, l) -> FunctionN(fn, List.map simplifyLite l)
         | Function(fn, f) -> Function(fn, simplifyLite f) 
         | x -> x
@@ -426,7 +210,7 @@ module Algebraic =
                 match simplifySquareRoot expr with
                 | Some x' -> x'
                 | None -> Power(simplifyLoop x, n)
-            | Power(a, FunctionN(Log,[b;c])) when a = b -> simplifyLoop c
+            | Power(a, FunctionN(Log,[b;c])) when a = b -> simplifyLoop c 
             | Power(x, n) -> Power(simplifyLoop x, simplifyLoop n)
             | Function(Atan, Number n) when n = 1N -> Operators.pi / 4
             | Function(Atan, Number n) when n = 0N -> 0Q
@@ -444,7 +228,8 @@ module Algebraic =
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
             | IsFunction(_,_, (IsNumber _ as n)) -> simplifyLoop n
-            | IsDerivative(IsFunction(Identifier(Symbol f),x,e),dx) -> fxn f x (diff dx (simplifyLoop e))   
+            | IsDerivative(IsFunction(Identifier(Symbol f),x,e),dx) -> 
+                fxn f x (diff dx (simplifyLoop e))   
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
             | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]) as expr ->
@@ -456,11 +241,18 @@ module Algebraic =
                     | ProductOver ->
                         List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
                     | _ -> expr
-                | _ -> expr
+                | a', b' -> 
+                    match f with
+                    | SumOver
+                    | ProductOver ->
+                        FunctionN(f, [simplifyLoop fx; var; a'; Identifier(Symbol "="); b' ]) 
+                    | _ -> expr
             | FunctionN(Choose,[Number n;Number k]) -> 
                 if n < k then 0Q  
                 else Number(factorial n/(factorial k * factorial(n - k)))
             | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
+            | Product [] -> 1Q
+            | Sum [] -> 0Q
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
             | Product (n::rest) when n = 1Q -> simplifyLoop (Product rest)
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
@@ -469,39 +261,80 @@ module Algebraic =
             | x -> x
         simplifyLoop fx |> Rational.reduce
 
-let rec partitions =
-    function
-    | 0 -> []
-    | n ->
-        let k = [ 1 ] :: partitions (n - 1)
-        [ for p in k do
-              yield [ 1 ] @ p
-              if p.Length < 2 || p.Tail.Head > p.Head then
-                  yield [ p.Head + 1 ] @ p.Tail ]
-        |> List.filter (List.sum >> (=) n)
+    let cancelAbs =
+        function
+        | Function(Abs, x) -> x
+        | x -> x 
+         
 
-let primeFactorsExpr =
-    abs
-    >> primefactors factorsExpr
-    >> groupPowers (fun x -> Sum [ x ])
-    >> Product
+module Rational = 
+    let rec simplifyNumbers(roundto : int) =
+        function
+        | Number n as num ->
+            let f = float n
+            let pf = abs f
+            if pf > 10000. || pf < 0.0001 then
+                let p10 = floor (log10 pf)
+                let x = Math.Round(f / 10. ** p10, roundto) |> Expression.fromFloat
+                Product [ x
+                          Power(10Q, p10 |> Expression.fromFloat) ]
+            else num
+        | Power(x, n) -> Power(simplifyNumbers roundto x, n)
+        | Sum l -> Sum(List.map (simplifyNumbers roundto) l)
+        | Product l -> Product(List.map (simplifyNumbers roundto) l)
+        | Function(f, x) -> Function(f, simplifyNumbers roundto x)
+        | x -> x
 
-let primeFactorsPartialExpr =
-    primefactorsPartial
-    >> Option.map (fst
-                   >> groupPowers (fun x -> Sum [ x ])
-                   >> Product)
-                    
+    let radicalRationalize x =
+        let den = Rational.denominator x
+        if den <> 1Q then 
+            let num = Rational.numerator x
+            num * den / Algebraic.expand(Algebraic.expand((den * den)))
+        else x
 
-let chooseN n k = 
-    if k < n then 0Q
-    else
-        let bn, bk = BigRational.FromInt n, BigRational.FromInt k
-        if k = 0 || n = k then 1Q 
-        else
-            factorial bn / (factorial bk * (factorial (bn - bk))) 
-            |> Expression.FromRational
-    
+    let rationalizeWithConjugate x =
+        match Rational.denominator x with
+        | Sum[a;b] as den ->
+            let num = Rational.numerator x
+            let den' = Sum[a; -b]
+            num*den'/Algebraic.expand(Algebraic.expand(den*den'))
+        | _ -> x
+
+    let rationalizeNumeratorWithConjugate x =
+        match Rational.numerator x with
+        | Sum[a;b] as num ->
+            let den = Rational.denominator x
+            let num' = Sum[a; -b]
+            Algebraic.expand(Algebraic.expand(num*num'))/(den * num')
+        | _ -> x
+
+    let applyToNumerator f x =
+        let num = Rational.numerator x
+        let den = Rational.denominator x
+        (f num) / den
+
+    let applyToDenominator f x =
+        let num = Rational.numerator x
+        let den = Rational.denominator x
+        num / (f den)
+
+    let consolidateNumerators = function
+        | Sum l as f -> 
+            let denominators = Hashset(List.map Rational.denominator l)
+            if denominators.Count = 1 then 
+               let d = Seq.head denominators
+               let n = List.map Rational.numerator l |> Sum
+               n / d 
+            else f
+        | f -> f 
+
+    let groupSumsByDenominator = function
+        | Sum l ->
+            l |> List.groupBy Rational.denominator
+              |> List.map (snd >> List.sum >> Rational.expand) 
+              |> Sum
+        | f -> f
+          
 open Operators
 open System.Collections.Generic
 
@@ -574,8 +407,8 @@ type Units(q : Expression, u : Expression, ?altUnit) =
         Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^" + string b)
     static member Pow(a : Units, b : Expression) =
         Units
-            (Algebraic.simplify true (a.Quantity ** b),
-             Algebraic.simplify true (a.Unit ** b))
+            (Expression.simplify true (a.Quantity ** b),
+             Expression.simplify true (a.Unit ** b))
     static member (/) (a : Units, b : Expression) =
         Units(a.Quantity / b, a.Unit, a.AltUnit)
     static member (/) (a : Units, b : Units) =
@@ -730,17 +563,7 @@ module Units =
     
     let flops = flop / sec |> setAlt "flop/s"
     let gigaflops = giga * flops |> setAlt "gigaflop/s"
-    let teraflops = tera * flops |> setAlt "teraflop/s"
-    //==============
-    let usd = Units(1Q, symbol "USD", "USD")
-
-    let internal setCurrency eps curr = 
-        (checkCurrency eps curr) * usd |> setAlt curr
-    
-    let currencyFriction = 1e-04
-
-    let mutable ngn = setCurrency 1e-04 "NGN"
-    let mutable gbp = setCurrency 8e-03 "GBP"
+    let teraflops = tera * flops |> setAlt "teraflop/s" 
     //==============
     let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
     let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
@@ -866,13 +689,7 @@ module Units =
 
     let fromCelsius (x:float) =
         (x + 273.15) * K
-
-    let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
-        if s.Unit = usd.Unit then 
-            let _, gdpsource = Currencies.getGDPperCapita sourcecountry  
-            let _, gdptarget = Currencies.getGDPperCapita targetcountry 
-            s.Quantity/gdpsource * gdptarget * usd
-        else failwith "Not a currency"
+         
 
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 
@@ -902,13 +719,6 @@ let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) 
         | _ -> None
     replace e 
 
-let rec containsVar x =
-    function
-    | Identifier _ as sy when sy = x -> true
-    | Power(p, n) -> containsVar x n || containsVar x p
-    | Function(_, fx) -> containsVar x fx
-    | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
-    | _ -> false
 
 let rec containsAnyVar =
     function
@@ -917,8 +727,6 @@ let rec containsAnyVar =
     | Function(_, fx) -> containsAnyVar fx
     | Product l | Sum l | FunctionN(_, l) -> List.exists containsAnyVar l
     | _ -> false
-
-
 
 let replaceSymbols (vars : seq<_>) e =
     let map = dict vars
@@ -995,8 +803,8 @@ let replaceExpressionRaw autosimplify replacement expressionToFind formula =
         | FunctionN(fn, l) ->
             FunctionN (fn, List.map iterReplaceIn l)
         | x -> x
-    let newexpr = iterReplaceIn (Algebraic.simplifyLite formula)  
-    if autosimplify then Algebraic.simplify true newexpr else newexpr
+    let newexpr = iterReplaceIn (Expression.simplifyLite formula)  
+    if autosimplify then Expression.simplify true newexpr else newexpr
 
 let replaceExpression = replaceExpressionRaw true 
 
@@ -1026,7 +834,7 @@ let containsExpression expressionToFind formula =
             func = expressionToFind
             || (List.exists iterFindIn l)
         | _ -> false
-    iterFindIn (Algebraic.simplifyLite formula)
+    iterFindIn (Expression.simplifyLite formula)
 
 let rec width =
     function
@@ -1183,55 +991,83 @@ module Structure =
             if filter fn then Some fn else None   
         | _ -> None
 
-    let rec applyInFunctionsRec fx =
+    let rec applyInFunctionRec fx =
         function  
-        | Function(fn, f) -> Function(fn, applyInFunctionsRec fx f)
+        | Function(fn, f) -> Function(fn, fx(applyInFunctionRec fx f))
+        | Power(x,n) -> Power(fx(applyInFunctionRec fx x), n)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability,
-                        s::applyInFunctionsRec fx x::rest)
+                        s::fx(applyInFunctionRec fx x)::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
-            FunctionN(fn, [ applyInFunctionsRec fx x;param ]) 
-        | x -> fx x
-    let applyInFunctions fx =
+            FunctionN(fn, [ fx (applyInFunctionRec fx x);param ]) 
+        | x -> x
+
+    let applyInFunction fx =
         function  
         | Function(fn, f) -> Function(fn,fx f)
+        | Power(x,n) -> Power(fx x, n)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability,
                             s::fx x::rest)
         | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
             FunctionN(fn, [fx x;param ]) 
         | x -> x
-    let rec recursiveMap fx =
-        function
-        | Identifier _ as var -> fx var
-        | Power(f, n) -> fx (Power(recursiveMap fx f, recursiveMap fx n))
-        | Function(fn, f) -> fx (Function(fn, recursiveMap fx f))
-        | Product l -> fx (Product(List.map (recursiveMap fx) l))
-        | Sum l -> fx (Sum(List.map (recursiveMap fx) l))
-        | FunctionN(Probability, s::x::rest) ->
-            fx (FunctionN(Probability,
-                            s::recursiveMap fx x::rest))
-        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
-            fx (FunctionN(fn,
-                          [ recursiveMap fx x
-                            param ]))
-        | FunctionN(fn, l) -> fx (FunctionN(fn, List.map (recursiveMap fx) l))
-        | x -> fx x 
 
-    let recursiveMapLocation depth breadth fx e = 
+    let internal filterApply fx filter x = if filter x then fx x else x
+
+    let rec recursiveMapFilter filter fx =
+        function
+        | Identifier _ as var when filter var -> fx var
+        | Power(f, n) ->
+            Power (recursiveMapFilter filter fx f, recursiveMapFilter filter fx n)
+            |> filterApply fx filter
+        | Function(fn, f) ->
+            Function(fn, recursiveMapFilter filter fx f)
+            |> filterApply fx filter
+        | Product l ->
+            Product(List.map (recursiveMapFilter filter fx) l)
+            |> filterApply fx filter
+        | Sum l ->
+            Sum(List.map (recursiveMapFilter filter fx) l)
+            |> filterApply fx filter
+        | FunctionN(Probability, s :: x :: rest) ->
+            FunctionN(Probability, s :: recursiveMapFilter filter fx x :: rest)
+            |> filterApply fx filter
+        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn ->
+            FunctionN(fn,
+                          [ recursiveMapFilter filter fx x
+                            param ])
+            |> filterApply fx filter
+        | FunctionN(fn, l) ->
+            FunctionN(fn, List.map (recursiveMapFilter filter fx) l)
+            |> filterApply fx filter
+        | x -> filterApply fx filter x
+
+    let recursiveMap fx e = recursiveMapFilter (fun _ -> true) fx e
+
+    let recursiveMapLocation depthonly filter depth breadth fx e =
         let rec loop d b =
             function
-            | Identifier _ as var when d = depth && b = breadth -> fx var
-            | Power(f, n) when d = depth && b = breadth -> fx (Power(f, n))
-            | Power(f, n) -> Power(loop (d+1) 0 f, loop (d+1) 1 n) 
-            | Function(fn, f) when d = depth && b = breadth -> fx (Function(fn, f))
-            | Function(fn, f) -> Function(fn, loop (d+1) 0 f)
-            | Product l when d = depth && b = breadth -> fx (Product l)
-            | Product l -> Product(List.mapi (loop (d+1)) l)
-            | Sum l when d = depth && b = breadth -> fx (Sum l)
-            | Sum l -> Sum(List.mapi (loop (d+1)) l) 
-            | x -> x 
+            | Identifier _ as var when d = depth && (depthonly || b = breadth)
+                                       && filter var -> fx var
+            | Power(f, n) when d = depth && (depthonly || b = breadth)
+                               && filter (Power(f, n)) -> fx (Power(f, n))
+            | Power(f, n) -> Power(loop (d + 1) 0 f, loop (d + 1) 1 n)
+            | Function(fn, f) when d = depth && (depthonly || b = breadth)
+                                   && filter (Function(fn, f)) ->
+                fx (Function(fn, f))
+            | Function(fn, f) -> Function(fn, loop (d + 1) 0 f)
+            | Product l when d = depth && (depthonly || b = breadth)
+                             && filter (Product l) -> fx (Product l)
+            | Product l -> Product(List.mapi (loop (d + 1)) l)
+            | Sum l when d = depth && (depthonly || b = breadth) && filter (Sum l) ->
+                fx (Sum l)
+            | Sum l -> Sum(List.mapi (loop (d + 1)) l)
+            | x -> x
         loop 0 0 e
+
+    let recursiveMapDepth filter depth fx e =
+        recursiveMapLocation true filter depth 0 fx e
 
     let mapfirst func expr =
         let mutable isdone = false
@@ -1255,7 +1091,7 @@ type Expression with
         | f -> f 
 
     static member toRational e =
-        let e' = Trigonometric.simplify e |> Algebraic.simplify true
+        let e' = Trigonometric.simplify e |> Expression.simplify true
         match e' with
         | Number(n) -> n
         | _ ->
@@ -1264,21 +1100,19 @@ type Expression with
                      (e'.ToFormattedString()) e')
 
     static member Simplify e =
-        Algebraic.simplify true e
+        Expression.simplify true e
 
     static member FullSimplify e =
         e
-        |> Algebraic.simplify true
-        |> Algebraic.simplify true
+        |> Expression.simplifyLite
+        |> Expression.simplify true
+        |> Expression.simplify true
         |> Rational.rationalize
         |> Algebraic.expand
 
     static member FullerSimplify e =
         Trigonometric.simplify e
-        |> Algebraic.simplify true
-        |> Algebraic.simplify true
-        |> Rational.rationalize
-        |> Algebraic.expand
+        |> Expression.FullSimplify
 
     static member isNumericOrVariable anyVar =
         let keep s =
@@ -1345,108 +1179,121 @@ type Equation(leq : Expression, req : Expression) =
 
 module InEquality =
     type Comparer =
-        | Lesser 
+        | Lesser
         | Greater
         | Geq
         | Leq
-        override t.ToString() = 
+        override t.ToString() =
             match t with
             | Lesser -> "<"
             | Greater -> ">"
-            | Leq -> match expressionFormat with InfixFormat -> " ≤ " | _ -> " \\leq "
-            | Geq -> match expressionFormat with InfixFormat -> " ≥ " | _ -> " \\geq "
-    let flipComparer = function
-    | Lesser -> Greater
-    | Greater -> Lesser
-    | Leq -> Geq    
-    | Geq -> Leq
+            | Leq ->
+                match expressionFormat with
+                | InfixFormat -> " ≤ "
+                | _ -> " \\leq "
+            | Geq ->
+                match expressionFormat with
+                | InfixFormat -> " ≥ "
+                | _ -> " \\geq "
 
-type InEquality(comparer:InEquality.Comparer, leq : Expression, req : Expression) =
-    member __.Definition = leq, req
+    let flipComparer =
+        function
+        | Lesser -> Greater
+        | Greater -> Lesser
+        | Leq -> Geq
+        | Geq -> Leq
+
+    type NumSign =
+        | Positive
+        | Negative
+        | Nil
+
+type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expression) =
+    let conditions = Hashset<InEquality>()
+    let varsigns = Dict<Expression, InEquality.NumSign>()
+    member __.Definition = leq, comparer, req
     member __.Left = leq
     member __.Right = req
     member __.Comparer = comparer
-    member __.InEqualities =
-        [ leq, req
-          req, leq ] 
+    member __.VarSigns = varsigns
+    member __.Conditions = Seq.toArray conditions
+
+    member __.GetSign =
+        match req with
+        | Function(Abs, _) ->
+            match comparer with
+            | InEquality.Geq | InEquality.Greater -> Some(InEquality.Positive)
+            | _ -> None
+        | IsNumber n ->
+            let isNegative = Expression.isNegativeNumber n
+            if isNegative then
+                match comparer with
+                | InEquality.Leq | InEquality.Lesser ->
+                    Some(InEquality.Negative)
+                | _ -> None
+            else
+                match comparer with //is positive
+                | InEquality.Geq | InEquality.Greater ->
+                    Some(InEquality.Positive)
+                | _ -> None
+        | _ -> None
+
     override __.ToString() =
         leq.ToFormattedString() + string comparer + req.ToFormattedString()
-     member __.Flip() =
-        InEquality(InEquality.flipComparer comparer, req, leq) 
+        + newline() + (Seq.map string conditions |> String.concat (newline()))
+
+    member __.Flip() = InEquality(InEquality.flipComparer comparer, req, leq)
     member i.ApplyToRight f = InEquality(i.Comparer, i.Left, f i.Right)
     member i.ApplyToLeft f = InEquality(i.Comparer, f i.Left, i.Right)
     member i.Apply f = InEquality(i.Comparer, f i.Left, f i.Right)
+
+    member i.AddCondition(c : InEquality) =
+        match c.Left with
+        | Identifier _ as x ->
+            match c.GetSign with
+            | None -> ()
+            | Some s -> varsigns.Add(x, s)
+        | _ -> ()
+        conditions.Add c |> ignore
+
+    static member decideComparison (eq : InEquality, expr : Expression) =
+        let isnum = Expression.isNumber expr
+
+        let c, safe =
+            match Expression.isNegativeNumber expr, eq.VarSigns.tryFind expr with
+            | false, Some InEquality.Negative | true, _ ->
+                InEquality.flipComparer eq.Comparer, true
+            | false, Some InEquality.Positive | _ when isnum ->
+                eq.Comparer, true
+            | _ -> eq.Comparer, false
+        if not safe then
+            eq.AddCondition(InEquality(InEquality.Comparer.Greater, expr, 0Q))
+        else if not isnum then
+            let compop =
+                match eq.VarSigns.[expr] with
+                | InEquality.Positive -> InEquality.Comparer.Greater
+                | InEquality.Negative -> InEquality.Comparer.Lesser
+                | _ -> InEquality.Comparer.Geq
+            eq.AddCondition(InEquality(compop, expr, 0Q))
+        c
+
     static member (*) (eq : InEquality, expr : Expression) =
-        if Expression.isNumber expr then
-            let c = if Expression.isNegativeNumber expr then 
-                        InEquality.flipComparer eq.Comparer
-                    else eq.Comparer
-            InEquality(c, eq.Left * expr, eq.Right * expr)
-        else eq
+        InEquality
+            (InEquality.decideComparison (eq, expr), eq.Left * expr,
+             eq.Right * expr)
     static member (+) (eq : InEquality, expr : Expression) =
-        InEquality(eq.Comparer, eq.Left + expr, eq.Right + expr) 
+        InEquality(eq.Comparer, eq.Left + expr, eq.Right + expr)
     static member (-) (eq : InEquality, expr : Expression) =
-        InEquality(eq.Comparer, eq.Left - expr, eq.Right - expr) 
+        InEquality(eq.Comparer, eq.Left - expr, eq.Right - expr)
     static member (/) (eq : InEquality, expr : Expression) =
-        if Expression.isNumber expr then
-            let c = if Expression.isNegativeNumber expr then 
-                        InEquality.flipComparer eq.Comparer
-                    else eq.Comparer
-            InEquality(c, eq.Left / expr, eq.Right / expr)
-        else eq
-        
-type InEqualityU(comparer:InEquality.Comparer, leq : Units, req : Units) =
-    member __.Definition = leq, req
-    member __.Left = leq
-    member __.Right = req
-    member __.Comparer = comparer
+        InEquality
+            (InEquality.decideComparison (eq, expr), eq.Left / expr,
+             eq.Right / expr)
 
-    member __.InEqualities =
-        [ leq, req
-          req, leq ]
-    override __.ToString() =
-        (Units.simplifyUnits leq) + string comparer + (Units.simplifyUnits req)
-    member __.ToStringAs(u:Units) =
-        let ul, _ = Units.To(leq, u).Value
-        let rl, _ = Units.To(req, u).Value
-        ul + string comparer + rl   
-    member __.Flip() =
-        InEqualityU(InEquality.flipComparer comparer, req, leq) 
-    member i.ApplyToRight f = InEqualityU(i.Comparer, i.Left, f i.Right)
-    member i.ApplyToLeft f = InEqualityU(i.Comparer, f i.Left, i.Right)
-    member i.Apply f = InEqualityU(i.Comparer, f i.Left, f i.Right)
-    static member (+) (eq : InEqualityU, expr : Units) =
-        InEqualityU(eq.Comparer, eq.Left + expr, eq.Right + expr)
-    static member (+) (eq : InEqualityU, expr : Expression) =
-        eq + (expr * Units.unitless)
-    static member (-) (eq : InEqualityU, expr : Units) =
-        InEqualityU(eq.Comparer, eq.Left - expr, eq.Right - expr)
-    static member (/) (eq : InEqualityU, expr : Expression) =
-        eq / (expr * Units.unitless)
-    static member (/) (eq : InEqualityU, expr : Units) =
-        if Expression.isNumber expr.Quantity then
-            let c = if Expression.isNegativeNumber expr.Quantity then 
-                        InEquality.flipComparer eq.Comparer
-                    else eq.Comparer
-            InEqualityU(c, eq.Left / expr, eq.Right / expr)
-        else eq
-
-type InEqualityU with
-    static member applyToRight f (i:InEqualityU) =
-        InEqualityU(i.Comparer, i.Left, f i.Right)
-    static member applyToLeft f (i:InEqualityU) =
-        i.ApplyToLeft f
-    static member apply f (i:InEqualityU) = i.Apply f 
-
-let lequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Leq,a,b)
-let gequ (a:Units) (b:Units) = InEqualityU(InEquality.Comparer.Geq,a,b)
-let ltu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Lesser,a,b)
-let gtu (a:Units) (b:Units)  = InEqualityU(InEquality.Comparer.Greater,a,b)        
 let leq a b = InEquality(InEquality.Comparer.Leq,a,b)
 let geq a b = InEquality(InEquality.Comparer.Geq,a,b)
 let lt a b = InEquality(InEquality.Comparer.Lesser,a,b)
-let gt a b = InEquality(InEquality.Comparer.Greater,a,b)
- 
+let gt a b = InEquality(InEquality.Comparer.Greater,a,b) 
 
 module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
@@ -1460,9 +1307,9 @@ let equals a b = Equation(a, b)
 let eqapply = Equation.Apply >> Op
 
 let eqapplys (s,f) = Instr(Equation.Apply f, s)
-
+  
 let equationTrace (current:Equation) (instructions : _ list) = 
-    stepTracer true string current instructions
+    stepTracer false true string current instructions
       
 let evalExpr vars x =
     replaceSymbols vars x |> Expression.FullerSimplify |> Some  
@@ -1560,19 +1407,19 @@ let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probc x param = FunctionN(Probability, [ symbol "P"; x; param ])
 let probparam x param = FunctionN(Probability, [symbol "P";  x; param; 0Q ])
 
-type PSigma(expr) =
+type PiSigma(expr) =
     member private __.op operator y = function
         | FunctionN(f, [fx;var;start;elem; stop]) -> 
             FunctionN(f, [operator fx y;var;start;elem; stop])
         | x -> x
 
-    static member sum fx = FunctionN(SumOver, [fx;V"";V"";V"";V""])
-    static member sum (fx,start) = FunctionN(SumOver, [fx;Vars.i;start;V"="; Vars.n])
-    static member sum (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start;V"="; stop])
-    static member sum (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;V"="; stop])
-    static member sum (fx,var,elem,start,stop) = FunctionN(SumOver, [fx;var;start;elem; stop])
-    static member prod fx = FunctionN(ProductOver, [fx;Vars.i;0Q;V"="; Vars.n])
-    static member (/) (a:PSigma, b : Expression) = b * (a.op (/) b a.Expression)
+    static member Σ fx = FunctionN(SumOver, [fx;V"";V"";V"";V""])
+    static member Σ (fx,start) = FunctionN(SumOver, [fx;Vars.i;start;V"="; Vars.n])
+    static member Σ (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start;V"="; stop])
+    static member Σ (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;V"="; stop])
+    static member Σ (fx,var,elem,start,stop) = FunctionN(SumOver, [fx;var;start;elem; stop])
+    static member Π fx = FunctionN(ProductOver, [fx;Vars.i;0Q;V"="; Vars.n])
+    static member (/) (a:PiSigma, b : Expression) = b * (a.op (/) b a.Expression)
 
     static member Evaluate(expr, ?parameters) =
         match expr, parameters with
@@ -1615,9 +1462,9 @@ type PSigma(expr) =
     member __.Expression = expr 
     member __.Evaluate( ?parameters ) = 
         match parameters with 
-        | None -> PSigma.Evaluate(expr) 
-        | Some par -> PSigma.Evaluate(expr, par)
-
+        | None -> PiSigma.Evaluate(expr) 
+        | Some par -> PiSigma.Evaluate(expr, par)
+          
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
   
 type Func(?varname, ?expr, ?functionName) =

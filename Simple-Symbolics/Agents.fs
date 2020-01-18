@@ -1,5 +1,6 @@
 ﻿namespace MathNet.Symbolics
 open Hansei.Continuation
+open NumberTheory
 
 module Expression =    
     open Core
@@ -342,19 +343,19 @@ module Searcher =
             | _ -> false) e |> not
      
     let shallowOptions =
-        [ Structure.applyInFunctions Algebraic.expand, "Expand"
-          Structure.applyInFunctions Rational.reduce, "Reduce fractions"
-          Structure.applyInFunctions Rational.rationalize, "rationalize terms"
-          Structure.applyInFunctions Rational.expand, "expand fractions" 
-          Structure.applyInFunctions Logarithm.expand, "apply logarithm product/quotient rule, expand"
-          Structure.applyInFunctions Logarithm.contract, "apply logarithm product/quotient rule, contract"
-          Structure.applyInFunctions Trigonometric.substitute, "substitute trig expression"
-          Structure.applyInFunctions Trigonometric.contract, "contract trig expression"
-          Structure.applyInFunctions Trigonometric.expand, "expand trig expression"
-          Structure.applyInFunctions Trigonometric.simplify, "simplify trig expression"
-          Structure.applyInFunctions Logarithm.powerRule, "apply logarithm power rule" 
+        [ Structure.applyInFunction Algebraic.expand, "Expand"
+          Structure.applyInFunction Rational.reduce, "Reduce fractions"
+          Structure.applyInFunction Rational.rationalize, "rationalize terms"
+          Structure.applyInFunction Rational.expand, "expand fractions" 
+          Structure.applyInFunction Logarithm.expand, "apply logarithm product/quotient rule, expand"
+          Structure.applyInFunction Logarithm.contract, "apply logarithm product/quotient rule, contract"
+          Structure.applyInFunction Trigonometric.substitute, "substitute trig expression"
+          Structure.applyInFunction Trigonometric.contract, "contract trig expression"
+          Structure.applyInFunction Trigonometric.expand, "expand trig expression"
+          Structure.applyInFunction Trigonometric.simplify, "simplify trig expression"
+          Structure.applyInFunction Logarithm.powerRule, "apply logarithm power rule" 
           evalIntegral, "Calculate integral"
-          Algebraic.simplify true, "simplify expression"  ]
+          Expression.simplify true, "simplify expression"  ]
 
     let inline fullsummaryList take f res =
         let psum = List.sumBy fst res

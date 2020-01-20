@@ -18,7 +18,7 @@ module Rational =
             | Product _ as p ->
                 p
                 |> Expression.simplifyLite
-                |> Expression.toList
+                |> Structure.toList
                 |> List.filter Expression.isVariable
             | _ -> []
 
@@ -34,7 +34,7 @@ module Rational =
             | Product _ as p ->
                 p
                 |> Expression.simplifyLite
-                |> Expression.toList
+                |> Structure.toList
                 |> List.filter f
                 |> Product
             | e -> e
@@ -67,10 +67,10 @@ module Algebraic =
             | _ -> p
         | f -> f
  
-    let dividesHeuristic a b = width (a / b) < width a
+    let dividesHeuristic a b = Structure.width (a / b) < Structure.width a
 
-    let consolidateSums chooser = function
-        | Sum l ->
+    let consolidateSumsBy chooser = function
+        | Sum l as s ->
             let exprlist = List.toArray l
 
             let divides =
@@ -85,23 +85,26 @@ module Algebraic =
                            if xr <> 1Q then yield xr |]
                 |> Hashset
                 |> Seq.toArray
+            if divides.Length = 0 then s 
+            else
+                let divisor = chooser divides
 
-            let divisor = chooser divides
+                let divisibles, undivisible =
+                    exprlist
+                    |> Array.groupBy (fun x -> Rational.denominator (x / divisor) = 1Q)
+                    |> Array.partition fst
 
-            let divisibles, undivisible =
-                exprlist
-                |> Array.groupBy (fun x -> Rational.denominator (x / divisor) = 1Q)
-                |> Array.partition fst
-
-            let divided =
-                divisibles.[0]
-                |> snd
-                |> Array.map (fun x -> x / divisor)
-                |> List.ofArray
-                |> Sum
-
-            divisor * divided + Sum (List.ofArray (snd undivisible.[0]))
+                let divided = 
+                    divisibles.[0]
+                    |> snd
+                    |> Array.map (fun x -> x / divisor)
+                    |> List.ofArray
+                    |> Sum
+                let nondivisibles = if undivisible.Length = 0 then 0Q else Sum (List.ofArray (snd undivisible.[0])) 
+                divisor * divided + nondivisibles            
         | x -> x 
+
+    let consolidateSums = consolidateSumsBy (Array.maxBy Structure.width)
 
     let intersectAll l =
         let getNumber =
@@ -110,7 +113,7 @@ module Algebraic =
             | Number n -> abs n
             | _ -> 1N
 
-        let curset = Hashset(List.head l |> Expression.toProductList)
+        let curset = Hashset(List.head l |> Structure.toProductList)
 
         let rec loop (cnum : BigRational) =
             function
@@ -171,7 +174,7 @@ module Algebraic =
         | f -> f
 
     let intersectAllSimple l =
-        let curset = Hashset(List.head l |> Expression.toProductList) 
+        let curset = Hashset(List.head l |> Structure.toProductList) 
         let rec loop = function
              | Product ps::rest ->
                 curset.IntersectWith ps

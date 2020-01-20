@@ -47,17 +47,17 @@ module BigRational =
 type Expression with
     member t.ToFormattedString() = expressionFormater t
     member t.ToFloat() = (Evaluate.evaluate (Map.empty) t).RealValue
-    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
+    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue 
 
     member t.ToInt() =
         match t with
         | Number n -> int n
         | _ -> failwith "not a number"
 
-    member t.Rational() =
+    member t.ToRational() =
         match t with
-        | Number n -> n
-        | _ -> failwith "not a number"
+        | Number n -> Some n
+        | _ -> None
 
 module Expression = 
     open MathNet.Symbolics
@@ -70,6 +70,7 @@ module Expression =
         BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat (x : Expression) = x.ToFloat()
     let toInt (i : Expression) = i.ToInt()
+    let toRational (i : Expression) = i.ToRational()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
     let toSciNumString r (x : float) =
@@ -109,6 +110,11 @@ module Expression =
         function
         | Number n when n.IsInteger -> true
         | _ -> false 
+
+    let isNegativeOrZeroNumber n =
+        if isNumber n then
+            n.ToFloat() <= 0.
+        else false
 
     let isNegativeNumber n =
         if isNumber n then
@@ -226,8 +232,7 @@ let primeFactorsPartialExpr =
     primefactorsPartial
     >> Option.map (fst
                    >> groupPowers (fun x -> Sum [ x ])
-                   >> Product)
-                    
+                   >> Product) 
 
 let chooseN n k = 
     if k < n then 0Q
@@ -238,3 +243,15 @@ let chooseN n k =
             factorial bn / (factorial bk * (factorial (bn - bk))) 
             |> Expression.FromRational
     
+let fac x = Function(Fac, x)
+
+let expandChooseBinomial = function
+    | Binomial(n,k) -> fac n /(fac k * fac(n - k))
+    | x -> x
+
+let sterlingsApproximation = function
+    | Function(Fac, x) ->
+        sqrt(2Q * Operators.pi * x) * (x/Constants.e)**x
+    | x -> x
+
+let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x

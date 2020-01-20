@@ -3,25 +3,28 @@
   <PropertyGroup>
     <TargetFrameworks>net47;netstandard2.0;netcoreapp2.1</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.2.6</Version>
+    <Version>0.2.8</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="un-needed.txt" />
+    <None Include="oeis-search.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="un-needed.txt" />
+    <None Include="on-math-amplifiers.fsx" />
     <None Include="MathNotes\Calculus\limits.fsx" />
     <None Include="MathNotes\Calculus\differentials.fsx" />
     <None Include="MathNotes\readme.md" />
     <None Include="simpleintegrator.txt" />
     <Compile Include="AssemblyInfo.fs" />
     <None Include="Changes.txt" />
+    <None Include="Lab\summation-tests.fsx" />
     <None Include="Lab\unitspath.fsx" />
     <None Include="Lab\simplesolve.fsx" />
     <None Include="Lab\deriver2.fsx" />
-    <None Include="Lab\linear-algebra.fsx" />
     <None Include="Lab\linalg-tests.fsx" />
-    <None Include="Lab\Core.fsx" />
     <None Include="Lab\differential-calculus.fsx" />
     <None Include="Lab\integration.fsx" />
     <None Include="Lab\solving.fsx" />
@@ -29,6 +32,7 @@
     <Compile Include="Utils.fs" />
     <Compile Include="Numbers.fs" />
     <Compile Include="Core.fs" />
+    <Compile Include="OEIS.fs" />
     <Compile Include="CurrencyUtils.fs" />
     <Compile Include="Powers.fs" />
     <Compile Include="Summation.fs" />
@@ -51,7 +55,7 @@
     <PackageReference Include="Hansei" Version="0.3.2.2" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.23.3" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.23.7" />
   </ItemGroup>
 
   <ItemGroup>

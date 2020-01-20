@@ -28,3 +28,7 @@ let newtonsMethodGen simplify n symbol f x0 =
     loop n x0
 
 let newtonsMethod = newtonsMethodGen true
+ 
+let chainrule dx f g u x =  
+    diff u (f u) * diff dx (g x)
+    |> replaceSymbol (g x) u

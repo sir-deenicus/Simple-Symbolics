@@ -1,5 +1,10 @@
-﻿module Summation
+﻿module MathNet.Symbolics.Summation
 
+open MathNet.Symbolics
+open MathNet.Symbolics.NumberTheory
+open MathNet.Symbolics.Core
+open Utils
+open Operators 
 
 let summation var start stop fx = FunctionN(SumOver, [fx;var;start;V"="; stop])
 
@@ -7,18 +12,18 @@ let (|Summation|_|) input =
      match input with
      | FunctionN(SumOver, [fx;var;start;_; stop]) -> Some(fx,var,start, stop)
      | _ -> None
+
 let isSummation = function | Summation _ -> true | _ -> false
 
 let extractSumConstants = function
     | Summation(p,v,start,stop) ->
-         extractNonVariables v (summation v start stop) p
+         Expression.extractNonVariables v (summation v start stop) p
     | x -> x
 
 let expandSummation = function
     | Summation(Sum _ as s,v,start,stop) ->
-         expandSumsOrProducts (summation v start stop) s
-    | x -> x
-
+         Expression.expandSumsOrProducts (summation v start stop) s
+    | x -> x 
 
 let simplifySums =
     function
@@ -54,7 +59,7 @@ let simplifySums =
         a * ((1-r**(n+1))/(1-r))
     | x -> x
 
-//r <= 1, r > 0
+/// condition: r <= 1, r > 0
 let simplifyInfiniteGeometricSum = function
     | Summation(Power(r,k), var, start, n)
         when start = 0Q && k = var && n = infinity -> 1/(1-r)
@@ -64,7 +69,7 @@ let simplifyInfiniteGeometricSum = function
         a * (1/(1-r))
     | x -> x
 
-// n >= 0
+/// condition: n >= 0
 let binomialTheorem = function
     | Summation
         (Product

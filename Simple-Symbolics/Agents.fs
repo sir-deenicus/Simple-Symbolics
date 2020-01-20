@@ -1,15 +1,15 @@
 ﻿namespace MathNet.Symbolics
 open Hansei.Continuation
 open NumberTheory
+open Utils   
 
 module Expression =    
     open Core
     open Hansei.Core
-    open Hansei.Core.Distributions
-    open Utils 
+    open Hansei.Core.Distributions  
     
     let shrink options sizeConstrain n e =
-        let maxwidth = width e
+        let maxwidth = Structure.width e
         let mutable topwidth = maxwidth
         let rec loop steps n e =
             cont {
@@ -21,8 +21,8 @@ module Expression =
                 else
                     let! op, desc = uniform options
                     let e' = op e
-                    do! constrain (e' <> e && width e' < maxwidth)
-                    topwidth <- min topwidth (width e')
+                    do! constrain (e' <> e && Structure.width e' < maxwidth)
+                    topwidth <- min topwidth (Structure.width e')
                     let str =
                         sprintf "%s:  \n$%s$" desc (fmt e')
                     return! loop (str :: steps) (n - 1) e'
@@ -79,16 +79,16 @@ module Replicator =
                 if replace then
                     let applicable =
                         List.filter
-                            (fst >> flip containsExpression currentExpression)
+                            (fst >> flip Expression.containsExpression currentExpression)
                             equalities
                     match applicable with
                     | [] -> return (currentExpression, path, mem)
                     | _ ->
                         let! e1, e2 = uniform (List.toArray applicable)
                         let expressionNew =
-                            replaceExpression e2 e1 currentExpression
+                            Expression.replaceExpression e2 e1 currentExpression
                         if (expressionNew <> currentExpression
-                            && width expressionNew < maxw
+                            && Structure.width expressionNew < maxw
                             && List.exists
                                    ((=) (Expression.FullSimplify expressionNew))
                                    mem |> not) then
@@ -108,7 +108,7 @@ module Replicator =
                     let! op, desc = uniform choices
                     let nextExpression = op currentExpression
                     let isnotequal = nextExpression <> currentExpression
-                    let width' = if isnotequal then width nextExpression else maxw
+                    let width' = if isnotequal then Structure.width nextExpression else maxw
                     if isnotequal
                        && width' < maxw
                        && List.exists
@@ -180,6 +180,7 @@ module Searcher =
     open System
     open EvolutionaryBayes.RegretMinimization
     open Integration
+    open Expression
 
     let dispMath x = "$" + x + "$"
 
@@ -213,17 +214,17 @@ module Searcher =
                     if replace then
                         let applicable =
                             List.filter
-                                (fst >> flip containsExpression currentExpression)
+                                (fst >> flip Expression.containsExpression currentExpression)
                                 equalities
                         match applicable with
                         | [] -> return! search steps strmem mem path currentExpression
                         | _ ->
                             let! e1, e2 = uniform applicable
                             let expressionNew =
-                                replaceExpression e2 e1 currentExpression
+                                Expression.replaceExpression e2 e1 currentExpression
                             do! constrain
                                     (expressionNew <> currentExpression
-                                     && width expressionNew < maxwidth
+                                     && Structure.width expressionNew < maxwidth
                                      && List.exists
                                             ((=) (Expression.FullSimplify
                                                     expressionNew)) mem |> not)
@@ -291,7 +292,7 @@ module Searcher =
                                 replaceExpression e2 e1 currentExpression
                             do! constrain
                                     (expressionNew <> currentExpression
-                                     && width expressionNew < maxwidth
+                                     && Structure.width expressionNew < maxwidth
                                      && List.exists
                                             ((=) (Expression.FullSimplify
                                                     expressionNew)) mem |> not)
@@ -331,7 +332,7 @@ module Searcher =
             let nextExpression = op currentExpression
             let ok =
                 nextExpression <> currentExpression  
-                && width nextExpression < maxwidth
+                && Structure.width nextExpression < maxwidth
                 && (List.exists ((=) (Expression.FullSimplify nextExpression)) mem
                     |> not) 
             return (nextExpression, desc, ok)

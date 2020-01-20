@@ -11,6 +11,7 @@ open Utils
 open MathNet.Symbolics.Differentiation
 open Prelude.Common
 open NumberTheory
+open Summation
 
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
@@ -236,7 +237,7 @@ let rec integrateByParts expr =
         if Structure.existsRecursive (Expression.isIntegral) res then
            match prev with 
            | None -> res, false
-           | Some ex -> if width ex > width res then res, false else ex,false
+           | Some ex -> if Structure.width ex > Structure.width res then res, false else ex,false
         else res, true
     match expr with
     | IsIntegral(Product [a;b],dx) -> 
@@ -250,10 +251,10 @@ let substitution substarget expr =
     let usub = symbol "u_{sub}"
     let inner dx innerExpr =
         let du = D dx substarget
-        let innerExprTemp = replaceExpression usub substarget innerExpr
+        let innerExprTemp = Expression.replaceExpression usub substarget innerExpr
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquationX true dx (substarget,usub) 
-            let innerExpr' = replaceExpression solvefor dx innerExprTemp 
+            let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 match integratePartialRes usub (du * innerExpr') with
                 | res, true -> replaceSymbol substarget usub res
@@ -271,10 +272,10 @@ let substitutionSteps substarget expr =
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let inner dx innerExpr =
         let du = D dx substarget
-        let innerExprTemp = replaceExpression usub substarget innerExpr  
+        let innerExprTemp = Expression.replaceExpression usub substarget innerExpr  
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquation dx (substarget,usub) 
-            let innerExpr' = replaceExpression solvefor dx innerExprTemp 
+            let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 trace.Add (dx <=> solvefor)
                 trace.Add
@@ -424,15 +425,14 @@ let changeOfVariable dy = function
     | f -> f
 
 module Riemann =
-    let toSum x b a f =
-        let dx = (b - a) / n
-        let x_i = a + dx * i
-        dx * replaceExpression x_i x f
+    let ofIntegral = function 
+        | IsDefiniteIntegral (f,dx,a,b) -> 
+            let deltax = (b - a) / n
+            let x_i = a + deltax * i
 
-    let displaylimit x =
-        x
-        |> Expression.toFormattedString
-        |> sprintf @"\lim _{n \rightarrow \infty} \sum_{i=1}^{n}%s"
+            summation i 1Q n (deltax * Expression.replaceExpression x_i dx f)
+            |> limit n MathNet.Symbolics.Operators.infinity 
+        | _ -> undefined
 
 module Units =
     let integrate (dx:Units) (fx : Units) = 

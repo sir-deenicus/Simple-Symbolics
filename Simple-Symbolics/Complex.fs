@@ -2,7 +2,7 @@
 
 open Core
 open Core.Vars
-open Core.Constants
+open Utils.Constants
 open MathNet.Numerics
 open MathNet.Symbolics.NumberTheory
 

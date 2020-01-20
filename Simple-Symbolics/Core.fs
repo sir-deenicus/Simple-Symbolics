@@ -12,13 +12,6 @@ let symbolString =
     function
     | Identifier(Symbol s) -> s
     | _ -> ""
-
-let isSpecializedFunction = function
-    | Probability
-    | Gradient
-    | Integral 
-    | Expectation -> true
-    | _ -> false
  
 let rec replaceSymbol r x =
     function
@@ -27,6 +20,7 @@ let rec replaceSymbol r x =
     | Function(fn, f) -> Function(fn, replaceSymbol r x f)
     | Product l -> Product(List.map (replaceSymbol r x) l)
     | Sum l -> Sum(List.map (replaceSymbol r x) l)
+    | Id v -> Id(replaceSymbol r x v)
     | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
     | x -> x
         
@@ -35,14 +29,15 @@ let rec containsVar x =
     | Identifier _ as sy when sy = x -> true
     | Power(p, n) -> containsVar x n || containsVar x p
     | Function(_, fx) -> containsVar x fx
+    | Id y -> containsVar x y
     | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
-    | _ -> false 
-
+    | _ -> false  
 
 let rec containsAnyVar =
     function
     | Identifier _ -> true
     | Power(p, n) -> containsAnyVar n || containsAnyVar p
+    | Id fx
     | Function(_, fx) -> containsAnyVar fx
     | Product l | Sum l | FunctionN(_, l) -> List.exists containsAnyVar l
     | _ -> false
@@ -53,6 +48,7 @@ let replaceSymbols (vars : seq<_>) e =
         | Identifier _ as var when map.ContainsKey var -> map.[var]
         | Power(f, n) -> Power(loop f, loop n)
         | Function(fn, f) -> Function(fn, loop f)
+        | Id x -> Id(loop x)
         | Product l -> Product(List.map loop l)
         | Sum l -> Sum(List.map loop l)
         | FunctionN(fn, l) -> FunctionN(fn, List.map loop l)
@@ -73,55 +69,43 @@ let rec replaceVariableSymbol replacer =
     | Sum l -> Sum(List.map (replaceVariableSymbol replacer) l)
     | FunctionN(fn, l) ->
         FunctionN(fn, List.map (replaceVariableSymbol replacer) l)
-    | x -> x 
-
-let rec findVariablesOfExpression =
-    function
-    | Identifier _ as var -> Hashset([ var ])
-    | Power(x, n) -> findVariablesOfExpression x |> Hashset.union (findVariablesOfExpression n)
-    | IsFunctionWithParams(_,x,_) -> Hashset([x])
-    | Product l | Sum l | FunctionN(_, l) ->
-        Hashset(Seq.collect findVariablesOfExpression l)
-    | Function(_, x) -> findVariablesOfExpression x
-    | _ -> Hashset []
-
-let getFirstVariable x = Seq.head (findVariablesOfExpression x)
- 
-let rec width =
-    function
-    | Undefined
-    | Constant _
-    | Identifier _ -> 1
-    | Power(x, n) -> width x + 1 + width n
-    | FunctionN(fn, x::_) when isSpecializedFunction fn -> width x + 1
-    | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
-    | Function(_, x) -> width x + 1
-    | Approximation _ | Number _ -> 1
-    | f -> failwith (sprintf "unimplemented compute size %A" (  f))
-
-let rec depth =
-    function
-    | Undefined 
-    | Constant _
-    | Identifier _ -> 1
-    | Power(x, n) -> (max (depth x) (depth n)) + 1
-    | FunctionN(fn, x::_) when isSpecializedFunction fn -> depth x + 1
-    | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
-    | Function(_, x) -> depth x + 1
-    | Approximation _ | Number _ -> 1
-    | f -> failwith ("unimplemented compute depth for " + (f.ToFormattedString()))
-
-let averageDepth =
-    function
-    | Sum l | Product l | FunctionN(_, l) -> List.averageBy (depth >> float) l
-    | e -> float (depth e)
-
-let averageWidth =
-    function
-    | Sum l | Product l | FunctionN(_, l) -> List.averageBy (width >> float) l
-    | e -> float (depth e)
-
+    | x -> x  
+   
 module Structure =
+    let rec width =
+        function
+        | Undefined
+        | Constant _
+        | Identifier _ -> 1
+        | Power(x, n) -> width x + 1 + width n
+        | FunctionN(fn, x::_) when isSpecializedFunction fn -> width x + 1
+        | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
+        | Function(_, x) -> width x + 1
+        | Approximation _ | Number _ -> 1
+        | f -> failwith (sprintf "unimplemented compute size %A" (  f))
+
+    let rec depth =
+        function
+        | Undefined 
+        | Constant _
+        | Identifier _ -> 1
+        | Power(x, n) -> (max (depth x) (depth n)) + 1
+        | FunctionN(fn, x::_) when isSpecializedFunction fn -> depth x + 1
+        | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
+        | Function(_, x) -> depth x + 1
+        | Approximation _ | Number _ -> 1
+        | f -> failwith ("unimplemented compute depth for " + (f.ToFormattedString()))
+
+    let averageDepth =
+        function
+        | Sum l | Product l | FunctionN(_, l) -> List.averageBy (depth >> float) l
+        | e -> float (depth e)
+
+    let averageWidth =
+        function
+        | Sum l | Product l | FunctionN(_, l) -> List.averageBy (width >> float) l
+        | e -> float (depth e)
+
     let rootWidth =
         function
         | Sum l | Product l -> List.length l
@@ -184,32 +168,7 @@ module Structure =
     let collectDistinctWith f expr =
         Structure.collectAllDistinct (fun x ->
             if f x then Some x
-            else None) expr
-
-    let rec removeSymbol x =
-        function
-        | Identifier _ as var when var = x -> None
-        | Power(f, n) ->
-            maybe {
-                    let! g = removeSymbol x f  
-                    let! m = removeSymbol x n  
-                    return Power(g, m)} 
-        | Function(fn, f) ->
-            removeSymbol x f |> Option.map (fun g -> Function(fn, g))
-        | Product l ->
-            Product
-                (List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
-        | Sum l ->
-            Sum
-                (List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get) |> Some
-        | FunctionN(fn, l) ->
-            match List.map (removeSymbol x) l
-                 |> List.filterMap Option.isSome Option.get with
-            | [] -> None
-            | nl -> FunctionN (fn, nl) |> Some
-        | x -> Some x
+            else None) expr  
 
     let rec recursiveFilter filter =
         function
@@ -269,6 +228,7 @@ module Structure =
     let rec recursiveMapFilter filter fx =
         function
         | Identifier _ as var when filter var -> fx var
+        | Id x -> Id(recursiveMapFilter filter fx x)
         | Power(f, n) ->
             Power (recursiveMapFilter filter fx f, recursiveMapFilter filter fx n)
             |> filterApply fx filter
@@ -320,6 +280,15 @@ module Structure =
     let recursiveMapDepth filter depth fx e =
         recursiveMapLocation true filter depth 0 fx e
 
+    let mapfirstN n func expr =
+        let mutable count = 0
+        recursiveMapFilter (fun _ -> count < n) (function
+            | f when count < n ->
+                let f' = func f
+                if f' <> f then count <- count + 1
+                f'
+            | f -> f) expr 
+    
     let mapfirst func expr =
         let mutable isdone = false
         recursiveMap (function
@@ -339,6 +308,16 @@ module Structure =
     let toProductList = function
         | Product l -> l
         | f -> [f]    
+
+    let mapList f =
+        function
+        | Sum l -> Sum(List.map f l)
+        | Product l -> Product(List.map f l)
+        | x -> x
+
+let recmap = Structure.recursiveMap
+
+let recmapf = Structure.recursiveMapFilter
 
 module Expression =  
     let evaluateFloat vars expr =
@@ -514,12 +493,13 @@ module Expression =
             | Function(Sin, Product [ Number n; Constant Pi ]) when n = 1N / 4N ->
                 1Q / sqrt (2Q)
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
+            | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
             | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x 
             | FunctionN(Log, [a;b]) when a = b -> 1Q
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
-            | IsFunction(_,_, (IsNumber _ as n)) -> simplifyLoop n
-            | IsDerivative(IsFunction(Identifier(Symbol f),x,e),dx) -> 
+            | IsFunctionExpr(_,_, (IsNumber _ as n)) -> simplifyLoop n
+            | IsDerivative(IsFunctionExpr(Identifier(Symbol f),x,e),dx) -> 
                 fxn f x (diff dx (simplifyLoop e))   
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
@@ -552,6 +532,125 @@ module Expression =
             | x -> x
         simplifyLoop fx |> Rational.reduce
 
+    let replaceExpressionRaw autosimplify replacement expressionToFind formula =
+        let tryReplaceCompoundExpression replacement
+            (expressionToFindContentSet : Hashset<_>) (expressionList : _ list) =
+            let expressionListSet = Hashset expressionList
+            if expressionToFindContentSet.IsSubsetOf expressionListSet then
+                expressionListSet.SymmetricExceptWith expressionToFindContentSet
+                replacement :: List.ofSeq expressionListSet
+            else expressionList
+
+        let expressionToFindContentSet = Hashset(Structure.toList expressionToFind)
+
+        let rec iterReplaceIn =
+            function
+            | Identifier _ as var when var = expressionToFind -> replacement
+            | FunctionN _ | Power _ | Function _ | Number _ | Constant _ as expr 
+                when expr = expressionToFind ->
+                    replacement
+            | Id x -> Id (iterReplaceIn x)
+            | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)
+            | Function(f, fx) -> Function(f, iterReplaceIn fx)
+            | Product l ->
+                Product
+                    (l |> List.map iterReplaceIn
+                       |> (tryReplaceCompoundExpression replacement
+                              expressionToFindContentSet))
+            | Sum l ->
+                Sum
+                    (l |> List.map iterReplaceIn
+                       |> (tryReplaceCompoundExpression replacement
+                              expressionToFindContentSet))
+            | FunctionN(Probability, s::x::rest) -> FunctionN(Probability, s::iterReplaceIn x::rest) 
+            | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [iterReplaceIn x; param])
+            | FunctionN(fn, l) ->
+                FunctionN (fn, List.map iterReplaceIn l)
+            | x -> x
+        let newexpr = iterReplaceIn (simplifyLite formula)  
+        if autosimplify then simplify true newexpr else newexpr
+
+    let replaceExpression = replaceExpressionRaw true 
+
+    let replaceExpressions expressionsToFind formula = 
+        let rec loop f =
+            function 
+            | [] -> f
+            | (x,replacement)::xs -> loop (replaceExpression replacement x f) xs
+        loop formula expressionsToFind
+
+    let containsExpression expressionToFind formula =
+        let tryFindCompoundExpression (expressionToFindContentSet : Hashset<_>)
+            (expressionList : _ list) =
+            let expressionListSet = Hashset expressionList
+            expressionToFindContentSet.IsSubsetOf expressionListSet
+
+        let expressionToFindContentSet = Hashset(Structure.toList expressionToFind)
+
+        let rec iterFindIn =
+            function
+            | Identifier _ as var when var = expressionToFind -> true
+            | Power(p, n) as powr ->
+                powr = expressionToFind || iterFindIn p || iterFindIn n
+            | Function(_, fx) as fn -> fn = expressionToFind || iterFindIn fx
+            | Product l as prod ->
+                prod = expressionToFind
+                || tryFindCompoundExpression expressionToFindContentSet l
+                || (List.exists iterFindIn l)
+            | Sum l as sum ->
+                sum = expressionToFind
+                || tryFindCompoundExpression expressionToFindContentSet l
+                || (List.exists iterFindIn l)
+            | FunctionN(_, l) as func ->
+                func = expressionToFind
+                || (List.exists iterFindIn l)
+            | _ -> false
+        iterFindIn (simplifyLite formula)
+
+    
+    let rec removeSymbol x =
+        function
+        | Identifier _ as var when var = x -> None
+        | Power(f, n) ->
+            maybe {
+                    let! g = removeSymbol x f  
+                    let! m = removeSymbol x n  
+                    return Power(g, m)} 
+        | Function(fn, f) ->
+            removeSymbol x f |> Option.map (fun g -> Function(fn, g))
+        | Product l ->
+            Product
+                (List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
+        | Sum l ->
+            Sum
+                (List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get) |> Some
+        | FunctionN(fn, l) ->
+            match List.map (removeSymbol x) l
+                 |> List.filterMap Option.isSome Option.get with
+            | [] -> None
+            | nl -> FunctionN (fn, nl) |> Some
+        | x -> Some x 
+
+    let removeExpression x f =
+        let placeholder = Operators.symbol "__PLACE_HOLDER__"
+        let replaced = replaceExpression placeholder x f
+        removeSymbol placeholder replaced
+    
+    let rec findVariables =
+        function
+        | Identifier _ as var -> Hashset([ var ])
+        | Power(x, n) -> findVariables x |> Hashset.union (findVariables n)
+        | IsFunctionExprWithParams(_,x,_) -> Hashset([x])
+        | Product l | Sum l | FunctionN(_, l) ->
+            Hashset(Seq.collect findVariables l)
+        | Function(_, x) -> findVariables x
+        | _ -> Hashset []
+
+    let getFirstVariable x = Seq.head (findVariables x)
+
+    /// condition: x > 0
     let cancelAbs =
         function
         | Function(Abs, x) -> x
@@ -623,81 +722,7 @@ module Rational =
             l |> List.groupBy Rational.denominator
               |> List.map (snd >> List.sum >> Rational.expand) 
               |> Sum
-        | f -> f
-    
-
-let replaceExpressionRaw autosimplify replacement expressionToFind formula =
-    let tryReplaceCompoundExpression replacement
-        (expressionToFindContentSet : Hashset<_>) (expressionList : _ list) =
-        let expressionListSet = Hashset expressionList
-        if expressionToFindContentSet.IsSubsetOf expressionListSet then
-            expressionListSet.SymmetricExceptWith expressionToFindContentSet
-            replacement :: List.ofSeq expressionListSet
-        else expressionList
-
-    let expressionToFindContentSet = Hashset(Structure.toList expressionToFind)
-
-    let rec iterReplaceIn =
-        function
-        | Identifier _ as var when var = expressionToFind -> replacement
-        | FunctionN _ | Power _ | Function _ | Number _ | Constant _ as expr 
-            when expr = expressionToFind ->
-                replacement
-        | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)
-        | Function(f, fx) -> Function(f, iterReplaceIn fx)
-        | Product l ->
-            Product
-                (l |> List.map iterReplaceIn
-                   |> (tryReplaceCompoundExpression replacement
-                          expressionToFindContentSet))
-        | Sum l ->
-            Sum
-                (l |> List.map iterReplaceIn
-                   |> (tryReplaceCompoundExpression replacement
-                          expressionToFindContentSet))
-        | FunctionN(Probability, s::x::rest) -> FunctionN(Probability, s::iterReplaceIn x::rest) 
-        | FunctionN(fn, [ x; param ]) when isSpecializedFunction fn -> FunctionN(fn, [iterReplaceIn x; param])
-        | FunctionN(fn, l) ->
-            FunctionN (fn, List.map iterReplaceIn l)
-        | x -> x
-    let newexpr = iterReplaceIn (Expression.simplifyLite formula)  
-    if autosimplify then Expression.simplify true newexpr else newexpr
-
-let replaceExpression = replaceExpressionRaw true 
-
-let containsExpression expressionToFind formula =
-    let tryFindCompoundExpression (expressionToFindContentSet : Hashset<_>)
-        (expressionList : _ list) =
-        let expressionListSet = Hashset expressionList
-        expressionToFindContentSet.IsSubsetOf expressionListSet
-
-    let expressionToFindContentSet = Hashset(Structure.toList expressionToFind)
-
-    let rec iterFindIn =
-        function
-        | Identifier _ as var when var = expressionToFind -> true
-        | Power(p, n) as powr ->
-            powr = expressionToFind || iterFindIn p || iterFindIn n
-        | Function(_, fx) as fn -> fn = expressionToFind || iterFindIn fx
-        | Product l as prod ->
-            prod = expressionToFind
-            || tryFindCompoundExpression expressionToFindContentSet l
-            || (List.exists iterFindIn l)
-        | Sum l as sum ->
-            sum = expressionToFind
-            || tryFindCompoundExpression expressionToFindContentSet l
-            || (List.exists iterFindIn l)
-        | FunctionN(_, l) as func ->
-            func = expressionToFind
-            || (List.exists iterFindIn l)
-        | _ -> false
-    iterFindIn (Expression.simplifyLite formula)
-
-
-let removeExpression x f =
-    let placeholder = Operators.symbol "__PLACE_HOLDER__"
-    let replaced = replaceExpression placeholder x f
-    Structure.removeSymbol placeholder replaced
+        | f -> f 
     
 open Operators
 open System.Collections.Generic
@@ -1086,7 +1111,7 @@ let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) 
 type Expression with
     static member groupInSumWith var = function
         | Sum l -> 
-            let haves, nots = List.partition (containsExpression var) l
+            let haves, nots = List.partition (Expression.containsExpression var) l
             Product[var; haves |> List.sumBy (fun x -> x/var)] + Sum nots
         | f -> f 
 
@@ -1207,9 +1232,10 @@ module InEquality =
         | Negative
         | Nil
 
-type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expression) =
-    let conditions = Hashset<InEquality>()
-    let varsigns = Dict<Expression, InEquality.NumSign>()
+type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expression, ?existingConditions : InEquality seq, ?existingSigns) =
+    let conditions = defaultArg (Option.map (fun (h:seq<InEquality>) -> Hashset(h)) existingConditions) (Hashset<InEquality>())
+    let varsigns = defaultArg existingSigns (Dict<Expression, InEquality.NumSign>())
+
     member __.Definition = leq, comparer, req
     member __.Left = leq
     member __.Right = req
@@ -1224,11 +1250,14 @@ type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expressi
             | InEquality.Geq | InEquality.Greater -> Some(InEquality.Positive)
             | _ -> None
         | IsNumber n ->
-            let isNegative = Expression.isNegativeNumber n
-            if isNegative then
+            let isNegativeOrZero = Expression.isNegativeOrZeroNumber n
+            if isNegativeOrZero then
+                let num = n.ToFloat()
                 match comparer with
-                | InEquality.Leq | InEquality.Lesser ->
-                    Some(InEquality.Negative)
+                | InEquality.Leq when num < 0. -> Some(InEquality.Negative)
+                | InEquality.Lesser -> Some(InEquality.Negative)
+                | InEquality.Geq | InEquality.Greater when num = 0. ->
+                    Some(InEquality.Positive)
                 | _ -> None
             else
                 match comparer with //is positive
@@ -1241,10 +1270,14 @@ type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expressi
         leq.ToFormattedString() + string comparer + req.ToFormattedString()
         + newline() + (Seq.map string conditions |> String.concat (newline()))
 
-    member __.Flip() = InEquality(InEquality.flipComparer comparer, req, leq)
-    member i.ApplyToRight f = InEquality(i.Comparer, i.Left, f i.Right)
-    member i.ApplyToLeft f = InEquality(i.Comparer, f i.Left, i.Right)
-    member i.Apply f = InEquality(i.Comparer, f i.Left, f i.Right)
+    member i.Flip() = i.To(InEquality.flipComparer comparer, req, leq)
+    member i.ApplyToRight f = i.To(i.Left, f i.Right)
+    member i.ApplyToLeft f = i.To(f i.Left, i.Right)
+    member i.Apply f = i.To(f i.Left, f i.Right)
+    
+    static member applyToRight f (e:InEquality) = e.ApplyToRight f
+    static member applyToLeft f (e:InEquality) = e.ApplyToLeft f 
+    static member apply f (e:InEquality) = e.Apply f 
 
     member i.AddCondition(c : InEquality) =
         match c.Left with
@@ -1253,7 +1286,7 @@ type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expressi
             | None -> ()
             | Some s -> varsigns.Add(x, s)
         | _ -> ()
-        conditions.Add c |> ignore
+        conditions.Add c |> ignore; i
 
     static member decideComparison (eq : InEquality, expr : Expression) =
         let isnum = Expression.isNumber expr
@@ -1265,29 +1298,42 @@ type InEquality(comparer : InEquality.Comparer, leq : Expression, req : Expressi
             | false, Some InEquality.Positive | _ when isnum ->
                 eq.Comparer, true
             | _ -> eq.Comparer, false
-        if not safe then
-            eq.AddCondition(InEquality(InEquality.Comparer.Greater, expr, 0Q))
-        else if not isnum then
-            let compop =
-                match eq.VarSigns.[expr] with
-                | InEquality.Positive -> InEquality.Comparer.Greater
-                | InEquality.Negative -> InEquality.Comparer.Lesser
-                | _ -> InEquality.Comparer.Geq
-            eq.AddCondition(InEquality(compop, expr, 0Q))
-        c
+        let cond =
+            if not safe then
+                Some (InEquality(InEquality.Comparer.Greater, expr, 0Q))
+            else 
+                //if not isnum then
+                //    let compop =
+                //        match eq.VarSigns.[expr] with
+                //        | InEquality.Positive -> InEquality.Comparer.Greater
+                //        | InEquality.Negative -> InEquality.Comparer.Lesser
+                //        | _ -> InEquality.Comparer.Geq
+                //    Some(InEquality(compop, expr, 0Q))
+                // else 
+                 None
+        c, cond
 
-    static member (*) (eq : InEquality, expr : Expression) =
-        InEquality
-            (InEquality.decideComparison (eq, expr), eq.Left * expr,
-             eq.Right * expr)
+    member eq.To (l, r) = 
+        InEquality(eq.Comparer, l, r, eq.Conditions, eq.VarSigns)
+    member eq.To (comparer,l, r)  = 
+        InEquality(comparer, l, r, eq.Conditions, eq.VarSigns)
+
+    static member (*) (eq : InEquality, expr : Expression) = 
+        let comparer, cond = InEquality.decideComparison (eq, expr)
+        let ineq = eq.To(comparer, eq.Left * expr, eq.Right * expr)
+        match cond with 
+        | None -> ineq 
+        | Some c -> ineq.AddCondition c
+        
     static member (+) (eq : InEquality, expr : Expression) =
-        InEquality(eq.Comparer, eq.Left + expr, eq.Right + expr)
+        eq.To(eq.Left + expr, eq.Right + expr)
     static member (-) (eq : InEquality, expr : Expression) =
-        InEquality(eq.Comparer, eq.Left - expr, eq.Right - expr)
+        eq.To(eq.Left - expr, eq.Right - expr)
     static member (/) (eq : InEquality, expr : Expression) =
-        InEquality
-            (InEquality.decideComparison (eq, expr), eq.Left / expr,
-             eq.Right / expr)
+        let comparer, cond = InEquality.decideComparison (eq, expr)
+        let ineq =
+            eq.To(comparer, eq.Left / expr, eq.Right / expr)
+        match cond with None -> ineq | Some c -> ineq.AddCondition c 
 
 let leq a b = InEquality(InEquality.Comparer.Leq,a,b)
 let geq a b = InEquality(InEquality.Comparer.Geq,a,b)
@@ -1308,6 +1354,9 @@ let eqapply = Equation.Apply >> Op
 let eqapplys (s,f) = Instr(Equation.Apply f, s)
   
 let equationTrace (current:Equation) (instructions : _ list) = 
+    stepTracer false true string current instructions
+
+let inEqualityTrace (current:InEquality) (instructions : _ list) = 
     stepTracer false true string current instructions
       
 let evalExpr vars x =
@@ -1386,11 +1435,7 @@ module Vars =
     let Z = V "Z" 
 
     let ofChar c = symbol (string c)
-
-module Constants =
-    let π = pi
-    let pi = pi 
-    let e = Constant Constant.E
+     
    
 let rational x = Expression.fromFloat x
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
@@ -1433,6 +1478,7 @@ type PiSigma(expr) =
                 e
                 |> replaceSymbols [ for (a, b) in p -> a, fromRational b ]
                 |> Expression.toRational
+                |> Option.get
 
             let n, m =
                 match Expression.FullSimplify a, Expression.FullSimplify b with
@@ -1487,7 +1533,7 @@ type Func(?varname, ?expr, ?functionName) =
         match f with 
         | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> funcx fname x
         | FunctionN(Function.Func, [_;Identifier _ as y;expr]) ->
-            replaceExpression x y expr
+            Expression.replaceExpression x y expr
         | _ -> failwith "Not a function"
     member __.Function =
         match (varname,expr, functionName) with
@@ -1514,37 +1560,7 @@ module Ops =
         | Number n, Number m -> Expression.FromRational (min n m)
         | _ -> FunctionN(Function.Min, [a;b])
 
-[<RequireQualifiedAccess>]
-type FuncType =
-     | Identity 
-     | Power of Expression
-     | Function of Function
-     member t.WrapExpression e =
-        match t with 
-        | Power n -> Expression.Power(e, n)
-        | Function f -> Expression.Function(f, e)
-        | Identity -> e
-     override t.ToString() =
-        match t with 
-        | Power n -> " _ ^" + (Expression.toFormattedString n)
-        | Function f -> string f
-        | Identity -> "id"
 
-let (|AsFunction|_|) input = 
-     match input with 
-     | Function(f, x) -> Some(FuncType.Function f,x)
-     | Power(x,n) -> Some(FuncType.Power n,x)
-     | f -> Some(FuncType.Identity, f)
-
-let (|IsProb|_|) input = 
-     match input with 
-     | FunctionN(Probability, _::x::_) -> Some(x) 
-     | _ -> None
-
-let (|IsExpectation|_|) input = 
-     match input with 
-     | FunctionN(Function.Expectation, [x; p]) -> Some(x, p) 
-     | _ -> None  
 
 
     

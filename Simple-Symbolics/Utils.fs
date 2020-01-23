@@ -43,6 +43,8 @@ let space() = if expressionFormat = InfixFormat then " " else " \\; "
 let newline() = if expressionFormat = InfixFormat then "\n" else "\n \\\\ "
 let fmt e = expressionFormater e
 
+let symbol = Operators.symbol
+
 let setInfix() =
     expressionFormat <- "Infix"
     expressionFormater <- Infix.format
@@ -175,6 +177,15 @@ let fx x = FunctionN(Function.Func, [Operators.symbol "f";x])
 let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
 let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
 
+let choose n k = FunctionN(Choose, [n;k])
+let binomial n k = FunctionN(Choose, [n;k])
+let prob x = FunctionN(Probability, [symbol "P"; x ])
+let probc x param = FunctionN(Probability, [ symbol "P"; x; param ])
+let probparam x param = FunctionN(Probability, [symbol "P";  x; param; 0Q ])
+
+let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
+
+
 let limit var lim x = FunctionN(Limit, [var;lim;x]) 
 
 let hold x = Id x
@@ -193,7 +204,8 @@ let transpose x = Function(Transpose, x)
 
 let inverse x = Function(Inverse, x)
 
- 
+let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
+
 let isSpecializedFunction = function
     | Probability
     | Gradient

@@ -49,7 +49,7 @@ To compute a (total) differential, we need to find all the variables of an expre
 *)
 (*** define-output:out1 ***)
 let expr = (x*y + z)
-let exprsvars = findVariablesOfExpression expr
+let exprsvars = Expression.findVariables expr
 exprsvars
 
 (*** include-it:out1 ***)
@@ -97,7 +97,7 @@ Putting it all into a function:
 *)
 (*** define-output:out8 ***)
 let totalDerivative expr =
-    let exprsvars = findVariablesOfExpression expr
+    let exprsvars = Expression.findVariables expr
     List.sum
         [ for v in exprsvars -> symbol ("d" + symbolString v) * (pdiff v expr) ]
 
@@ -126,7 +126,7 @@ It's fairly opaque, I think. Let's try doing it in code, thereby enforcing clari
 *)
 let deltax = V"\\Delta x"
 let df Δx x =
-    let dx = getFirstVariable x
+    let dx = Expression.getFirstVariable x
     diff dx x * Δx
 (**
 Applying this to the identity function, a line: $x \mapsto x$, but which we'll  write as the expression $x$, you get:
@@ -154,7 +154,7 @@ let dx = V"dx"
 [ eqapply (replaceSymbols [ deltax, dy x ])
   eqapplys
       ("Pretend $\\operatorname{{d}}(x)$ is not a function",
-       replaceExpression dx (dy x))
+       Expression.replaceExpression dx (dy x))
   eqapply (fun e -> e / dx) ]
 |> equationTrace (dy (fx x) <=> df deltax (fx x))
 
@@ -181,7 +181,7 @@ let deltay = V"\\Delta y"
     (@"$dy \approx \Delta y$ and approximate $f(x + \Delta x)$ with $f'(x)(x-c) + f(c)$",
        replaceSymbols [ deltay, V "dy" ]
       //false here prevents simplification on replacement
-       >> replaceExpressionRaw false (linear x fx c (deltax + c))
+       >> Expression.replaceExpressionRaw false (linear x fx c (deltax + c))
               (fx (x + deltax)))
   eqapply Expression.Simplify
   eqapply (replaceSymbol x c) ]

@@ -33,6 +33,7 @@
     <Compile Include="Numbers.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="OEIS.fs" />
+    <Compile Include="Units.fs" />
     <Compile Include="CurrencyUtils.fs" />
     <Compile Include="Powers.fs" />
     <Compile Include="Summation.fs" />
@@ -55,7 +56,7 @@
     <PackageReference Include="Hansei" Version="0.3.2.2" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.23.7" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.23.9" />
   </ItemGroup>
 
   <ItemGroup>

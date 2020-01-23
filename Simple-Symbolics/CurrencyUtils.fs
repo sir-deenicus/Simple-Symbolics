@@ -60,12 +60,13 @@ let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
         |> Seq.last
 
 module Units =
+    open Units
     open MathNet.Symbolics.Core
 
-    let usd = Units(1Q, symbol "USD", "USD")
+    let usd = Units("USD")
 
     let internal setCurrency eps curr = 
-        (checkCurrency eps curr) * usd |> Core.Units.setAlt curr
+        (checkCurrency eps curr) * usd |> setAlt curr
     
     let currencyFriction = 1e-04
 

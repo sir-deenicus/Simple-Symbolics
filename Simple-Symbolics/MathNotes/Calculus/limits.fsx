@@ -40,41 +40,6 @@ open Expression
 
 setLatex()
 
-
-let res1, z1 =
-    [ NumberTheory.expandChooseBinomial
-      recmap (Algebraic.consolidateSums)
-      Rational.applyToNumerator (replaceSymbol (p*M + q*M) M) ; replaceExpression q (1-p);
-      recmap (approximateFactorial)]
-      |> List.map Op
-      |> expressionTrace (choose M (p*M))
-
-res1,z1
-
-let res2, z2 =
-    [ Expression.Simplify
-      recmap Exponents.expandRationalPower
-      recmap Algebraic.expand
-      recmap Exponents.splitPower
-      Exponents.gatherProductPowers
-      recmap (Expression.replaceExpression M (p*M + q*M))  ]
-      |> List.map Op
-      |> expressionTrace res1
-
-res2,z2
-
-
-fac(p*M+q*M)/fac(p*M)/fac(q*M) |> recmap (approximateFactorial) |> Expression.Simplify  |> recmap Exponents.splitPower |> Exponents.gatherProductPowers |> Expression.Simplify
-
-
-[InEquality.apply (log 2Q >> Expression.Simplify) ;
- InEquality.apply Logarithm.expand
- InEquality.apply (recmap Logarithm.powerRule)
- InEquality.apply (Algebraic.consolidateSums)
- fun x -> (x / M)]
- |> List.map Op
- |> inEqualityTrace (leq res2 (2Q**N))
-
 (t - sqrt (3 * t + 4)) / (4 - t)
 |> Rational.rationalizeNumeratorWithConjugate
 |> Structure.recursiveMapFilter
@@ -124,33 +89,16 @@ let extractNonVariables x f = function
 
 
 PiSigma.Σ((3-2*i)**2Q ,1Q,n) |> Structure.recursiveMap Algebraic.expand |> expandSummation |> Structure.recursiveMap extractSumConstants |> Structure.recursiveMap simplifySums |> Expression.FullSimplify
-let isPositiveNumber n =
-    if isNumber n then
-        n.ToFloat() >= 0.
-    else false
-
-let hasNegatives = function
-    | Product (Number n)::_ -> n >= 0
-    | x -> isNegativeNumber x
-
-let isPositiveExpression = function
-    | Function(Abs,_) -> true
-    | Power(_,Number n) when (int n)%2 = 0 -> true
-    | x -> isPositiveNumber x
-
-let isPositive = function
-    | Sum l -> List.forall isPositiveExpression l
-    | x -> isPositiveExpression x
-
-x
--x+b*3,""
 
 
 let (|IsLimit|_|) input =
      match input with
      | FunctionN(Limit, [var;lim;x]) -> Some(var,lim,x)
      | _ -> None
-
+ let evalLimit = function
+     | IsLimit(var,lim,x) ->
+         replaceSymbol lim var x
+     | x -> x
 let cLimit = function
     | IsLimit(var,lim,Product (c::l)) when Expression.isNumber c -> c * limit var lim (Product l)
     | x -> x
@@ -168,6 +116,14 @@ let sLimit = function
     | IsLimit(var,lim,Product l) ->
         l |> List.map (fun x -> limit var lim x) |> Product
     | x -> x
+
+
+let simpinf = function Power(x, n) when n = infinity && Structure.exists hasNegatives x -> undefined | x -> x
+
+((-a/b)**n)|> Exponents.expandRationalPower |> replaceSymbol infinity n |> Expression.Simplify |> Algebraic.expand |> Structure.toList |> List.map (Expression.FullSimplify)
+simpinf ((-a/b)**infinity)
+
+(2/3Q)**n |> Exponents.expandRationalPower |> Expression.expandSumsOrProducts (limit n infinity)// |> recmap evalLimit// |> Structure.toList |> List.map (Expression.FullSimplify >> simpinf)
 
 let var = x
 let lim = a

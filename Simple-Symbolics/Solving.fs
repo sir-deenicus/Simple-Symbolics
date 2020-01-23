@@ -6,6 +6,7 @@ open Vars
 open Prelude.Common 
 open Utils
 open MathNet.Symbolics.NumberTheory
+open Units
 
 let reArrangeExprInequalityX silent focusVar (left, right) =
     let rec iter doflip fx ops =

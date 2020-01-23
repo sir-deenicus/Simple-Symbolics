@@ -121,6 +121,27 @@ module Expression =
             n.ToFloat() < 0.
         else false
 
+    let hasNegatives = function
+        | Product (Number n::_) -> n < 0N
+        | x -> isNegativeNumber x 
+
+    let isPositiveNumber n =
+        if isNumber n then
+            n.ToFloat() >= 0.
+        else false
+
+    let rec isPositiveExpressionRec = function
+        | Function(Abs,_) -> true
+        | Power(_,Number n) when (int n)%2 = 0 -> true
+        | Sum l
+        | Product l -> List.forall isPositiveExpressionRec l
+        | x -> isPositiveNumber x
+
+    let isPositiveExpression = function
+        | Product l
+        | Sum l -> List.forall isPositiveExpressionRec l
+        | x -> isPositiveExpressionRec x 
+
 let (|ProductHasNumber|_|) =
     function
     | Product l ->
@@ -255,3 +276,5 @@ let sterlingsApproximation = function
     | x -> x
 
 let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
+ 
+let rational x = Expression.fromFloat x

@@ -435,6 +435,7 @@ module Riemann =
         | _ -> undefined
 
 module Units =
+    open Units
     let integrate (dx:Units) (fx : Units) = 
         Units (evalIntegral (integral dx.Quantity fx.Quantity), fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx
 

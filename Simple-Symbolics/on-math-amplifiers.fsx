@@ -51,7 +51,19 @@ Sum of k^p
 
 telescopic logarithm
 
+Deriving Bayes Rule
 
+change of base
+
+[ eqapply (fun x -> b ** x |> Expression.Simplify)
+  eqapply (log a)
+  eqapply Logarithm.powerRule
+  Op Equation.swap
+  Op(Solving.reArrangeEquation z)
+  eqapply (replaceSymbol (log b x) z) ]
+|> equationTrace (log b x <=> z)
+
+How to reverse integrals?
 
 [Rational.applyToNumerator (powerRuleRevSwapped true) >> Expression.Simplify;
  Rational.applyToDenominator Algebraic.expand]

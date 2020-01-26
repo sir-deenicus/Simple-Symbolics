@@ -204,6 +204,14 @@ let transpose x = Function(Transpose, x)
 
 let inverse x = Function(Inverse, x)
 
+let sub x subscript = FunctionN(Indexed, [subscript;x])
+
+let subs subscripts x = FunctionN(Indexed, x::subscripts)
+
+let define a b = Definition(a,b)
+
+let replaceDefinition = function Definition(a,b) -> b | x -> x
+
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
 
 let isSpecializedFunction = function
@@ -253,4 +261,16 @@ let (|Binomial|_|) input =
      | _ -> None 
 
 //========================
- 
+let expectationsDistribution = function
+    | IsExpectation (_, px) -> px
+    | _ -> Undefined
+    
+let expectationsProbInner = function
+    | IsExpectation (_, IsProb x) -> x
+    | _ -> Undefined
+
+let innerProb = function
+    | IsProb x -> x
+    | _ -> Undefined
+
+let isProb = function | IsProb _ -> true | _ -> false

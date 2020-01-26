@@ -399,19 +399,7 @@ let rewriteIntegralAsExpectation =
         }
         |> Option.defaultValue f
     | f -> f
-    
-let expectationsDistribution = function
-    | IsExpectation (_, px) -> px
-    | _ -> Undefined
-    
-let expectationsProbInner = function
-    | IsExpectation (_, IsProb x) -> x
-    | _ -> Undefined
-
-let innerProb = function
-    | IsProb x -> x
-    | _ -> Undefined
-
+     
 let rewriteExpectationAsIntegral = function
     | FunctionN(Function.Expectation, [ expr; distr ]) ->
         let dx =

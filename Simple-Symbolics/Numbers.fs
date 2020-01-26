@@ -3,6 +3,7 @@
 open MathNet.Numerics
 open MathNet
 open MathNet.Symbolics.Utils
+open System
 
 module BigRational =
     open Microsoft.FSharp.Core.Operators
@@ -278,3 +279,15 @@ let sterlingsApproximation = function
 let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
  
 let rational x = Expression.fromFloat x
+
+let tryNumber =
+    function
+    | Number n -> Some(float n)
+    | IsNumber n -> Some(n.ToFloat())
+    | PositiveInfinity -> Some(Double.PositiveInfinity)
+    | NegativeInfinity -> Some(Double.NegativeInfinity)
+    | x ->
+        try
+            Some(Expression.toFloat x)
+        with _ -> None
+    | _ -> None

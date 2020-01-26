@@ -183,8 +183,10 @@ module Structure =
         function
         | Number _ as n when not (filter n) -> None
         | Number _ as n -> Some n
+        | Definition _  
         | Identifier _ as var when not (filter var) -> None
-        | Identifier _ as var -> Some var
+        | Definition _ 
+        | Identifier _ as var -> Some var 
         | Power(f, n) as p ->
             match 
                 (maybe {
@@ -501,6 +503,8 @@ module Expression =
                 1Q / sqrt (2Q)
             | Function(Sin, Product [ Number n; Constant Pi ]) when n = 1N / 4N ->
                 1Q / sqrt (2Q)
+            | Function(Function.Cos, Function(Acos, x))
+            | Function(Function.Acos, Function(Cos, x)) -> simplifyLoop x
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
             | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
             | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x 
@@ -993,7 +997,11 @@ module Vars =
     let A = V"A"
     let B = V"B"
     let C = V "C"
-    let D = V "D"
+    let F = V"F"
+    let G = V"G"
+    let J = V "J"
+    let K = V "K"
+    let L = V "L"
     let M = V "M"
     let N = V "N"
     let P = V "P" 
@@ -1001,12 +1009,35 @@ module Vars =
     let R = V"R"
     let S = V"S"
     let T = V "T"
-    let U = V"U" 
-    let X = V "X" 
-    let Y = V "Y" 
-    let Z = V "Z" 
+    let U = V"U"  
+    let W = V"W" 
+    let X = V"X" 
+    let Y = V"Y" 
+    let Z = V"Z" 
 
     let ofChar (c:char) = symbol (string c) 
+
+type Vars() = 
+    //Α α, Β β, Γ γ, Δ δ, Ε ε, Ζ ζ, Η η, Θ θ, Ι ι, Κ κ, Λ λ, Μ μ, Ν ν, Ξ ξ, Ο ο, Π π, Ρ ρ,  σ,Ω ω.
+    static member internal letter greek latex =
+        match expressionFormat with 
+        | InfixFormat -> greek
+        | _ -> latex
+    static member alpha = Vars.letter "α" "\\alpha"
+    static member beta = Vars.letter "β" "\\beta"
+    static member gamma = Vars.letter "γ" "\\gamma"
+    static member Gamma = Vars.letter "Γ" "\\alpha"
+    static member delta = Vars.letter "δ" "\\delta"
+    static member Delta = Vars.letter "Δ" "\\Delta" 
+    static member epsilon = Vars.letter "ε" "\\epsilon"
+    static member lambda = Vars.letter "λ" "\\lambda"
+    static member mu = Vars.letter "μ" "\\mu"
+    static member Theta = Vars.letter "Θ" "\\Theta"
+    static member theta = Vars.letter "θ" "\\theta"
+    static member rho = Vars.letter "ρ" "\\rho"
+    static member sigma = Vars.letter "σ" "\\sigma"
+    static member omega = Vars.letter "ω" "\\omega"
+    static member Omega = Vars.letter "Ω" "\\Omega"
 
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 

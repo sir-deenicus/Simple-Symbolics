@@ -1,10 +1,12 @@
 ﻿module MathNet.Symbolics.Summation
 
+open MathNet.Numerics
 open MathNet.Symbolics
 open MathNet.Symbolics.NumberTheory
 open MathNet.Symbolics.Core
 open Utils
 open Operators 
+open Prelude.Common
 
 let summation var start stop fx = FunctionN(SumOver, [fx;var;start;V"="; stop])
 
@@ -89,4 +91,28 @@ let binomialTheorem = function
         when k = k2 && start = 0Q && n = n2 -> 2Q ** n
     | Summation(Product [ k2; Binomial(n,k)], k3, start, n2)
         when k = k2 && k2 = k3 && start = 0Q && n = n2 -> n * 2Q**(n-1)
+    | x -> x
+
+let rewriteAsExpectation = function
+    | FunctionN(SumOver,x::_) as f ->
+        maybe {
+            let! p = Structure.first isProb x
+            let! x' = Structure.recursiveFilter ((<>) p) x
+            return (expectation p x')
+        } |> Option.defaultValue f
+    | f -> f
+
+let rewriteExpectationAsSum = function
+    | IsExpectation(expr, distr) ->
+        let dx =
+            match Structure.first Expression.isVariable (innerProb distr) with
+            | Some e -> e  
+            | None -> V""
+        FunctionN(SumOver, [(distr * expr);dx;V"";V"";V""])
+    | f -> f
+
+let expandVarianceExpectation = function
+    | IsExpectation 
+        (Power (Sum [Product [Number n; IsExpectation(x1, p1)]; x2], p),p2) when n = -1N && p = 2Q -> 
+            expectation p1 (x1**2Q) - (expectation p2 x2)**2Q
     | x -> x

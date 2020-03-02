@@ -25,6 +25,8 @@ open Hansei.Core.Distributions
 open Prelude.StringMetrics
 open Derivations
 open Units
+open Solving
+
 
 let getCandidates1 (vset : Hashset<_>) vars knowns =
     knowns

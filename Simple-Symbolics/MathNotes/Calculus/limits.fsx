@@ -1,17 +1,22 @@
-﻿#load @"C:\Users\cybernetic\Jupyter-Notebooks\maths.fsx"
+﻿
+#load @"C:\Users\cybernetic\Jupyter-Notebooks\maths.fsx"
 
 open MathNet.Numerics
 open Prelude.Common
 open System
 open MathNet.Symbolics.Core
 open MathNet.Symbolics
-open MathNet.Symbolics.Core.Vars
 open MathNet.Symbolics.Operators
 open MathNet.Symbolics.Utils
 open XPlot.Plotly
 open MathNet.Symbolics.Differentiation
 open Maths
 open MathNet.Symbolics.LinearAlgebra
+open MathNet.Symbolics.Core.Vars
+open MathNet.Symbolics.Summation
+open MathNet.Symbolics.Units
+
+setLatex()
 
 #r "netstandard"
 #r @"C:\Users\cybernetic\source\repos\Prelude\Prelude\bin\Release\net47\prelude.dll"
@@ -34,12 +39,13 @@ open MathNet.Symbolics.Utils
 open MathNet.Symbolics.Differentiation
 open MathNet.Symbolics.LinearAlgebra
 open MathNet.Symbolics.Solving
+open MathNet.Symbolics.Units
 
 open NumberTheory
 open Expression
-
+ 
 setLatex()
-
+ 
 (t - sqrt (3 * t + 4)) / (4 - t)
 |> Rational.rationalizeNumeratorWithConjugate
 |> Structure.recursiveMapFilter
@@ -95,10 +101,12 @@ let (|IsLimit|_|) input =
      match input with
      | FunctionN(Limit, [var;lim;x]) -> Some(var,lim,x)
      | _ -> None
- let evalLimit = function
+
+let evalLimit = function
      | IsLimit(var,lim,x) ->
          replaceSymbol lim var x
      | x -> x
+
 let cLimit = function
     | IsLimit(var,lim,Product (c::l)) when Expression.isNumber c -> c * limit var lim (Product l)
     | x -> x

@@ -6,7 +6,7 @@ open Utils
 
 let evalDerivative =
     function
-    | IsDerivative(f, dx) -> Calculus.differentiate2 dx f
+    | IsDerivative(_, f, dx) -> Calculus.differentiate2 dx f
     | f -> f
 
 let evalAllDerivativeExprs = Structure.recursiveMap evalDerivative >> Expression.simplify true

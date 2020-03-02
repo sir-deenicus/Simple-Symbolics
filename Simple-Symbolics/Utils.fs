@@ -5,6 +5,7 @@ open System
 open Microsoft.FSharp 
 open Prelude.Math
 open Prelude.Common
+open MathNet.Numerics
 
 type TraceExplain<'a> =
      | Str of string
@@ -77,7 +78,7 @@ type StepTrace(s) =
 
 let stepTracer isverbose iseq fmt current instructions =
     let steps = StepTrace("")
-    let nline = if iseq then "\n\n  " else "  "
+    let nline = if iseq then "\n  " else "  "
     let rec loop cnt current =
         function
         | [] -> current, steps
@@ -190,9 +191,14 @@ let limit var lim x = FunctionN(Limit, [var;lim;x])
 
 let hold x = Id x
 
-let removeHold = function
-    | Id x -> x
-    | x -> x
+module Hold = 
+    let extractLeadingNegative = function
+        | Id(Product (Number n::_) as p) when n < 0N -> -1 * hold (p / -1)
+        | x -> x
+
+    let remove = function
+        | Id x -> x
+        | x -> x
 
 let negateId x = (Operators.negate(Algebraic.expand(Operators.negate x))) 
 
@@ -231,12 +237,16 @@ let (|IsFunctionExprWithParams|_|) = function
     | _ -> None      
 
 let (|IsDerivative|_|) = function
-     | FunctionN(PartialDerivative, [ x; dx ])
-     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+     | FunctionN(PartialDerivative as f, [ x; dx ])
+     | FunctionN(Derivative as f, [ x; dx ]) -> Some(f, x,dx)
      | _ -> None  
 
 let (|IsDerivative1D|_|) = function
     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+    | _ -> None    
+
+let (|IsPartialDerivative|_|) = function
+    | FunctionN(PartialDerivative, [ x; dx ]) -> Some(x,dx)
     | _ -> None    
 
 let (|AsFunction|_|) input = 

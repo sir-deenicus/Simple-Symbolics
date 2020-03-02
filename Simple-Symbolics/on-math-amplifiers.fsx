@@ -3,14 +3,6 @@
 
 Programming removes ambiguity and thus offers a level of inspectability that language does not allow.
 
-vs Mathematica vs Lean 
-
-[Lean Proof](https://github.com/ImperialCollegeLondon/M4P33/blob/f427bb3057138dc9ca52830f3147d3cec443a85a/src/affine_algebraic_set/V.lean#L335)
-
-Beyond visualization
-
-link to euler diagram paper
-
 math amplification
 
 the importance of steps
@@ -20,6 +12,18 @@ forgetting high frequency details or memory as a low pass filter
 math as a series of transformations
 
 AI vs IA
+
+vs Mathematica vs Lean 
+
+
+Beyond visualization
+
+[Lean Proof](https://github.com/ImperialCollegeLondon/M4P33/blob/f427bb3057138dc9ca52830f3147d3cec443a85a/src/affine_algebraic_set/V.lean#L335)
+
+
+link to euler diagram paper
+
+
 
 knowledge base
 

@@ -63,11 +63,16 @@ module Logarithm =
         | f -> powerRuleSingleBackwards f
 
 module Exponents =
-    let movePowerLeft nInt =
-        let n = Expression.FromInt32 nInt
+    let shiftPowerLeftRaw (n:Expression) =
         function
-        | Power(b, (Sum(Number _ :: _) as r)) ->
-            Core.Expression.simplifyLite (b ** n * Power(b, r - n))
+        | Power(b, r) ->
+             (b ** n * hold(Power(b, hold r - n)))
+        | f -> f
+
+    let shiftPowerLeft (n:Expression) =
+        function
+        | Power(b, r) ->
+             (b ** n * hold(Power(b, r - n)))
         | f -> f
 
     let splitPower =

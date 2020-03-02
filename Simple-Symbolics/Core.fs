@@ -22,17 +22,24 @@ let symbolString =
     | Identifier(Symbol s) -> s
     | _ -> ""
  
-let rec replaceSymbol r x =
-    function
-    | Identifier _ as var when var = x -> r
-    | Power(f, n) -> Power(replaceSymbol r x f, replaceSymbol r x n)
-    | Function(fn, f) -> Function(fn, replaceSymbol r x f)
-    | Product l -> Product(List.map (replaceSymbol r x) l)
-    | Sum l -> Sum(List.map (replaceSymbol r x) l)
-    | Id v -> Id(replaceSymbol r x v)
-    | FunctionN(fn, l) -> FunctionN(fn, List.map (replaceSymbol r x) l)
-    | x -> x
-        
+let rec replaceSymbolX doall r x f =
+    let rec loop =
+        function
+        | Identifier _ as var when var = x -> r
+        | Power(f, n) -> Power(loop f, loop n)
+        | Function(fn, f) -> Function(fn, loop f)
+        | Product l -> Product(List.map loop l)
+        | Sum l -> Sum(List.map loop l)
+        | Id v -> Id(loop v)
+        | FunctionN(fn, l) when doall -> FunctionN(fn, List.map loop l) 
+        | IsDerivative(f, x, dx) -> FunctionN(f, [loop x; dx ])
+        | x -> x
+    loop f
+
+let replaceSymbol r x f = replaceSymbolX false r x f
+
+let replaceSymbolAll r x f = replaceSymbolX true r x f
+
 let rec containsVar x =
     function
     | Identifier _ as sy when sy = x -> true
@@ -212,6 +219,12 @@ module Structure =
             if filter fn then Some fn else None   
         | _ -> None
 
+    
+    let recursivePartition filter f =
+        let trues = recursiveFilter filter f
+        let falses = recursiveFilter (filter >> not) f
+        trues, falses
+
     let rec applyInFunctionRec fx =
         function  
         | Function(fn, f) -> Function(fn, fx(applyInFunctionRec fx f))
@@ -325,6 +338,7 @@ module Structure =
         | Sum l -> Sum(List.map f l)
         | Product l -> Product(List.map f l)
         | x -> x
+
 
 let recmap = Structure.recursiveMap
 
@@ -505,10 +519,12 @@ module Expression =
                 1Q / sqrt (2Q)
             | Function(Function.Cos, Function(Acos, x))
             | Function(Function.Acos, Function(Cos, x)) -> simplifyLoop x
+            | Function(Ln, Power(Constant Constant.E, x))
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
             | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
             | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x 
             | FunctionN(Log, [a;b]) when a = b -> 1Q
+            | Power(Constant Constant.E, Function(Ln,x))
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
             | IsFunctionExpr(_,_, (IsNumber _ as n)) -> simplifyLoop n
@@ -1023,21 +1039,22 @@ type Vars() =
         match expressionFormat with 
         | InfixFormat -> greek
         | _ -> latex
-    static member alpha = Vars.letter "α" "\\alpha"
-    static member beta = Vars.letter "β" "\\beta"
-    static member gamma = Vars.letter "γ" "\\gamma"
-    static member Gamma = Vars.letter "Γ" "\\alpha"
-    static member delta = Vars.letter "δ" "\\delta"
-    static member Delta = Vars.letter "Δ" "\\Delta" 
-    static member epsilon = Vars.letter "ε" "\\epsilon"
-    static member lambda = Vars.letter "λ" "\\lambda"
-    static member mu = Vars.letter "μ" "\\mu"
-    static member Theta = Vars.letter "Θ" "\\Theta"
-    static member theta = Vars.letter "θ" "\\theta"
-    static member rho = Vars.letter "ρ" "\\rho"
-    static member sigma = Vars.letter "σ" "\\sigma"
-    static member omega = Vars.letter "ω" "\\omega"
-    static member Omega = Vars.letter "Ω" "\\Omega"
+    static member alpha = Vars.letter "α" "\\alpha" |> V
+    static member beta = Vars.letter "β" "\\beta" |> V
+    static member gamma = Vars.letter "γ" "\\gamma" |> V
+    static member Gamma = Vars.letter "Γ" "\\alpha" |> V
+    static member delta = Vars.letter "δ" "\\delta" |> V
+    static member Delta = Vars.letter "Δ" "\\Delta"  |> V
+    static member epsilon = Vars.letter "ε" "\\epsilon" |> V
+    static member Lambda = Vars.letter "Λ" "\\Lambda" |> V
+    static member lambda = Vars.letter "λ" "\\lambda" |> V
+    static member mu = Vars.letter "μ" "\\mu" |> V
+    static member Theta = Vars.letter "Θ" "\\Theta" |> V
+    static member theta = Vars.letter "θ" "\\theta" |> V
+    static member rho = Vars.letter "ρ" "\\rho" |> V
+    static member sigma = Vars.letter "σ" "\\sigma" |> V
+    static member omega = Vars.letter "ω" "\\omega" |> V
+    static member Omega = Vars.letter "Ω" "\\Omega" |> V
 
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 
@@ -1171,8 +1188,14 @@ type Func(?varname, ?expr, ?functionName) =
     member f.Apply(x) = Func.Apply(f.Function, x)
  
 module Ops =
-    let max a b = FunctionN(Function.Max, [a;b])
-    let min a b = 
+    let max2 a b = 
+        match (a,b) with
+            | PositiveInfinity, _ -> a
+            | _, PositiveInfinity -> b
+            | a , b when a = b -> a
+            | Number n, Number m -> Expression.FromRational (max n m)
+            | _ -> FunctionN(Function.Max, [a;b]) 
+    let min2 a b = 
         match (a,b) with
         | PositiveInfinity, _ -> b
         | _, PositiveInfinity -> a
@@ -1180,7 +1203,9 @@ module Ops =
         | Number n, Number m -> Expression.FromRational (min n m)
         | _ -> FunctionN(Function.Min, [a;b])
 
-
+type Ops () =
+    static member max(x) = Function(Max, x)
+    static member max(a,b) = Ops.max2 a b
 
 
     

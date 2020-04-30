@@ -113,7 +113,7 @@ module Algebraic =
             | Number n -> abs n
             | _ -> 1N
 
-        let curset = Hashset(List.head l |> Structure.toProductList)
+        let curset = Hashset(List.head l |> Structure.listOfProduct)
 
         let rec loop (cnum : BigRational) =
             function
@@ -174,7 +174,7 @@ module Algebraic =
         | f -> f
 
     let intersectAllSimple l =
-        let curset = Hashset(List.head l |> Structure.toProductList) 
+        let curset = Hashset(List.head l |> Structure.listOfProduct) 
         let rec loop = function
              | Product ps::rest ->
                 curset.IntersectWith ps
@@ -185,7 +185,7 @@ module Algebraic =
              | [] -> Seq.toList curset
         loop (List.tail l)
 
-    let consolidateSumsSimpleGen f = 
+    let internal consolidateSumsSimpleGen f = 
         function
         | Sum l as s -> 
             match intersectAllSimple l with
@@ -200,5 +200,5 @@ module Algebraic =
     let consolidateSumsSimple =
         consolidateSumsSimpleGen (fun p s -> Algebraic.expand (s / p))
 
-    let consolidateSumsSimple2 = consolidateSumsSimpleGen Expression.groupInSumWith
+    //let consolidateSumsSimple2 = consolidateSumsSimpleGen Expression.groupInSumWith
      

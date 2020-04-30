@@ -133,16 +133,28 @@ let smartround2 r x =
 let smartround n = smartroundEx n >> fst
 
 //========================
+let rational r = Expression.FromRational r
+let integer i = Expression.FromInt32 i
+let biginteger i = Expression.FromInteger i
 
 let real x = Approximation (Real x)
-
 let todecimal = function | Number n -> real(float n) | f -> f
-let todecimalr r = function | Number n -> real(float n |> Prelude.Common.round r) | f -> f
+let todecimalr roundto = function | Number n -> real(float n |> Prelude.Common.round roundto) | f -> f
 
 let degreeToRadians deg = 1/180Q * Operators.pi * deg
 let radiansToDegree rad = (180Q * rad)/Operators.pi
 
-//========================
+//======================== 
+
+let toUnicodeSubScript = function 
+     | x when x >= '0' && x <='9' -> 
+       char ((int x - 48) + 8320)
+     | '-' -> '\u208B'
+     | '+' -> '\u208A'  
+     | '=' -> '\u208C'
+     | '(' -> '\u208D'
+     | ')' -> '\u208E'   
+
 
 module Constants =
     open Operators
@@ -172,8 +184,7 @@ let gradn var x = FunctionN(Gradient, [x;var] )
 let diff dx x = FunctionN(Derivative, [x;dx])
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx]) 
 
-let func f = FunctionN(Function.Func, [Operators.symbol f])
-let funcx f x = FunctionN(Function.Func, [Operators.symbol f;x])
+let func f x = FunctionN(Function.Func, [Operators.symbol f;x])
 let fx x = FunctionN(Function.Func, [Operators.symbol "f";x]) 
 let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
 let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
@@ -181,11 +192,10 @@ let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr])
 let choose n k = FunctionN(Choose, [n;k])
 let binomial n k = FunctionN(Choose, [n;k])
 let prob x = FunctionN(Probability, [symbol "P"; x ])
-let probc x param = FunctionN(Probability, [ symbol "P"; x; param ])
-let probparam x param = FunctionN(Probability, [symbol "P";  x; param; 0Q ])
+let probc x theta = FunctionN(Probability, [ symbol "P"; x; theta ])
+let probparam x theta = FunctionN(Probability, [symbol "P";  x; theta; Parameter ";" ])
 
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
-
 
 let limit var lim x = FunctionN(Limit, [var;lim;x]) 
 
@@ -230,8 +240,12 @@ let isSpecializedFunction = function
 let (|IsFunctionExpr|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
     | _ -> None  
-
-let (|IsFunctionExprWithParams|_|) = function
+    
+let (|IsFunctionExprNameOnly|_|) = function 
+    | FunctionN(Func, [ f;x ]) -> Some(f,x)
+    | _ -> None  
+    
+let (|IsFunctionExprAny|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,Some fx)
     | FunctionN(Func, [ f;x ]) -> Some(f,x,None)
     | _ -> None      

@@ -8,11 +8,11 @@ open Utils
 open Operators 
 open Prelude.Common
 
-let summation var start stop fx = FunctionN(SumOver, [fx;var;start;V"="; stop])
+let summation var start stop fx = FunctionN(SumOver, [fx;var;start;stop])
 
 let (|Summation|_|) input =
      match input with
-     | FunctionN(SumOver, [fx;var;start;_; stop]) -> Some(fx,var,start, stop)
+     | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
      | _ -> None
 
 let isSummation = function | Summation _ -> true | _ -> false
@@ -108,7 +108,7 @@ let rewriteExpectationAsSum = function
             match Structure.first Expression.isVariable (innerProb distr) with
             | Some e -> e  
             | None -> V""
-        FunctionN(SumOver, [(distr * expr);dx;V"";V"";V""])
+        FunctionN(SumOver, [(distr * expr);dx; Parameter ""; Parameter ""])
     | f -> f
 
 let expandVarianceExpectation = function

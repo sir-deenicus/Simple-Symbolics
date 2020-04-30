@@ -142,3 +142,47 @@ let lt a b = InEquality(id, 0Q,InEquality.Comparer.Lesser,a,b)
 let gt a b = InEquality(id, 0Q,InEquality.Comparer.Greater,a,b) 
 
 Might be better to go the replace route?
+
+======
+
+Helper for symbolic functions. Not needed.
+
+type Func(?varname, ?expr, ?functionName) =
+    static member fn fname = FunctionN(Function.Func, [symbol fname])
+    static member make fname = fun x -> FunctionN(Function.Func, [symbol fname; x])
+    static member fn (fname,x) = FunctionN(Function.Func, [symbol fname;x])
+    static member fn (x) = FunctionN(Function.Func, [symbol "f";x])
+    static member fn (fname,x,expr) = FunctionN(Function.Func, [symbol fname;x;expr])
+    static member fn (x,expr) = FunctionN(Function.Func, [symbol "f";x;expr])
+    static member JustName (fn, ?keepInputVar) =
+        match fn, keepInputVar with
+         | FunctionN (Function.Func, fname :: _), Some false
+         | FunctionN (Function.Func, fname :: _), None -> FunctionN (Function.Func, [fname]) 
+         | FunctionN (Function.Func, fname :: x:: _), Some true -> FunctionN (Function.Func, [fname;x]) 
+         | e, _ -> e
+    static member Internal (fn) =
+        match fn with
+        | FunctionN (Function.Func, [_;_;x]) -> x
+        | e -> e
+    static member Apply (f,x) =
+        match f with 
+        | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> funcx fname x
+        | FunctionN(Function.Func, [_;Identifier _ as y;expr]) ->
+            Expression.replaceExpression x y expr
+        | _ -> failwith "Not a function"
+    member __.Function =
+        match (varname,expr, functionName) with
+        | None, None, Some (f:string) -> Func.fn f
+        | Some xb, None, Some f -> Func.fn(f,xb)
+        | Some xb, Some e, Some f -> Func.fn(f,xb,e)
+        | Some xb, Some e, None -> Func.fn("f",xb,e)
+        | None, Some e, None -> Func.fn("f",Vars.x,e)
+        | _ -> failwith "error in function created"
+
+    member __.Run(params) = 
+        match(expr) with
+        | None -> None 
+        | Some e -> Expression.evaluateFloat params e
+    member f.Apply(x) = Func.Apply(f.Function, x)
+ 
+

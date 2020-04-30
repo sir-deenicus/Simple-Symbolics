@@ -181,6 +181,7 @@ let inches = 12 * ft |> setAlt "inches"
 let au =  150Q * mega * km |> setAlt "AU" 
 
 let liter = 1000 * cm ** 3 |> setAlt "L" 
+let gallons = 3.785411784 * liter |> setAlt "gallons"
 //----------
 let sec = Units(1Q, Operators.symbol "sec", "sec")
 let minute = 60Q * sec |> setAlt "minute"
@@ -197,6 +198,9 @@ let year = years |> setAlt "year"
 //----------
 let N = kg * meter / sec ** 2 |> setAlt "N"
 
+let lb = 0.45359237 * kg |> setAlt "lb"
+let ounces = 1/16Q * lb |> setAlt "oz"
+
 let J = kg * meter ** 2 * sec ** -2 |> setAlt "J"
 let kJ = (J * 1000Q) |> setAlt "kJ"
 let calorie = Expression.fromFloat 4.184 * J |> setAlt "calorie"
@@ -212,11 +216,12 @@ let amps = Units(1Q, Operators.symbol "Amps", "Amps")
 let amp = amps |> setAlt "amp"
 let C = amps * sec |> setAlt "coulombs"
 let volt = J / C |> setAlt "volt"
-let volts = volt |> setAlt "volts"
+let volts = volt |> setAlt "volts" 
 //----------
 let bits = Units(1Q, Operators.symbol "bits", "bits")
 let bytes = 8Q * bits |> setAlt "bytes"
 let gigabytes = giga * bytes |> setAlt "gigabytes"
+let bp = 2 * bits |> setAlt "base pairs"
 
 let flop = Units(1Q, Operators.symbol "flop")
 let exafloatops = exa * flop |> setAlt "exafloatops"

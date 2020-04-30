@@ -12,6 +12,8 @@ open MathNet.Symbolics.Differentiation
 open Prelude.Common
 open NumberTheory
 open Summation
+open MathNet.Symbolics.Core
+open Expression
 
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
@@ -45,10 +47,7 @@ module Integral =
         | f -> f
 
 let integratePolynomExpr m n e = e ** (n + 1Q) / (m * (n + 1Q))
-
-let isLinear x f =
-    Polynomial.isPolynomial x f && (Polynomial.degree x f).ToFloat() = 1.
-
+ 
 let intFuncStraight =
     function
     | Function(Cos, (x)) -> Function(Sin, x)
@@ -79,7 +78,7 @@ let extractLinearComponent x ex =
 
 let linearSquared combinator =
     combinator (function
-        | Power(e, n) when n = 2Q && isLinear x e -> true
+        | Power(e, n) when n = 2Q && isLinearIn x e -> true
         | _ -> false)
 
 type IntegrationResult =
@@ -118,12 +117,12 @@ let integrateSimplePartial x f =
         | Power(e, n) as p when not (containsVar x e) && not (containsVar x n) ->
             Succeeded(p * x)
         | Power(e, n) as p when not (containsVar x e) && (containsVar x n)
-                                && isLinear x n ->
+                                && isLinearIn x n ->
             Succeeded(p / (fst (extractLinearComponent x n) * ln (e)))
         | Power(e, n) as f when not (containsVar x e) && (containsVar x n) ->
             //printfn "Power nonlinear in x, fail"
             Deferred (f,false)
-        | Power(e, n) when n = -1Q && e <> 0Q && isLinear x e ->
+        | Power(e, n) when n = -1Q && e <> 0Q && isLinearIn x e ->
             Succeeded(Function(Ln, abs e) / fst (extractLinearComponent x e))
         | Power(Identifier _ as y, n) when x = y && n <> -1Q ->
             Succeeded((x ** (n + 1)) / (n + 1))
@@ -132,7 +131,7 @@ let integrateSimplePartial x f =
             match (iter mono) with
             | Succeeded fx -> Succeeded(k * fx)
             | _ -> failwith "unexpected state in integrate monomial"
-        | Power(Sum _ as e, n) when isLinear x e && n <> -1Q ->
+        | Power(Sum _ as e, n) when isLinearIn x e && n <> -1Q ->
             let t, e' = extractLinearComponent x e
             Succeeded(integratePolynomExpr t n e')
         | Power(e, n) as poly when Polynomial.isPolynomial x e && n <> -1Q ->
@@ -146,7 +145,7 @@ let integrateSimplePartial x f =
         | Function(f, (Number _ as n)) -> Succeeded(x * Function(f, n))
         | Function(_, (Identifier(Symbol _))) as f ->
             Succeeded(intFuncStraight f)
-        | Function(_, ex) as f when isLinear x ex ->
+        | Function(_, ex) as f when isLinearIn x ex ->
             Succeeded((intFuncStraight f) / fst (extractLinearComponent x ex))
         | Sum l ->
             let calculated, deferred =

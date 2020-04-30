@@ -6,6 +6,7 @@ open Utils
 
 let evalDerivative =
     function
+    | IsDerivative(_, IsFunctionExprNameOnly _, _) as f -> f
     | IsDerivative(_, f, dx) -> Calculus.differentiate2 dx f
     | f -> f
 
@@ -18,12 +19,14 @@ let Dx = evalAllDerivativeExprs
 let evalDerivatives = evalAllDerivativeExprs
 
 let newtonsMethodGen simplify n symbol f x0 =
-    let sf = if simplify then Expression.FullSimplify else id
+    let sf = if simplify then Expression.FullSimplify else id 
     let f' = D symbol f
     let rec loop n x0 =
         if n = 0 then x0
         else
-            let x' = (x0 - (Func.Apply(f, x0)/Func.Apply(f',x0))) |> sf
+            let fx = applyfn f x0
+            let fx' = applyfn f' x0
+            let x' = (x0 - (fx/fx')) |> sf
             loop (n-1) x'
     loop n x0
 

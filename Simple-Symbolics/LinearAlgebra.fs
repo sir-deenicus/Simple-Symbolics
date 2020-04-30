@@ -153,6 +153,11 @@ type Vector<'a when 'a: equality>(l : 'a list) =
 module Vector =
     let toList (v : Vector<_>) = v.AsList
     let map f (v : Vector<_>) = Vector(List.map f v.AsList)
+    
+    let toBasisExpression (bs:List<Expression>, v:Vector<_>) =
+        List.map2 (fun el b -> hold el * vec b) v.AsList bs
+        |> List.sum
+  
     let map2 f (v : Vector<_>) (v2 : Vector<_>) = Vector(List.map2 f v.AsList v2.AsList)
     let inline lpNorm (p : Expression) (v : Vector<_>) =
         (v.AsList |> List.sumBy (fun x -> (abs x) ** p)) ** (1 / p)

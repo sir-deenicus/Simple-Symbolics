@@ -22,7 +22,7 @@ let symbolString =
     | Identifier(Symbol s) -> s
     | _ -> ""
  
-let rec replaceSymbolX doall r x f =
+let rec replaceSymbolAux doall r x f =
     let rec loop =
         function
         | Identifier _ as var when var = x -> r
@@ -32,13 +32,15 @@ let rec replaceSymbolX doall r x f =
         | Sum l -> Sum(List.map loop l)
         | Id v -> Id(loop v)
         | FunctionN(fn, l) when doall -> FunctionN(fn, List.map loop l) 
+        | FunctionN(Choose, l) -> FunctionN(Choose, List.map loop l) 
+        | IsFunctionExpr(Identifier (Symbol f), x,ex) -> fxn f x (loop ex)
         | IsDerivative(f, x, dx) -> FunctionN(f, [loop x; dx ])
         | x -> x
     loop f
 
-let replaceSymbol r x f = replaceSymbolX false r x f
+let replaceSymbol r x f = replaceSymbolAux false r x f
 
-let replaceSymbolAll r x f = replaceSymbolX true r x f
+let replaceSymbolAll r x f = replaceSymbolAux true r x f
 
 let rec containsVar x =
     function
@@ -155,12 +157,15 @@ module Structure =
         function
         | Undefined as un -> func un
         | Identifier _ as i -> func i
+        | Number _ as n -> func n
+        | Approximation _ as r -> func r
         | Power(p, n) as pow ->
             func pow || existsRecursive func n || existsRecursive func p
         | Function(_, fx) as f -> func f || existsRecursive func fx
         | (Product l | Sum l | FunctionN(_, l)) as prod ->
             func prod || List.exists (existsRecursive func) l
         | _ -> false
+  
   
     let rec first func =
         function
@@ -252,7 +257,9 @@ module Structure =
     let rec recursiveMapFilter filter fx =
         function
         | Identifier _ as var when filter var -> fx var
-        | Id x -> Id(recursiveMapFilter filter fx x)
+        | Id x -> 
+            Id(recursiveMapFilter filter fx x)
+            |> filterApply fx filter
         | Power(f, n) ->
             Power (recursiveMapFilter filter fx f, recursiveMapFilter filter fx n)
             |> filterApply fx filter
@@ -329,9 +336,13 @@ module Structure =
         | Sum l | Product l -> l
         | x -> [ x ]
 
-    let toProductList = function
+    let listOfProduct= function
         | Product l -> l
         | f -> [f]    
+
+    let listOfSum= function
+        | Sum l -> l
+        | f -> [f]
 
     let mapList f =
         function
@@ -528,7 +539,7 @@ module Expression =
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f, x) -> Function(f, (simplifyLoop x))
             | IsFunctionExpr(_,_, (IsNumber _ as n)) -> simplifyLoop n
-            | IsDerivative(IsFunctionExpr(Identifier(Symbol f),x,e),dx) -> 
+            | IsDerivative(_, IsFunctionExpr(Identifier(Symbol f),x,e),dx) -> 
                 fxn f x (diff dx (simplifyLoop e))   
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
@@ -671,7 +682,7 @@ module Expression =
         function
         | Identifier _ as var -> Hashset([ var ])
         | Power(x, n) -> findVariables x |> Hashset.union (findVariables n)
-        | IsFunctionExprWithParams(_,x,_) -> Hashset([x])
+        | IsFunctionExprAny(_,x,_) -> Hashset([x])
         | Product l | Sum l | FunctionN(_, l) ->
             Hashset(Seq.collect findVariables l)
         | Function(_, x) -> findVariables x
@@ -684,10 +695,26 @@ module Expression =
         function
         | Function(Abs, x) -> x
         | x -> x  
-         
+
+    
+    let isLinearIn x f =
+        Polynomial.isPolynomial x f && (Polynomial.degree x f).ToFloat() = 1.
+
+    let xor a b = (a && not b) || (not a && b)
+
+    let isLinear vars f =
+        Structure.toList f
+        |> List.forall (fun es -> 
+            let vs = findVariables es
+            let cs = vars |> List.filter vs.Contains
+            cs.Length = 1)
+        && vars |> List.forall (fun x -> isLinearIn x f) 
+
 module Rational = 
     let rec simplifyNumbers(roundto : int) =
         function
+        | Approximation (Approximation.Real r) -> 
+            Approximation (Approximation.Real (round roundto r))
         | Number n as num ->
             let f = float n
             let pf = abs f
@@ -1039,6 +1066,8 @@ type Vars() =
         match expressionFormat with 
         | InfixFormat -> greek
         | _ -> latex
+    static member D = V"D"
+    static member I = V"I"
     static member alpha = Vars.letter "α" "\\alpha" |> V
     static member beta = Vars.letter "β" "\\beta" |> V
     static member gamma = Vars.letter "γ" "\\gamma" |> V
@@ -1049,12 +1078,14 @@ type Vars() =
     static member Lambda = Vars.letter "Λ" "\\Lambda" |> V
     static member lambda = Vars.letter "λ" "\\lambda" |> V
     static member mu = Vars.letter "μ" "\\mu" |> V
+    static member nu = Vars.letter "v" "\\nu" |> V
     static member Theta = Vars.letter "Θ" "\\Theta" |> V
     static member theta = Vars.letter "θ" "\\theta" |> V
     static member rho = Vars.letter "ρ" "\\rho" |> V
     static member sigma = Vars.letter "σ" "\\sigma" |> V
     static member omega = Vars.letter "ω" "\\omega" |> V
     static member Omega = Vars.letter "Ω" "\\Omega" |> V
+    
 
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 
@@ -1085,32 +1116,39 @@ let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) 
     replace e     
      
 
-type Prob () =
+type Fn () =
     static member prob(x) = FunctionN(Probability, [symbol "P"; x ])
     static member prob(s,x) = FunctionN(Probability, [symbol s; x ]) 
-     
+    static member prob(x,?name) =
+        FunctionN(Probability, [symbol (defaultArg name "P");  x ])
+    static member prob(x,conditional, ?name, ?semicolon) =
+        match semicolon with 
+        | Some true -> 
+            FunctionN(Probability, [symbol (defaultArg name "P");  x; conditional; Parameter ";" ])
+        | _ ->
+            FunctionN(Probability, [symbol (defaultArg name "P");  x; conditional])
 
 type PiSigma(expr) =
     member private __.op operator y = function
-        | FunctionN(f, [fx;var;start;elem; stop]) -> 
-            FunctionN(f, [operator fx y;var;start;elem; stop])
+        | FunctionN(f, [fx;var;start; stop]) -> 
+            FunctionN(f, [operator fx y;var;start; stop])
         | x -> x
 
-    static member Σ fx = FunctionN(SumOver, [fx;V"";V"";V"";V""])
-    static member Σ (fx,start) = FunctionN(SumOver, [fx;Vars.i;start;V"="; Vars.n])
-    static member Σ (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start;V"="; stop])
-    static member Σ (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;V"="; stop])
-    static member Σ (fx,var,elem,start,stop) = FunctionN(SumOver, [fx;var;start;elem; stop])
-    static member Π fx = FunctionN(ProductOver, [fx;Vars.i;0Q;V"="; Vars.n])
+    static member Σ fx = FunctionN(SumOver, [fx;Parameter "";Parameter ""; Parameter "" ])
+    static member Σ (fx,start) = FunctionN(SumOver, [fx;Vars.i;start; Vars.n])
+    static member Σ (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start; stop])
+    static member Σ (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;stop]) 
+    static member Π fx = FunctionN(ProductOver, [fx;Vars.i;0Q;Vars.n])
     static member (/) (a:PiSigma, b : Expression) = b * (a.op (/) b a.Expression)
 
     static member Evaluate(expr, ?parameters) =
         match expr, parameters with
-        | FunctionN(SumOver, [ fx; var; Number n; Identifier(Symbol "="); Number m ]), _ ->
+        | FunctionN(SumOver, [ fx; var; Number n; Number m ]), _ ->
             List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
-        | FunctionN(ProductOver, [ fx; var; Number n; Identifier(Symbol "="); Number m ]), _ ->
+        | FunctionN(ProductOver, [ fx; var; Number n; Number m ]), _ ->
             List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
-        | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]), Some p ->
+        | FunctionN(SumOver as f, [ fx; var; a; b ]), Some p
+        | FunctionN(ProductOver as f, [ fx; var; a; b ]), Some p ->
             let lookup = dict p
 
             let runvar e =
@@ -1132,7 +1170,7 @@ type PiSigma(expr) =
             | ProductOver ->
                 List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
             | _ -> expr
-        | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]), None ->
+        | FunctionN(f, [ fx; var; a; b ]), None ->
             match Expression.FullSimplify a, Expression.FullSimplify b with
             | Number n, Number m ->
                 match f with
@@ -1148,45 +1186,18 @@ type PiSigma(expr) =
         match parameters with 
         | None -> PiSigma.Evaluate(expr) 
         | Some par -> PiSigma.Evaluate(expr, par) 
-  
-type Func(?varname, ?expr, ?functionName) =
-    static member fn fname = FunctionN(Function.Func, [symbol fname])
-    static member make fname = fun x -> FunctionN(Function.Func, [symbol fname; x])
-    static member fn (fname,x) = FunctionN(Function.Func, [symbol fname;x])
-    static member fn (x) = FunctionN(Function.Func, [symbol "f";x])
-    static member fn (fname,x,expr) = FunctionN(Function.Func, [symbol fname;x;expr])
-    static member fn (x,expr) = FunctionN(Function.Func, [symbol "f";x;expr])
-    static member JustName (fn, ?keepInputVar) =
-        match fn, keepInputVar with
-         | FunctionN (Function.Func, fname :: _), Some false
-         | FunctionN (Function.Func, fname :: _), None -> FunctionN (Function.Func, [fname]) 
-         | FunctionN (Function.Func, fname :: x:: _), Some true -> FunctionN (Function.Func, [fname;x]) 
-         | e, _ -> e
-    static member Internal (fn) =
-        match fn with
-        | FunctionN (Function.Func, [_;_;x]) -> x
-        | e -> e
-    static member Apply (f,x) =
-        match f with 
-        | FunctionN(Function.Func, [Identifier (Symbol fname);Identifier _]) -> funcx fname x
-        | FunctionN(Function.Func, [_;Identifier _ as y;expr]) ->
-            Expression.replaceExpression x y expr
-        | _ -> failwith "Not a function"
-    member __.Function =
-        match (varname,expr, functionName) with
-        | None, None, Some (f:string) -> Func.fn f
-        | Some xb, None, Some f -> Func.fn(f,xb)
-        | Some xb, Some e, Some f -> Func.fn(f,xb,e)
-        | Some xb, Some e, None -> Func.fn("f",xb,e)
-        | None, Some e, None -> Func.fn("f",Vars.x,e)
-        | _ -> failwith "error in function created"
+   
+let makefunc f x =
+    match f with
+    | IsFunctionExpr(_, xvar,fx) -> 
+        replaceSymbol x xvar fx
+    | _ -> f
 
-    member __.Run(params) = 
-        match(expr) with
-        | None -> None 
-        | Some e -> Expression.evaluateFloat params e
-    member f.Apply(x) = Func.Apply(f.Function, x)
- 
+let makefunc2 xvar f =  
+    fun x -> replaceSymbol x xvar f 
+
+let applyfn f x = makefunc x f
+
 module Ops =
     let max2 a b = 
         match (a,b) with

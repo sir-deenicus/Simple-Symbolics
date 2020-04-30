@@ -233,6 +233,13 @@ let primefactorsPartial x =
     | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
     | None -> None
 
+///n is integer, k number of summands              
+let rec num_partitions =
+    function 
+    | (k, n) when k > n -> 0
+    | (k, n) when k = n -> 1
+    | k, n -> num_partitions (k + 1, n) + num_partitions (k, n - k)
+
 let rec partitions =
     function
     | 0 -> []
@@ -277,9 +284,7 @@ let sterlingsApproximation = function
     | x -> x
 
 let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
- 
-let rational x = Expression.fromFloat x
-
+  
 let tryNumber =
     function
     | Number n -> Some(float n)

@@ -3,9 +3,9 @@ module MathNet.Symbolics.OEIS
 
 open System
 open MathNet.Numerics
-open NumberTheory
+open NumberTheory 
 
-type OEIntegerSequences = FSharp.Data.JsonProvider<"oeis-search.json"> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
+type OEIntegerSequences = FSharp.Data.JsonProvider<OEISjson.json> //"oeis-search.json"> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
 
 type OEIS() =
     static member query (str: string) =

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net47;netstandard2.0;netcoreapp2.1</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.2.9</Version>
+    <Version>0.3.0</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
@@ -33,7 +33,6 @@
     <Compile Include="Utils.fs" />
     <Compile Include="Numbers.fs" />
     <Compile Include="Core.fs" />
-    <Compile Include="OEISjson.fs" />
     <Compile Include="OEIS.fs" />
     <Compile Include="Units.fs" />
     <Compile Include="CurrencyUtils.fs" />

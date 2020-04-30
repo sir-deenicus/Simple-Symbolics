@@ -30,7 +30,7 @@ let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 let rewriteIntegralAsSum = function 
    | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> 
         let delta = if Utils.InfixFormat = "Infix" then "Δ" else "\\Delta "
-        PiSigma.Σ(Product[x;V(delta + sdx)],dx,V"",V"",Expression.PositiveInfinity)     
+        PiSigma.Σ(Product[x;V(delta + sdx)],dx, Parameter "",Expression.PositiveInfinity)     
    | x -> x
  
 module Expression =

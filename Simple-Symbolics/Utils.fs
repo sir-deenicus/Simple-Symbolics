@@ -226,7 +226,7 @@ let subs subscripts x = FunctionN(Indexed, x::subscripts)
 
 let define a b = Definition(a,b)
 
-let replaceDefinition = function Definition(a,b) -> b | x -> x
+let extractDefinition = function Definition(a,b) -> b | x -> x
 
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
 

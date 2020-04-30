@@ -5,7 +5,8 @@ open System
 open MathNet.Numerics
 open NumberTheory 
 
-type OEIntegerSequences = FSharp.Data.JsonProvider<OEISjson.json> //"oeis-search.json"> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
+let [<Literal>] oeisjsonpath = __SOURCE_DIRECTORY__  +  "/oeis-search.json"
+type OEIntegerSequences = FSharp.Data.JsonProvider<oeisjsonpath> //OEISjson.json> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
 
 type OEIS() =
     static member query (str: string) =

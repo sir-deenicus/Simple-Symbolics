@@ -186,3 +186,48 @@ type Func(?varname, ?expr, ?functionName) =
     member f.Apply(x) = Func.Apply(f.Function, x)
  
 
+========
+
+
+let rec replaceVariableSymbol replacer =
+    function
+    | Identifier(Symbol s) -> Identifier(Symbol(replacer s))
+    | Power(f, n) ->
+        Power
+            (replaceVariableSymbol replacer f,
+             replaceVariableSymbol replacer n)
+    | Function(fn, f) ->
+        Function(fn, replaceVariableSymbol replacer f)
+    | Product l ->
+        Product(List.map (replaceVariableSymbol replacer) l)
+    | Sum l -> Sum(List.map (replaceVariableSymbol replacer) l)
+    | FunctionN(fn, l) ->
+        FunctionN(fn, List.map (replaceVariableSymbol replacer) l)
+    | x -> x  
+
+==========
+To unintuitive to use. Better to instead target using filters, optionally applying to only N elements 
+
+let recursiveMapLocation depthonly filter depth breadth fx e =
+    let rec loop d b =
+        function
+        | Identifier _ as var when d = depth && (depthonly || b = breadth)
+                                    && filter var -> fx var
+        | Power(f, n) when d = depth && (depthonly || b = breadth)
+                            && filter (Power(f, n)) -> fx (Power(f, n))
+        | Power(f, n) -> Power(loop (d + 1) 0 f, loop (d + 1) 1 n)
+        | Function(fn, f) when d = depth && (depthonly || b = breadth)
+                                && filter (Function(fn, f)) ->
+            fx (Function(fn, f))
+        | Function(fn, f) -> Function(fn, loop (d + 1) 0 f)
+        | Product l when d = depth && (depthonly || b = breadth)
+                            && filter (Product l) -> fx (Product l)
+        | Product l -> Product(List.mapi (loop (d + 1)) l)
+        | Sum l when d = depth && (depthonly || b = breadth) && filter (Sum l) ->
+            fx (Sum l)
+        | Sum l -> Sum(List.mapi (loop (d + 1)) l)
+        | x -> x
+    loop 0 0 e
+
+let recursiveMapDepth filter depth fx e =
+    recursiveMapLocation true filter depth 0 fx e

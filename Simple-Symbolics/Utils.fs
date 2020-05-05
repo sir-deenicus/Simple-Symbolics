@@ -7,6 +7,8 @@ open Prelude.Math
 open Prelude.Common
 open MathNet.Numerics
 
+let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
+
 type TraceExplain<'a> =
      | Str of string
      | Op of ('a -> 'a) 
@@ -142,7 +144,8 @@ let todecimal = function | Number n -> real(float n) | f -> f
 let todecimalr roundto = function | Number n -> real(float n |> Prelude.Common.round roundto) | f -> f
 
 let degreeToRadians deg = 1/180Q * Operators.pi * deg
-let radiansToDegree rad = (180Q * rad)/Operators.pi
+let radiansToDegree rad = (180Q * rad)/Operators.pi  
+ 
 
 //======================== 
 
@@ -154,13 +157,15 @@ let toUnicodeSubScript = function
      | '=' -> '\u208C'
      | '(' -> '\u208D'
      | ')' -> '\u208E'   
-
+     | ',' -> '﹐'
+     | c -> c
 
 module Constants =
     open Operators
     let π = pi
     let pi = pi 
-    let e = Constant Constant.E
+    let e = Constant Constant.E  
+    let i = Constant Constant.I
      
 
 [<RequireQualifiedAccess>]
@@ -179,15 +184,18 @@ type FuncType =
         | Function f -> string f
         | Identity -> "id" 
 
+module FunctionHelpers =
+    ///Create a function with name and symbol: func "g" y = `g(y)`
+    let func name x = FunctionN(Function.Func, [Operators.symbol name;x])
+    ///Create a function with symbol and default name "f": fx y = `f(y)`
+    let fx x = FunctionN(Function.Func, [Operators.symbol "f";x]) 
+    ///Create a function with symbol, body and default name "f": fn x x^2 = `x |-> x^2`
+    let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
+
 let grad x = FunctionN(Gradient, [x])
 let gradn var x = FunctionN(Gradient, [x;var] )
 let diff dx x = FunctionN(Derivative, [x;dx])
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx]) 
-
-let func f x = FunctionN(Function.Func, [Operators.symbol f;x])
-let fx x = FunctionN(Function.Func, [Operators.symbol "f";x]) 
-let fn x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr]) 
-let fxn f x expr = FunctionN(Function.Func, [Operators.symbol f;x; expr]) 
 
 let choose n k = FunctionN(Choose, [n;k])
 let binomial n k = FunctionN(Choose, [n;k])
@@ -198,20 +206,7 @@ let probparam x theta = FunctionN(Probability, [symbol "P";  x; theta; Parameter
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
 
 let limit var lim x = FunctionN(Limit, [var;lim;x]) 
-
-let hold x = Id x
-
-module Hold = 
-    let extractLeadingNegative = function
-        | Id(Product (Number n::_) as p) when n < 0N -> -1 * hold (p / -1)
-        | x -> x
-
-    let remove = function
-        | Id x -> x
-        | x -> x
-
-let negateId x = (Operators.negate(Algebraic.expand(Operators.negate x))) 
-
+ 
 let matrix x = Generic(x,GenericExpressionType.Matrix)
 
 let vec x = Generic(x,GenericExpressionType.Vector)
@@ -230,10 +225,22 @@ let extractDefinition = function Definition(a,b) -> b | x -> x
 
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
 
-let isSpecializedFunction = function
-    | Probability
+let hold x = Id x
+
+module Hold = 
+    let extractLeadingNegative = function
+        | Id(Product (Number n::_) as p) when n < 0N -> -1 * hold (p / -1)
+        | x -> x
+
+    let remove = function
+        | Id x -> x
+        | x -> x
+
+let functionFirstTermOnly = function 
     | Gradient
-    | Integral 
+    | Derivative
+    | PartialDerivative
+    | Integral    
     | Expectation -> true
     | _ -> false  
 
@@ -273,7 +280,7 @@ let (|IsProb|_|) input =
      match input with 
      | FunctionN(Probability, _::x::_) -> Some(x) 
      | _ -> None
-
+      
 let (|IsExpectation|_|) input = 
      match input with 
      | FunctionN(Function.Expectation, [x; p]) -> Some(x, p) 

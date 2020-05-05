@@ -88,8 +88,8 @@ type Units(q : Expression, u : Expression, ?altUnit) =
                 else b.AltUnit
 
             let qstr =
-                if Expression.isNumber (a / b).Quantity then
-                    let q, r = ((a / b).Quantity.ToFloat() |> smartroundEx 1)
+                if Expression.isRealNumber (a / b).Quantity then
+                    let q, r = ((a / b).Quantity.ToFloat().Value |> smartroundEx 1)
                     Expression.toSciNumString r q
                 else (a / b).Quantity.ToFormattedString()
             let space = if expressionFormat = "Infix" then " " else "\\;"    
@@ -103,8 +103,8 @@ type Units(q : Expression, u : Expression, ?altUnit) =
 
     override t.ToString() =
         let space = if expressionFormat = "Infix" then " " else "\\;"
-        if Expression.isNumber t.Quantity then
-            let q, r = t.Quantity.ToFloat() |> smartroundEx 1
+        if Expression.isRealNumber t.Quantity then
+            let q, r = t.Quantity.ToFloat().Value |> smartroundEx 1
             let qstr = Expression.toSciNumString r q
             if t.Unit = 1Q then qstr
             else sprintf "%s%s%s" qstr space (t.Unit.ToFormattedString())

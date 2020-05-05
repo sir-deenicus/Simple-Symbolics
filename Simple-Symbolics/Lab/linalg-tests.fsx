@@ -1,13 +1,17 @@
-﻿#load "linear-algebra.fsx"
+﻿#r @"../bin/Debug/net47/MathNet.Numerics.dll"
+#r @"../bin/Debug/net47/MathNet.Numerics.FSharp.dll"
+#r @"../bin/Debug/net47/MathNet.Symbolic.Ext.dll"
+#r @"../bin/Debug/net47/Simple-Symbolics.dll"
+
 open MathNet.Symbolics
 open Core.Vars
-open ``Linear-algebra``
 open Core
-open Core.Units
+open Units
+open MathNet.Symbolics.LinearAlgebra
 
-dot [a ; b] [cos a;b] |> Infix.format //|> Evaluate.evaluate symbols2
+dot [a ; b] [cos a;b]  
  
-vecmatrixmult [a; b] [[a;b];[c;d]] |> List.map Infix.format 
+vecmatrixmult [a; b] [[a;b];[c;d]]  
  
 let vec = Vector [1Q; 2Q; 3Q]
 let m = Matrix([[1Q;2Q;3Q]; [3Q;4Q;5Q] ])
@@ -37,11 +41,11 @@ Units.To(vr * vf, J)
  
 let vu = Vector([ 400 * W; 45 * tera * flops; 16 * giga * bytes])
 
-16Q * vu |> Vector.map Units.trySimplifyUnits
+16Q * vu |> Vector.map Units.simplifyUnits
 
-30Q * 16Q * vu.[0] |> Units.trySimplifyUnits
-30Q * 16Q * vu.[0] * 14Q * days |> Units.trySimplifyUnits
-Units.ToUnit(30Q * 16Q * vu.[0] * 14Q * days, mega * W * hr).Value.Evaluate()
+30Q * 16Q * vu.[0] |> Units.simplifyUnits
+30Q * 16Q * vu.[0] * 14Q * days |> Units.simplifyUnits
+Units.To(30Q * 16Q * vu.[0] * 14Q * days, mega * W * hr) 
 ///////////////
 let mu = [[Complex 1Q; Complex (2Q, 1Q)];[Complex (1/2Q,3Q);Complex 4Q]]
 let mi = [[ 1Q;  2Q];[ 3Q; 4Q]]

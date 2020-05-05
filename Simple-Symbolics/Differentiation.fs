@@ -18,7 +18,7 @@ let Dx = evalAllDerivativeExprs
 
 let evalDerivatives = evalAllDerivativeExprs
 
-let newtonsMethodGen simplify n symbol f x0 =
+let newtonsMethodGen simplify iters symbol f x0 =
     let sf = if simplify then Expression.FullSimplify else id 
     let f' = D symbol f
     let rec loop n x0 =
@@ -28,7 +28,7 @@ let newtonsMethodGen simplify n symbol f x0 =
             let fx' = applyfn f' x0
             let x' = (x0 - (fx/fx')) |> sf
             loop (n-1) x'
-    loop n x0
+    loop iters x0
 
 let newtonsMethod = newtonsMethodGen true
  

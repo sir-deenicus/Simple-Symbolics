@@ -4,19 +4,30 @@ open MathNet.Numerics
 open MathNet
 open MathNet.Symbolics.Utils
 open System
+         
+let (|RealConstant|_|) =
+    function
+    | Constant Constant.I -> None
+    | Constant c -> Some c
+    | _ -> None
+
+let (|RealApproximation|_|) =
+    function 
+    | Approximation (Approximation.Real r) -> Some r
+    | _ -> None
 
 module BigRational =
     open Microsoft.FSharp.Core.Operators
     open System
 
-    let almostZero x = (floor x) / x > 0.999999
+    let approximatelyInt x = (floor x) / x > 0.999999
 
     let fromFloatDouble (df : float) =
         let rec countDigits n x =
             let x' = x * 10.
-            if almostZero x' then n + 1
+            if approximatelyInt x' then n + 1
             else countDigits (n + 1) x'
-        if almostZero df then BigRational.FromBigInt(Numerics.BigInteger df)
+        if approximatelyInt df then BigRational.FromBigInt(Numerics.BigInteger df)
         else
             let dpart = df - floor df
             let dpow = countDigits 0 dpart
@@ -47,7 +58,7 @@ module BigRational =
 
 type Expression with
     member t.ToFormattedString() = expressionFormater t
-    member t.ToFloat() = (Evaluate.evaluate (Map.empty) t).RealValue
+    member t.ToFloat() = try Some (Evaluate.evaluate (Map.empty) t).RealValue with _ -> None
     member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue 
 
     member t.ToInt() =
@@ -59,7 +70,7 @@ type Expression with
         match t with
         | Number n -> Some n
         | _ -> None
-
+         
 module Expression = 
     open MathNet.Symbolics
     open System
@@ -94,7 +105,7 @@ module Expression =
         function
         | Number _ -> true
         | _ -> false
-
+         
     let isNumber =
         function
         | Number _ | Constant _ | Approximation _
@@ -105,8 +116,20 @@ module Expression =
         | Power(Constant _, Constant _) 
         | Product [ Number _; Constant _ ] ->
             true
-        | _ -> false
-        
+        | _ -> false 
+
+    let isRealNumber =
+        function
+        | Number _ | RealConstant _ | RealApproximation _
+        | Power(Number _, Number _)  
+        | Power(RealApproximation _, Number _)  
+        | Power(RealConstant _, Number _)  
+        | Power(Number _, RealConstant _)
+        | Power(RealConstant _, RealConstant _) 
+        | Product [ Number _; RealConstant _ ] ->
+            true
+        | _ -> false       
+
     let isInteger =
         function
         | Number n when n.IsInteger -> true
@@ -114,34 +137,35 @@ module Expression =
 
     let isNegativeOrZeroNumber n =
         if isNumber n then
-            n.ToFloat() <= 0.
+            match n.ToFloat() with 
+            | Some x -> x <= 0. 
+            | None -> false
         else false
 
     let isNegativeNumber n =
         if isNumber n then
-            n.ToFloat() < 0.
+            match n.ToFloat() with 
+            | Some x -> x < 0. 
+            | None -> false 
         else false
 
-    let hasNegatives = function
+    let hasNegative = function
         | Product (Number n::_) -> n < 0N
         | x -> isNegativeNumber x 
 
     let isPositiveNumber n =
-        if isNumber n then
-            n.ToFloat() >= 0.
+        if isNumber n then 
+            match n.ToFloat() with 
+            | Some x -> x >= 0. 
+            | None -> false
         else false
 
-    let rec isPositiveExpressionRec = function
+    let rec isPositiveExpression = function
         | Function(Abs,_) -> true
         | Power(_,Number n) when (int n)%2 = 0 -> true
         | Sum l
-        | Product l -> List.forall isPositiveExpressionRec l
-        | x -> isPositiveNumber x
-
-    let isPositiveExpression = function
-        | Product l
-        | Sum l -> List.forall isPositiveExpressionRec l
-        | x -> isPositiveExpressionRec x 
+        | Product l -> List.forall isPositiveExpression l
+        | x -> isPositiveNumber x 
 
 let (|ProductHasNumber|_|) =
     function
@@ -166,19 +190,38 @@ let (|IntegerNumber|_|)  = function
 let (|IsNumber|_|) = function
       | e when Expression.isNumber e -> Some e
       | _ -> None
-   
-let productToConstantsAndVarsGen test =
-    function
-    | Number _ as n when test n -> Some(n, [])
-    | Product p ->
-        let nums, vars = List.partition test p
-        Some(List.fold (*) 1Q nums, vars)
+
+let (|IsRealNumber|_|) = function
+      | e when Expression.isRealNumber e -> Some e
+      | _ -> None
+       
+let (|IsFloatingPoint|_|) = function
+    | IsRealNumber n -> n.ToFloat()
     | _ -> None
+     
+let (|SquareRoot|_|) = function
+      | Power(e, n) when n = 1Q/2Q -> Some e
+      | _ -> None
+   
+let (|IsNegativeNumber|_|) = function
+      | e when Expression.isNegativeNumber e -> Some e
+      | _ -> None 
+   
+module Structure = 
+    let productToConstantsAndVarsGen test =
+        function
+        | Number _ as n when test n -> Some(n, [])
+        | Product p ->
+            let nums, vars = List.partition test p
+            Some(List.fold (*) 1Q nums, vars)
+        | _ -> None
 
-let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+    let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
 
-let productToIntConstantsAndVars =
-    productToConstantsAndVarsGen Expression.isInteger
+    let productToIntConstantsAndVars =
+        productToConstantsAndVarsGen Expression.isInteger
+          
+let xIsMultipleOfy y x = x % y = 0
 
 let inline rem n d =
     let rec loop n = if n >= d then loop (n-d) else n
@@ -229,7 +272,7 @@ let groupPowers singletonLift pl =
            else Power(x, Expression.FromInt32(List.length l)))
 
 let primefactorsPartial x =
-    match productToIntConstantsAndVars x with
+    match Structure.productToIntConstantsAndVars x with
     | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
     | None -> None
 
@@ -288,11 +331,16 @@ let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x 
 let tryNumber =
     function
     | Number n -> Some(float n)
-    | IsNumber n -> Some(n.ToFloat())
+    | IsRealNumber n -> Some(n.ToFloat().Value)
     | PositiveInfinity -> Some(Double.PositiveInfinity)
     | NegativeInfinity -> Some(Double.NegativeInfinity)
-    | x ->
-        try
-            Some(Expression.toFloat x)
-        with _ -> None
+    | x -> Expression.toFloat x 
     | _ -> None
+
+let xor a b = (a && not b) || (not a && b) 
+   
+let clampRadians = function
+    | IsRealNumber n -> 
+        let deg = radiansToDegree n
+        deg.ToInt() % 360 |> Operators.fromInt32 |> degreeToRadians
+    | x -> x

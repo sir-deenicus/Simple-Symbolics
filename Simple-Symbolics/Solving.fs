@@ -235,47 +235,63 @@ let dispSolvedUnitsA matches newline tx =
     |> String.concat newline
 
 let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx
+ 
+module Polynomial =
+    //Sometimes there might be rational coefficients. So multiply by denominators to get out integers.
+    ///Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
+    let toIntegerCoefficients fx =
+        let denominators =
+            [ for c in Polynomial.coefficients x fx do
+                   if not (Expression.isInteger c) then yield Rational.denominator c ]
+           
+        if List.isEmpty denominators then 1Q, fx 
+        else  
+            // get rid of denominators by multiplying by their least common multiple  
+            let lcm = (Numbers.lcm denominators)
+            lcm, fx * lcm |> Algebraic.expand
+ 
+ 
+///The rational roots method to factor a polynomial 
+let factorPolynomial x fx =
+    //this will iterate 
+    let rec loop zeros fx =
 
-let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
+        //Simple cases
+        let deg = Polynomial.degree x fx
+        
+        if deg = 0Q then (fx, Operators.undefined)::zeros
+        elif deg = 1Q then
+            let coeff = Polynomial.coefficient x 1 fx 
+            let constant = Polynomial.coefficient x 0 fx
+            (fx, (-constant / coeff))::zeros
+        elif deg = 2Q then
+            let a,b = quadraticSolve x fx 
+            (x-a,a)::(x-b,b)::zeros
+        else //Get all the Polynomial coefficients and their factors.      
+            let coeffs = Polynomial.coefficients x fx
+            let numfactors = Array.collect (abs >> factorsExpr >> List.toArray) coeffs |> Hashset
 
-let rec tryFactorizePolynomial x fx =
-    let constant = Polynomial.coefficient x 0 fx
-    let deg = Polynomial.degree x fx
-    if (constant = 0Q || constant = Operators.undefined) && deg.ToInt() < 2 then [], []
-    elif deg.ToInt() = 1 then
-        let coeff = Polynomial.coefficient x 1 fx
-        [ -constant / coeff ], []
-    elif constant = 0Q || constant = Operators.undefined then
-        let fx', _ = Polynomial.divide x fx x
-        let sols, eq = tryFactorizePolynomial x fx'
-        removeDuplicates(0Q :: sols),  (x::fx'::eq)
-    else
-        let factors = factorsExpr (abs constant)
-
-        let results, polynomials' =
-            List.unzip
-                [ for f in (List.map ((*) -1) factors) @ factors do
-                      let n = f.ToFloat()
-                      let value =
-                          Expression.evaluateFloat [ x, n ] fx |> Option.get
-                      if value = 0. then
-                          yield (f, Polynomial.divide x fx (x - f) |> fst) ]
-
-        let sols, eq = List.map (tryFactorizePolynomial x) polynomials' |> List.unzip
-        results @ List.concat sols
-        |> removeDuplicates,
-
-        polynomials' @ List.concat eq
-        |> removeDuplicates
-
-let factorizePolynomial x fx =
-    let sols, res = tryFactorizePolynomial x fx
-    let v = Product res
-    let f = // hack
-        if List.isEmpty res || Algebraic.expand v = fx then v
-        else
-            let q, _ = Polynomial.divide x (Algebraic.expand v) fx
-            res |> List.filter ((<>) q) |> Product
-    sols, f
+            //evaluate each candidate and its negation, collecting all inputs
+            //which evaluate to zero.
+            let pfactors =
+                [ for f in numfactors do
+                    yield!
+                        [for fval in [f;-f] do
+                            let eval = replaceSymbol fval x fx |> Expression.FullSimplify
+                            if eval = 0Q then yield x - fval, fval ]]
+            match pfactors with 
+            | [] -> zeros
+            | _ -> 
+                //The factors can be multiplied such that dividing by them leaves 
+                //us with a simpler polynomial. 
+                let p = pfactors |> List.map fst |> List.reduce (*) |> Algebraic.expand
+                let fx', rem = Polynomial.divide x fx p
+                if rem <> 0Q then failwith "Polynomial factoring unexpected error"
+                loop (pfactors @ zeros) fx'
     
-let factorizedPolynomial x fx = factorizePolynomial x fx |> snd
+    //Ensure integer coefficients
+    let fs, zs = loop [] (Polynomial.toIntegerCoefficients fx |> snd) |> List.unzip
+
+    (match fs with
+     | [] -> None
+     | _ -> Some(Product fs)), List.filter ((<>) Operators.undefined) zs

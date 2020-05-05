@@ -36,20 +36,7 @@ let exprIsLog =
     function
     | Function(Ln, _) -> true
     | _ -> false
-
-let xIsMultipleOfy y x = x % y = 0
-
-let isCertainlyMultiple tester f =
-    let isMultiple =
-        function
-        | Number n -> n.IsInteger && tester (int n)
-        | Product(Number p :: ps) -> p.IsInteger && tester (int p)
-        | _ -> false
-    match f with
-    | f when isMultiple f -> true
-    | Sum l -> List.forall isMultiple l
-    | _ -> false
-
+     
 let collectIntegerTerms i x =
     let nums = Structure.collectNumbers x
     let l = nums.Length - 1
@@ -156,9 +143,7 @@ let options =
 //     List.zip ([| 1..options.Length |]
 //               |> Array.map (konst 1.)
 //               |> Array.normalize
-//               |> Array.toList) options
-let isCertainlyEven = isCertainlyMultiple (xIsMultipleOfy 2)
-let isCertainlyOdd = isCertainlyEven >> not
+//               |> Array.toList) options 
 
 let makeCertainlyEven x =
     if isCertainlyEven x then x

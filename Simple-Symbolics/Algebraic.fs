@@ -5,6 +5,9 @@ open Core
 open MathNet.Numerics
 
 module Rational =
+    let reciprocal e = 
+        Rational.denominator e / Rational.numerator e 
+
     let cancelDivision =
         let getNegProducts =
             function
@@ -52,7 +55,11 @@ module Rational =
 module Algebraic =
     open Core
     open NumberTheory
-    let rewriteAsOne x = Product [ x; x ** -1] 
+    let groupInSumWith var = function
+        | Sum l -> 
+            let haves, nots = List.partition (Expression.containsExpression var) l
+            Product[var; haves |> List.sumBy (fun x -> x/var)] + Sum nots
+        | f -> f 
     let multiplyAsUnityBy m = function
         | Product (Power(x,n)::rest) ->
             Product (m::Power(Algebraic.expand (x*m),n)::rest)

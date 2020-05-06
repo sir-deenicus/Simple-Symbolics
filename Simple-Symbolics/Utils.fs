@@ -7,8 +7,6 @@ open Prelude.Math
 open Prelude.Common
 open MathNet.Numerics
 
-let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
-
 type TraceExplain<'a> =
      | Str of string
      | Op of ('a -> 'a) 
@@ -26,7 +24,14 @@ module Option =
     let mapOrAdd def f =
         function
         | None -> Some def
-        | Some y -> Some(f y) 
+        | Some y -> Some(f y)  
+
+module Constants =
+    open Operators
+    let π = pi
+    let pi = pi 
+    let e = Constant Constant.E  
+    let i = Constant Constant.I
 
 let safeEval f x = try f x with _ -> x
 let flip f a b = f b a
@@ -36,6 +41,8 @@ let pairmap f (x, y) = f x, f y
 let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
+
+let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
 
 let [<Literal>] InfixFormat = "Infix"
 
@@ -145,29 +152,17 @@ let todecimalr roundto = function | Number n -> real(float n |> Prelude.Common.r
 
 let degreeToRadians deg = 1/180Q * Operators.pi * deg
 let radiansToDegree rad = (180Q * rad)/Operators.pi  
- 
 
 //======================== 
-
-let toUnicodeSubScript = function 
-     | x when x >= '0' && x <='9' -> 
-       char ((int x - 48) + 8320)
-     | '-' -> '\u208B'
-     | '+' -> '\u208A'  
-     | '=' -> '\u208C'
-     | '(' -> '\u208D'
-     | ')' -> '\u208E'   
-     | ',' -> '﹐'
-     | c -> c
-
-module Constants =
-    open Operators
-    let π = pi
-    let pi = pi 
-    let e = Constant Constant.E  
-    let i = Constant Constant.I
-     
-
+ 
+let functionFirstTermOnly = function 
+    | Gradient
+    | Derivative
+    | PartialDerivative
+    | Integral    
+    | Expectation -> true
+    | _ -> false  
+    
 [<RequireQualifiedAccess>]
 type FuncType =
      | Identity 
@@ -234,16 +229,9 @@ module Hold =
 
     let remove = function
         | Id x -> x
-        | x -> x
+        | x -> x 
 
-let functionFirstTermOnly = function 
-    | Gradient
-    | Derivative
-    | PartialDerivative
-    | Integral    
-    | Expectation -> true
-    | _ -> false  
-
+//========================
 let (|IsFunctionExpr|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
     | _ -> None  
@@ -305,3 +293,7 @@ let innerProb = function
     | _ -> Undefined
 
 let isProb = function | IsProb _ -> true | _ -> false
+
+//////////
+
+

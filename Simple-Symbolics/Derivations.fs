@@ -5,11 +5,12 @@ open Core
 open Solving 
 open Prelude.Common
 open NumberTheory
+open Equations
 
 let deriveTrivialEqualitiesSingle (e1, eq) =
     [ yield Equation(e1, eq)
       for var in Expression.findVariables eq do
-          match reArrangeExprEquationX true var (eq, e1) with
+          match reArrangeExprEquation true var (eq, e1) with
           | Identifier _ as var, req ->
               yield Equation(var, Expression.simplify true req)
           | _ -> () ]

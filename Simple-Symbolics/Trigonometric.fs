@@ -5,6 +5,8 @@ open Utils
 open MathNet.Symbolics.Operators
 open MathNet.Numerics
 open MathNet.Symbolics
+open NumberTheory
+open Equations
 
 let Pi = Constants.pi
 
@@ -114,7 +116,89 @@ let simplifyTrigTerm = function
 let doubleAngleIdentity2a = function
     | Function(Cos, Product[n; x]) when n = 2Q -> 2 * (cos x) ** 2 - 1
     | f -> f
+     
+let (|IsSin|_|) = function
+      | Function(Sin,e) -> Some e
+      | _ -> None 
 
-//Here's an interesting idea. There are a great deal of trigonometric identities. Rather than writing the code up for transformations manually, let's just put them all in an undirected graph!
+let (|IsCos|_|) = function
+      | Function(Cos,e) -> Some e
+      | _ -> None 
 
-let TrigIdentities =Prelude.SimpleGraphs.
+let (|IsTan|_|) = function
+      | Function(Tan,e) -> Some e
+      | _ -> None 
+
+let (|IsCot|_|) = function
+      | Function(Cot,e) -> Some e
+      | _ -> None 
+
+let (|IsSec|_|) = function
+      | Function(Sec,e) -> Some e
+      | _ -> None 
+
+let (|IsCsc|_|) = function
+      | Function(Csc,e) -> Some e
+      | _ -> None  
+
+let tanToSinCos = function 
+    | IsTan a -> sin a / cos a
+    | x -> x
+
+let cotToTan = function 
+    | IsCot a -> 1 / tan a
+    | x -> x
+
+let secToCos = function 
+    | IsSec a -> 1 / cos a
+    | x -> x
+
+let cscToSin = function 
+    | IsCsc a -> 1 / sin a
+    | x -> x
+
+
+module SumDifferenceRule =
+    let sin =
+        function 
+        | IsSin(Sum[a;b]) -> sin a * cos b + cos a * sin b
+        | IsSin(Minus(a,b)) -> sin a * cos b - cos a * sin b
+        | Sum [Product [IsSin a; IsCos b] ; Product [IsCos a2; IsSin b2]] 
+            when a = a2 && b = b2 ->  sin (a + b)
+        | Minus(Product [IsSin a; IsCos b] , Product [IsCos a2; IsSin b2]) 
+            when a = a2 && b = b2 -> sin (a - b)
+        | x -> x
+
+    let cos =
+        function 
+        | IsCos(Sum[a;b]) -> cos a * cos b - sin a * sin b
+        | IsCos(Minus(a,b)) -> cos a * cos b + sin a * sin b
+        | Minus (Product [IsCos a; IsCos b], Product [IsSin a2; IsSin b2])
+            when a = a2 && b = b2 ->  cos (a + b)
+        | Sum [Product [IsCos a; IsCos b] ; Product [IsSin a2; IsSin b2]]
+            when a = a2 && b = b2 -> cos (a - b)
+        | x -> x 
+
+module DoubleAngle =
+    let sin =
+        function 
+        | IsSin (Product [Two; x]) -> 2 * sin x * cos x
+        | Product [Two; IsSin x ;IsCos x2 ] when x = x2 -> sin (2*x) 
+        | x -> x
+
+let cosToSin = function 
+    | IsCos(x) -> sin (Pi/2 - x)
+    | x -> x
+
+let sinToCos = function 
+    | IsSin(x) -> cos (Pi/2 - x)
+    | x -> x
+
+let x = symbol "x"
+let a = symbol "a"
+let b = symbol "b"
+
+let Equalities = 
+    [tan x <=> sin x/ cos x; 
+     cot x <=> 1 / tan x; sec x <=> 1/ cos x; csc x <=> 1/ sin x; (sin x) ** 2 + (cos x)**2 <=> 1Q 
+     ]

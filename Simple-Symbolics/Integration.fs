@@ -14,6 +14,7 @@ open NumberTheory
 open Summation
 open MathNet.Symbolics.Core
 open Expression
+open Equations
 
 let (|IsIntegral|_|) = function
      | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
@@ -252,7 +253,7 @@ let substitution substarget expr =
         let du = D dx substarget
         let innerExprTemp = Expression.replaceExpression usub substarget innerExpr
         if innerExprTemp <> innerExpr then
-            let _, solvefor = Solving.reArrangeExprEquationX true dx (substarget,usub) 
+            let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
             let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 match integratePartialRes usub (du * innerExpr') with
@@ -273,7 +274,7 @@ let substitutionSteps substarget expr =
         let du = D dx substarget
         let innerExprTemp = Expression.replaceExpression usub substarget innerExpr  
         if innerExprTemp <> innerExpr then
-            let _, solvefor = Solving.reArrangeExprEquation dx (substarget,usub) 
+            let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
             let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 trace.Add (dx <=> solvefor)

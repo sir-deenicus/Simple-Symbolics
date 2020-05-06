@@ -167,6 +167,21 @@ module Expression =
         | Product l -> List.forall isPositiveExpression l
         | x -> isPositiveNumber x 
 
+module Structure = 
+    let productToConstantsAndVarsGen test =
+        function
+        | Number _ as n when test n -> Some(n, [])
+        | Product p ->
+            let nums, vars = List.partition test p
+            Some(List.fold (*) 1Q nums, vars)
+        | _ -> None
+
+    let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+
+    let productToIntConstantsAndVars =
+        productToConstantsAndVarsGen Expression.isInteger
+          
+
 let (|ProductHasNumber|_|) =
     function
     | Product l ->
@@ -206,21 +221,25 @@ let (|SquareRoot|_|) = function
 let (|IsNegativeNumber|_|) = function
       | e when Expression.isNegativeNumber e -> Some e
       | _ -> None 
-   
-module Structure = 
-    let productToConstantsAndVarsGen test =
-        function
-        | Number _ as n when test n -> Some(n, [])
-        | Product p ->
-            let nums, vars = List.partition test p
-            Some(List.fold (*) 1Q nums, vars)
-        | _ -> None
 
-    let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+let (|Minus|_|) = function
+      | Sum [a; Product [Number n; b]] when n = -1N -> Some (a,b)
+      | _ -> None  
+       
+let (|Divide|_|) = function
+      | Product [a; Power (b,Number n)] when n = -1N -> Some (a,b)
+      | _ -> None  
+       
+let (|Two|NotTwo|) = function
+    | Number n when n = 2N -> Two
+    | RealApproximation f when f = 2. -> Two
+    | _ -> NotTwo 
 
-    let productToIntConstantsAndVars =
-        productToConstantsAndVarsGen Expression.isInteger
-          
+let (|OneHalf|NotOneHalf|) = function
+    | Number n when n = 1N/2N -> OneHalf
+    | RealApproximation f when f = 0.5 -> OneHalf
+    | _ -> NotOneHalf
+            
 let xIsMultipleOfy y x = x % y = 0
 
 let inline rem n d =

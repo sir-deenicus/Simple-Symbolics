@@ -7,8 +7,9 @@ open Prelude.Common
 open Utils
 open MathNet.Symbolics.NumberTheory
 open Units
+open Equations
 
-let reArrangeExprInequalityX silent focusVar (left, right) =
+let internal reArrangeExprInequality silent focusVar (left, right) =
     let rec iter doflip fx ops =
         match fx with
         | f when f = focusVar -> doflip, f, ops
@@ -74,7 +75,7 @@ let reArrangeExprInequalityX silent focusVar (left, right) =
     |> List.fold (fun e f -> f e) right
     |> Expression.simplify true
 
-let reArrangeExprEquationX silent focusVar (left, right) =
+let internal reArrangeExprEquation silent focusVar (left, right) =
     let rec iter fx ops =
         match fx with
         | f when f = focusVar -> f, ops
@@ -137,18 +138,18 @@ let reArrangeExprEquationX silent focusVar (left, right) =
     |> List.rev
     |> List.fold (fun e f -> f e) right
     |> Expression.simplify true
-
-let reArrangeExprEquation focusVar (left, right) =
-    reArrangeExprEquationX false focusVar (left, right)
+      
+let reArrangeEquation focusVar (e : Equation) =
+    reArrangeExprEquation true focusVar e.Definition |> Equation
 
 let reArrangeInEquality focusVar (e : InEquality) =
-    let f,l,r = reArrangeExprInequalityX true focusVar (e.Left, e.Right) 
+    let f,l,r = reArrangeExprInequality true focusVar (e.Left, e.Right) 
     let c' = if f then InEquality.flipComparer e.Comparer else e.Comparer
     InEquality(c', l , r)
 
 let rec invertFunction x expression =
     printfn "%s" (expression |> Infix.format)
-    match reArrangeExprEquation x (expression, x) with
+    match reArrangeExprEquation false x (expression, x) with
     | Identifier(Symbol _) as y, inv when y = x -> inv
     | _, inv ->
         printfn "Did not completely reduce. Collecting terms"
@@ -175,9 +176,6 @@ let completeSquare x p =
         let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
         a * (x + b / (2 * a)) ** 2 + c - b ** 2 / (4 * a)
     else failwith "Not quadratic"
-
-let reArrangeEquation focusVar (e : Equation) =
-    reArrangeExprEquationX true focusVar e.Definition |> Equation
 
 let getCandidates (vset : Hashset<_>) vars knowns =
     knowns
@@ -236,6 +234,8 @@ let dispSolvedUnitsA matches newline tx =
 
 let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx
  
+//========================
+
 module Polynomial =
     //Sometimes there might be rational coefficients. So multiply by denominators to get out integers.
     ///Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm

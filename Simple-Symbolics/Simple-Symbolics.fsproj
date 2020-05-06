@@ -32,6 +32,7 @@
     <None Include="Lab\experiments.fsx" />
     <Compile Include="Utils.fs" />
     <Compile Include="Numbers.fs" />
+    <Compile Include="Equations.fs" />
     <Compile Include="Trigonometric.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="OEIS.fs" />
@@ -57,7 +58,7 @@
     <PackageReference Include="Hansei" Version="0.3.2.2" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.24.8" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.24.9" />
   </ItemGroup>
 
   <ItemGroup>

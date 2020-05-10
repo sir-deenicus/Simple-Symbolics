@@ -34,10 +34,8 @@ let rec replaceSymbolAux doall r x f =
         | Sum l -> Sum(List.map loop l)
         | Id v -> Id(loop v)
         | Definition(a,b) -> Definition(loop a, loop b)
-        | Generic(a, ty) -> Generic(loop a, ty)
-        | FunctionN(fn, h::t) when functionFirstTermOnly fn -> FunctionN(fn, loop h::t) 
-        | FunctionN(Probability, h::t) -> FunctionN(Probability, h::(List.map loop t)) 
-        | FunctionN(Choose, l) -> FunctionN(Choose, List.map loop l) 
+        | Generic(a, ty) -> Generic(loop a, ty) 
+        | FunctionN(Probability, h::t) -> FunctionN(Probability, h::(List.map loop t))  
         | IsFunctionExpr(Identifier (Symbol _), x,ex) when doall -> fn (loop x) (loop ex)
         | IsFunctionExpr(Identifier (Symbol _), x,ex) -> fn x (loop ex)
         | FunctionN(fn, l) -> FunctionN(fn, List.map loop l) 
@@ -260,10 +258,9 @@ module Structure =
         | Function(fn, f) -> Function(fn, fx(applyInFunctionRec fx f))
         | Power(x,n) -> Power(fx(applyInFunctionRec fx x), n)
         | FunctionN(Probability, s::x::rest) ->
-            FunctionN(Probability,
-                        s::fx(applyInFunctionRec fx x)::rest)
-        | FunctionN(fn, x::parameters) when functionFirstTermOnly fn ->
-            FunctionN(fn, fx (applyInFunctionRec fx x)::parameters) 
+            FunctionN(Probability, s::fx(applyInFunctionRec fx x)::rest)
+        | FunctionN(fn, parameters) ->
+            FunctionN(fn, List.map (applyInFunctionRec fx >> fx) parameters) 
         | x -> x
 
     let applyInFunction fx =
@@ -272,8 +269,8 @@ module Structure =
         | Power(x,n) -> Power(fx x, n)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability, s::fx x::rest)
-        | FunctionN(fn, x::param) when functionFirstTermOnly fn ->
-            FunctionN(fn, fx x::param) 
+        | FunctionN(fn, xs) ->
+            FunctionN(fn, List.map fx xs) 
         | x -> x
 
     let internal filterApply fx filter x = if filter x then fx x else x
@@ -304,9 +301,6 @@ module Structure =
             |> filterApply fx filter
         | FunctionN(Probability, s :: x :: rest) ->
             FunctionN(Probability, s :: recursiveMapFilter filter fx x :: rest)
-            |> filterApply fx filter
-        | FunctionN(fn, x::param) when functionFirstTermOnly fn ->
-            FunctionN(fn, recursiveMapFilter filter fx x :: param)
             |> filterApply fx filter
         | FunctionN(fn, l) ->
             FunctionN(fn, List.map (recursiveMapFilter filter fx) l)
@@ -591,15 +585,12 @@ module Expression =
             | Product l ->
                 Product
                     (l |> List.map iterReplaceIn
-                       |> (tryReplaceCompoundExpression replacement
-                              expressionToFindContentSet))
+                       |> (tryReplaceCompoundExpression replacement expressionToFindContentSet))
             | Sum l ->
                 Sum
                     (l |> List.map iterReplaceIn
-                       |> (tryReplaceCompoundExpression replacement
-                              expressionToFindContentSet))
-            | FunctionN(Probability, s::x::rest) -> FunctionN(Probability, s::iterReplaceIn x::rest) 
-            | FunctionN(fn, x::param) when functionFirstTermOnly fn -> FunctionN(fn, iterReplaceIn x::param)
+                       |> (tryReplaceCompoundExpression replacement expressionToFindContentSet))
+            | FunctionN(Probability, s::x::rest) -> FunctionN(Probability, s::iterReplaceIn x::rest)  
             | FunctionN(fn, l) ->
                 FunctionN (fn, List.map iterReplaceIn l)
             | x -> x
@@ -1072,6 +1063,7 @@ module private Ops =
 type Ops () =
     static member max(x) = Function(Max, x)
     static member max(a,b) = Ops.max2 a b
+    static member min(a,b) = Ops.min2 a b
     
     
 

@@ -22,20 +22,20 @@ type Tropicalf (e:float) =
 
 type Tropical (e:Expression) =
     member __.Value = Expression.simplifyLite e
-    static member (+) (l : Tropical, r : Tropical) =
-        Tropical(Ops.min2 l.Value r.Value)
+    static member (+) (l : Tropical, r : Tropical) = 
+        Tropical(Ops.min (l.Value, r.Value))
     static member (+) (l : Tropical, r : float) =
-        Tropical(Ops.min2 l.Value (real r))
+        Tropical(Ops.min(l.Value, (real r)))
     static member (+) (l : float, r : Tropical) =
-        Tropical(Ops.min2 (real l) r.Value)
+        Tropical(Ops.min((real l), r.Value))
     static member (+) (l : Expression, r : Tropical) =
-        Tropical(Ops.min2 l r.Value)
+        Tropical(Ops.min(l, r.Value))
     static member (+) (l : Tropical, r : Expression) =
-        Tropical(Ops.min2 l.Value r)
+        Tropical(Ops.min (l.Value, r))
     static member (+) (l : Tropical, r : int) =
-        Tropical(Ops.min2 l.Value (Expression.FromInt32 r))
+        Tropical(Ops.min(l.Value, (Expression.FromInt32 r)))
     static member (+) (l : int, r : Tropical) =
-        Tropical(Ops.min2 (Expression.FromInt32 l) r.Value)
+        Tropical(Ops.min((Expression.FromInt32 l), r.Value))
 
     static member (*) (l : Tropical, r : Tropical) =
         Tropical(l.Value + r.Value)

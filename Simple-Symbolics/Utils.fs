@@ -154,15 +154,15 @@ let degreeToRadians deg = 1/180Q * Operators.pi * deg
 let radiansToDegree rad = (180Q * rad)/Operators.pi  
 
 //======================== 
- 
+
 let functionFirstTermOnly = function 
     | Gradient
     | Derivative
     | PartialDerivative
     | Integral    
     | Expectation -> true
-    | _ -> false  
-    
+    | _ -> false      
+
 [<RequireQualifiedAccess>]
 type FuncType =
      | Identity 
@@ -249,19 +249,6 @@ let (|IsFunctionExprAny|_|) = function
     | FunctionN(Func, [ f;x ]) -> Some(f,x,None)
     | _ -> None      
 
-let (|IsDerivative|_|) = function
-     | FunctionN(PartialDerivative as f, [ x; dx ])
-     | FunctionN(Derivative as f, [ x; dx ]) -> Some(f, x,dx)
-     | _ -> None  
-
-let (|IsDerivative1D|_|) = function
-    | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
-    | _ -> None    
-
-let (|IsPartialDerivative|_|) = function
-    | FunctionN(PartialDerivative, [ x; dx ]) -> Some(x,dx)
-    | _ -> None    
-
 let (|AsFunction|_|) input = 
      match input with 
      | Function(f, x) -> Some(FuncType.Function f,x)
@@ -291,7 +278,25 @@ let (|IsDefiniteIntegral|_|) = function
      | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
      | _ -> None
 
+let (|IsDerivative|_|) = function
+     | FunctionN(PartialDerivative as f, [ x; dx ])
+     | FunctionN(Derivative as f, [ x; dx ]) -> Some(f, x,dx)
+     | _ -> None  
+
+let (|IsDerivative1D|_|) = function
+    | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
+    | _ -> None    
+
+let (|IsPartialDerivative|_|) = function
+    | FunctionN(PartialDerivative, [ x; dx ]) -> Some(x,dx)
+    | _ -> None    
+
+let (|IsLimit|_|) = function
+    | FunctionN(Limit, [var;lim;x])  -> Some(var,lim,x)
+    | _ -> None    
+ 
 //========================
+
 let expectationsDistribution = function
     | IsExpectation (_, px) -> px
     | _ -> Undefined

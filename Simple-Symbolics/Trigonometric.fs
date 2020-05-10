@@ -22,7 +22,30 @@ let isTrigonometricFunction = function
     | Function.Asec
     | Function.Acot-> true 
     | _ -> false
+     
+let (|IsSin|_|) = function
+      | Function(Sin,e) -> Some e
+      | _ -> None 
 
+let (|IsCos|_|) = function
+      | Function(Cos,e) -> Some e
+      | _ -> None 
+
+let (|IsTan|_|) = function
+      | Function(Tan,e) -> Some e
+      | _ -> None 
+
+let (|IsCot|_|) = function
+      | Function(Cot,e) -> Some e
+      | _ -> None 
+
+let (|IsSec|_|) = function
+      | Function(Sec,e) -> Some e
+      | _ -> None 
+
+let (|IsCsc|_|) = function
+      | Function(Csc,e) -> Some e
+      | _ -> None  
 
 module TrigTables = 
 
@@ -81,7 +104,42 @@ module TrigTables =
                      sqrt 3Q, Pi / 3 ]
                      
 
-let evalAtan y x = 
+[<RequireQualifiedAccess>]
+module DoubleAngle =
+    let Sine =
+        function 
+        | IsSin (Product [Two; x]) -> 2 * sin x * cos x
+        | Product [Two; IsSin x ;IsCos x2 ] when x = x2 -> sin (2*x) 
+        | x -> x
+
+    let Cos = 
+        function 
+        | IsCos(Product [Two; x]) -> 2 * (cos x)**2 - 1
+        | Sum[Number n; Product [Two; Power(IsCos x,Two)]] when n = -1N -> cos (2*x)
+        | x -> x
+
+[<RequireQualifiedAccess>]
+module SumDifferenceRule =
+    let Sine =
+        function
+        | IsSin (Sum [ a; b ]) -> sin a * cos b + cos a * sin b
+        | IsSin (Minus (a, b)) -> sin a * cos b - cos a * sin b
+        | Sum [ Product [ IsSin b; IsCos a ]; Product [ IsSin a2; IsCos b2 ] ] when a = a2 && b = b2 -> sin (a + b)
+        | Sum [ Product [ NegativeOne; IsSin b; IsCos a ]; Product [ IsSin a2; IsCos b2 ] ]
+        | Sum [ Product [ IsSin a2; IsCos b2 ]; Product [ NegativeOne; IsSin b; IsCos a ] ] when a = a2 && b = b2 ->
+            sin (a - b)
+        | x -> x
+
+    let Cos =
+        function
+        | IsCos (Sum [ a; b ]) -> cos a * cos b - sin a * sin b
+        | IsCos (Minus (a, b)) -> cos a * cos b + sin a * sin b
+        | Sum [ Product [ NegativeOne; IsSin a; IsSin b ]; Product [ IsCos a2; IsCos b2 ] ] when a = a2 && b = b2 ->
+            cos (a + b)
+        | Sum [ Product [ IsSin a2; IsSin b2 ]; Product [ IsCos a; IsCos b ] ] when a = a2 && b = b2 -> cos (a - b)
+        | x -> x
+
+let evalAtan y x =
     let xn, yn = rational x, rational y
     if x > 0N then arctan (yn / xn)
     elif x < 0N && y >= 0N then Trigonometric.simplify (arctan (yn / xn) + Pi)
@@ -90,102 +148,31 @@ let evalAtan y x =
     elif x = 0N && y < 0N then -Pi / 2
     else Undefined
 
-let simplifyTrigTerm = function
-    | Function(Cos, n) as cosx ->
+let simplifyTrigTerm =
+    function
+    | Function (Cos, n) as cosx ->
         TrigTables.cosineLookUp.tryFind n
         |> Option.defaultValue cosx
-    | Function(Sin, n) as sinx ->
+    | Function (Sin, n) as sinx ->
         TrigTables.sineLookUp.tryFind n
-        |> Option.defaultValue sinx   
-    | Function(Tan, n) as tanx ->
+        |> Option.defaultValue sinx
+    | Function (Tan, n) as tanx ->
         TrigTables.tanLookUp.tryFind n
-        |> Option.defaultValue tanx 
-    | Function(Atan, x) as atanx ->
+        |> Option.defaultValue tanx
+    | Function (Atan, x) as atanx ->
         TrigTables.aTanLookUp.tryFind x
-        |> Option.defaultValue atanx   
-    | FunctionN(Atan, [a;b]) as atanx  -> 
-        match a,b with 
-        | Number x, Number y -> 
+        |> Option.defaultValue atanx
+    | FunctionN (Atan, [ a; b ]) as atanx ->
+        match a, b with
+        | Number x, Number y ->
             let atanx' = evalAtan x y
             atanx'
             |> TrigTables.aTanLookUp.tryFind
             |> Option.defaultValue atanx'
-        | _ -> atanx        
-    | x -> x      
-
-let doubleAngleIdentity2a = function
-    | Function(Cos, Product[n; x]) when n = 2Q -> 2 * (cos x) ** 2 - 1
-    | f -> f
-     
-let (|IsSin|_|) = function
-      | Function(Sin,e) -> Some e
-      | _ -> None 
-
-let (|IsCos|_|) = function
-      | Function(Cos,e) -> Some e
-      | _ -> None 
-
-let (|IsTan|_|) = function
-      | Function(Tan,e) -> Some e
-      | _ -> None 
-
-let (|IsCot|_|) = function
-      | Function(Cot,e) -> Some e
-      | _ -> None 
-
-let (|IsSec|_|) = function
-      | Function(Sec,e) -> Some e
-      | _ -> None 
-
-let (|IsCsc|_|) = function
-      | Function(Csc,e) -> Some e
-      | _ -> None  
-
-let tanToSinCos = function 
-    | IsTan a -> sin a / cos a
+        | _ -> atanx
     | x -> x
-
-let cotToTan = function 
-    | IsCot a -> 1 / tan a
-    | x -> x
-
-let secToCos = function 
-    | IsSec a -> 1 / cos a
-    | x -> x
-
-let cscToSin = function 
-    | IsCsc a -> 1 / sin a
-    | x -> x
-
-
-module SumDifferenceRule =
-    let sin =
-        function 
-        | IsSin(Sum[a;b]) -> sin a * cos b + cos a * sin b
-        | IsSin(Minus(a,b)) -> sin a * cos b - cos a * sin b
-        | Sum [Product [IsSin a; IsCos b] ; Product [IsCos a2; IsSin b2]] 
-            when a = a2 && b = b2 ->  sin (a + b)
-        | Minus(Product [IsSin a; IsCos b] , Product [IsCos a2; IsSin b2]) 
-            when a = a2 && b = b2 -> sin (a - b)
-        | x -> x
-
-    let cos =
-        function 
-        | IsCos(Sum[a;b]) -> cos a * cos b - sin a * sin b
-        | IsCos(Minus(a,b)) -> cos a * cos b + sin a * sin b
-        | Minus (Product [IsCos a; IsCos b], Product [IsSin a2; IsSin b2])
-            when a = a2 && b = b2 ->  cos (a + b)
-        | Sum [Product [IsCos a; IsCos b] ; Product [IsSin a2; IsSin b2]]
-            when a = a2 && b = b2 -> cos (a - b)
-        | x -> x 
-
-module DoubleAngle =
-    let sin =
-        function 
-        | IsSin (Product [Two; x]) -> 2 * sin x * cos x
-        | Product [Two; IsSin x ;IsCos x2 ] when x = x2 -> sin (2*x) 
-        | x -> x
-
+    
+   
 let cosToSin = function 
     | IsCos(x) -> sin (Pi/2 - x)
     | x -> x
@@ -198,7 +185,17 @@ let x = symbol "x"
 let a = symbol "a"
 let b = symbol "b"
 
-let Equalities = 
-    [tan x <=> sin x/ cos x; 
-     cot x <=> 1 / tan x; sec x <=> 1/ cos x; csc x <=> 1/ sin x; (sin x) ** 2 + (cos x)**2 <=> 1Q 
-     ]
+let TrigEqualities =
+    [ tan x <=> sin x / cos x
+      cot x <=> 1 / tan x
+      sec x <=> 1 / cos x
+      csc x <=> 1 / sin x
+      (sin x) ** 2 + (cos x) ** 2 <=> 1Q
+      cos x <=> sin (Pi / 2 - x)
+      sin x <=> cos (Pi / 2 - x)
+      sin (2 * x) <=> 2 * sin x * cos x
+      cos (2 * x) <=> (cos x) ** 2 - (sin x) ** 2
+      sin (a + b) <=> sin a * cos b + cos a * sin b
+      sin (a - b) <=> sin a * cos b - cos a * sin b
+      cos (a + b) <=> cos a * cos b - sin a * sin b
+      cos (a - b) <=> cos a * cos b + sin a * sin b ]

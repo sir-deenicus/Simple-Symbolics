@@ -737,36 +737,34 @@ module Expression =
 
     let isCertainlyOdd = isCertainlyEven >> not 
     
-    //A rational function is a rational where the denominator is a polynomial and the numerator is a non-constant polynomial
+    //A rational function is a rational where the denominator is a polynomial and the numerator is a polynomial
     let isRationalFunction var f =
         let num, den = Rational.numerator f, Rational.denominator f
         if den = 1Q then Polynomial.isPolynomial var f
-        else if Polynomial.isPolynomial var den then
-                let deg = Polynomial.degree var num
-                if deg = 0Q then false
-                else Polynomial.isPolynomial var num
-             else false
+        else Polynomial.isPolynomial var num && Polynomial.isPolynomial var den
 
 
 module Rational = 
-    let rec simplifyNumbers(roundto : int) =
+    let rec simplifyNumbersAux (minval) (roundto : int) =
         function
-        | Approximation (Approximation.Real r) -> 
+        | Approximation (Approximation.Real r) ->
             Approximation (Approximation.Real (round roundto r))
         | Number n as num ->
             let f = float n
             let pf = abs f
-            if pf > 10000. || pf < 0.0001 then
+            if pf > 10000. || pf < minval then
                 let p10 = floor (log10 pf)
                 let x = Math.Round(f / 10. ** p10, roundto) |> Expression.fromFloat
                 Product [ x
                           Power(10Q, p10 |> Expression.fromFloat) ]
             else num
-        | Power(x, n) -> Power(simplifyNumbers roundto x, n)
-        | Sum l -> Sum(List.map (simplifyNumbers roundto) l)
-        | Product l -> Product(List.map (simplifyNumbers roundto) l)
-        | Function(f, x) -> Function(f, simplifyNumbers roundto x)
+        | Power(x, n) -> Power(simplifyNumbersAux minval roundto x, n)
+        | Sum l -> Sum(List.map (simplifyNumbersAux minval roundto) l)
+        | Product l -> Product(List.map (simplifyNumbersAux minval roundto) l)
+        | Function(f, x) -> Function(f, simplifyNumbersAux minval roundto x)
         | x -> x
+
+    let rec simplifyNumbers(roundto : int) = simplifyNumbersAux 0.0001 roundto
 
     let radicalRationalize x =
         let den = Rational.denominator x
@@ -1055,7 +1053,7 @@ let makefuncAlt xvar f =
 
 let applyfn f x = makefunc f x
 
-module Ops =
+module private Ops =
     let max2 a b = 
         match (a,b) with
             | PositiveInfinity, _ -> a

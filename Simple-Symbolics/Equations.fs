@@ -30,6 +30,10 @@ type Equation(leq : Expression, req : Expression) =
         Equation(eq.Left * expr, eq.Right * expr)
     static member (/) (eq : Equation, expr : Expression) =
         Equation(eq.Left / expr, eq.Right / expr)
+    static member Pow(e:Equation, n : Expression) = 
+        Equation (e.Left ** n, e.Right ** n)
+    static member Pow(e:Equation, n : int) = 
+        Equation (e.Left ** n, e.Right ** n)
     override __.ToString() =
         fmt leq + " = " + fmt req
          
@@ -37,6 +41,11 @@ module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
     let right (eq:Equation) = eq.Right
     let left (eq:Equation) = eq.Left
+    
+    ///convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -> a * d = b * c -> a * d - b * c = 0
+    let multiplyAndSubtractRightDenominator (e:Equation) =
+        let e' = e * Rational.denominator e.Right * Rational.denominator e.Left
+        e' - e'.Right 
 
 let (<=>) a b = Equation(a, b)
 
@@ -44,13 +53,16 @@ let equals a b = Equation(a, b)
 
 let eqapply = Equation.Apply >> Op
 
-let eqapplys (s,f) = Instr(Equation.Apply f, s)
+let ieqapply (s,f) = Instr(Equation.Apply f, s)
   
 let equationTrace (current:Equation) (instructions : _ list) = 
     stepTracer false true string current instructions
 
-//==============
+let eqApp = Equation.Apply
 
+module eq = Equation
+
+//============== 
 
 module InEquality =
     type Comparer =

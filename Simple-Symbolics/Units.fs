@@ -285,6 +285,8 @@ let units =
         meter, "length"
         km, "length" ]
 
+let unitsmap = Dict.ofSeq (List.map swap units)
+
 let simplifyUnits (u : Units) =
     let matched =
         List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units

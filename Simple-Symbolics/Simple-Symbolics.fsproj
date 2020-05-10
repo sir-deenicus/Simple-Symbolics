@@ -43,11 +43,11 @@
     <Compile Include="Algebraic.fs" />
     <Compile Include="Complex.fs" />
     <Compile Include="Tropical.fs" />
+    <Compile Include="Differentiation.fs" />
+    <Compile Include="LinearAlgebra.fs" />
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
-    <Compile Include="Differentiation.fs" />
     <Compile Include="Integration.fs" />
-    <Compile Include="LinearAlgebra.fs" />
     <Compile Include="Agents.fs" />
   </ItemGroup>
 
@@ -58,7 +58,7 @@
     <PackageReference Include="Hansei" Version="0.3.2.2" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.24.9" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.25.0" />
   </ItemGroup>
 
   <ItemGroup>

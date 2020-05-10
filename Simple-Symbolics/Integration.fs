@@ -16,17 +16,6 @@ open MathNet.Symbolics.Core
 open Expression
 open Equations
 
-let (|IsIntegral|_|) = function
-     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
-     | _ -> None
-
-let (|IsDefiniteIntegral|_|) = function
-     | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
-     | _ -> None
- 
-let integral dx x = FunctionN(Integral, [ x; dx ])
-
-let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 
 let rewriteIntegralAsSum = function 
    | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> 
@@ -181,19 +170,39 @@ let integrateSimplePartial x f =
             (*printfn "Can't integrate this %s" (f.ToFormattedString());*) 
     iter f
       
-let integratePartialRes x e =
+let internal freshConstant e =
+    let vs = Expression.findVariables e
+
+    let cvs =
+        vs
+        |> Seq.filter (function
+            | ExpressionPatterns.IsSymbolVar s -> s.Contains "constant"
+            | _ -> false)
+
+    let i = Seq.length cvs
+    symbol "constant_" + (i + 1)
+
+     
+let integratePartialResAux trackConstants x e =
     match (integrateSimplePartial x e) with 
     | Partial(s, def, true) -> s + def, false
     | Partial(s, def, false) -> s * (integral x def), false
-    | Succeeded e -> e, true
+    | Succeeded e -> (if not trackConstants then e else e + freshConstant e), true
     | Deferred (e,true) -> e, false
     | Deferred (e,false) -> integral x e, false
+
+let integratePartialRes x e = integratePartialResAux false x e
 
 let integratePartial x e = fst(integratePartialRes x e)
  
 let evalIntegral =
     function
     | IsIntegral(f, dx) -> integratePartial dx f
+    | f -> f  
+    
+let evalIntegralC =
+    function
+    | IsIntegral(f, dx) -> fst(integratePartialResAux true dx f)
     | f -> f 
 
 let evalDefiniteIntegral =
@@ -392,10 +401,9 @@ let rewriteIntegralAsExpectation =
     | FunctionN(Function.Integral, Product l :: _) as f ->
         maybe {
             let! p = List.tryFind (function
-                         | FunctionN(Probability, _) -> true
-                         | _ -> false) l
-            return FunctionN(Function.Expectation,
-                             [ (Product l) / p; p ])
+                        | FunctionN(Probability, _) -> true
+                        | _ -> false) l
+            return FunctionN(Function.Expectation, [ (Product l) / p; p ])
         }
         |> Option.defaultValue f
     | f -> f
@@ -419,7 +427,7 @@ module Riemann =
             let x_i = a + deltax * i
 
             summation i 1Q n (deltax * Expression.replaceExpression x_i dx f)
-            |> limit n MathNet.Symbolics.Operators.infinity 
+            |> limit n Symbolics.Operators.infinity 
         | _ -> undefined
 
 module Units =

@@ -219,6 +219,10 @@ let define a b = Definition(a,b)
 let extractDefinition = function Definition(a,b) -> b | x -> x
 
 let interval a b = IntSharp.Types.Interval.FromInfSup(a,b)
+ 
+let integral dx x = FunctionN(Integral, [ x; dx ])
+
+let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 
 let hold x = Id x
 
@@ -278,6 +282,14 @@ let (|Binomial|_|) input =
      match input with
      | FunctionN(Choose, [n;k]) -> Some(n,k)
      | _ -> None 
+      
+let (|IsIntegral|_|) = function
+     | FunctionN(Integral, [ x; dx ]) -> Some(x,dx)
+     | _ -> None
+
+let (|IsDefiniteIntegral|_|) = function
+     | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
+     | _ -> None
 
 //========================
 let expectationsDistribution = function

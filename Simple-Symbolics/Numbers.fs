@@ -110,6 +110,7 @@ module Expression =
         function
         | Number _ | Constant _ | Approximation _
         | Power(Number _, Number _)  
+        | Power(Number _, Approximation _) 
         | Power(Approximation _, Number _)  
         | Power(Constant _, Number _)  
         | Power(Number _, Constant _)
@@ -122,6 +123,7 @@ module Expression =
         function
         | Number _ | RealConstant _ | RealApproximation _
         | Power(Number _, Number _)  
+        | Power(Number _, RealApproximation _) 
         | Power(RealApproximation _, Number _)  
         | Power(RealConstant _, Number _)  
         | Power(Number _, RealConstant _)
@@ -168,7 +170,7 @@ module Expression =
         | x -> isPositiveNumber x 
 
 module Structure = 
-    let productToConstantsAndVarsGen test =
+    let productToConstantsAndVarsAux test =
         function
         | Number _ as n when test n -> Some(n, [])
         | Product p ->
@@ -176,11 +178,12 @@ module Structure =
             Some(List.fold (*) 1Q nums, vars)
         | _ -> None
 
-    let productToConstantsAndVars = productToConstantsAndVarsGen Expression.isNumber
+    let productToConstantsAndVars = productToConstantsAndVarsAux Expression.isNumber
 
     let productToIntConstantsAndVars =
-        productToConstantsAndVarsGen Expression.isInteger
+        productToConstantsAndVarsAux Expression.isInteger
           
+///////////////////////////////////////////////
 
 let (|ProductHasNumber|_|) =
     function
@@ -198,7 +201,7 @@ let (|IntegerLiteral|_|) m = function
     | Number n as q when n.IsInteger && int n = m -> Some q
     | _ -> None
 
-let (|IntegerNumber|_|)  = function
+let (|IntegerNumber|_|) = function
     | Number n as q when n.IsInteger -> Some q
     | _ -> None
 
@@ -223,13 +226,30 @@ let (|IsNegativeNumber|_|) = function
       | _ -> None 
 
 let (|Minus|_|) = function
+      | Sum [Product [Number n; a]; b]
       | Sum [a; Product [Number n; b]] when n = -1N -> Some (a,b)
+      | Sum [Number n; a] when n < 0N -> Some(Number n, a)
       | _ -> None  
        
 let (|Divide|_|) = function
       | Product [a; Power (b,Number n)] when n = -1N -> Some (a,b)
       | _ -> None  
-       
+
+let (|NegativeOne|NotNegativeOne|) = function
+    | Number n when n = -1N -> NegativeOne
+    | RealApproximation f when f = -1. -> NegativeOne
+    | _ -> NotNegativeOne      
+
+let (|Zero|NotZero|) = function
+    | Number n when n = 0N -> Zero
+    | RealApproximation f when f = 0. -> Zero
+    | _ -> NotZero     
+
+let (|One|NotOne|) = function
+    | Number n when n = 1N -> One
+    | RealApproximation f when f = 1. -> One
+    | _ -> NotOne      
+    
 let (|Two|NotTwo|) = function
     | Number n when n = 2N -> Two
     | RealApproximation f when f = 2. -> Two
@@ -358,8 +378,3 @@ let tryNumber =
 
 let xor a b = (a && not b) || (not a && b) 
    
-let clampRadians = function
-    | IsRealNumber n -> 
-        let deg = radiansToDegree n
-        deg.ToInt() % 360 |> Operators.fromInt32 |> degreeToRadians
-    | x -> x

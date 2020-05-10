@@ -8,11 +8,90 @@ open Utils
 open MathNet.Symbolics.NumberTheory
 open Units
 open Equations
+open MathNet.Symbolics.Operators
+
+let quadraticSolve x p =
+    if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
+        let coeffs = Polynomial.coefficients x p
+        let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
+        Expression.simplify true ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
+        Expression.simplify true ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
+    else failwith "Not quadratic"
+
+let completeSquare x p =
+    if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
+        let coeffs = Polynomial.coefficients x p
+        let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
+        a * (x + b / (2 * a)) ** 2 + c - b ** 2 / (4 * a)
+    else failwith "Not quadratic"
+
+module Polynomial =
+    //Sometimes there might be rational coefficients. So multiply by denominators to get out integers.
+    ///Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
+    let toIntegerCoefficients fx =
+        let denominators =
+            [ for c in Polynomial.coefficients x fx do
+                   if not (Expression.isInteger c) then yield Rational.denominator c ]
+           
+        if List.isEmpty denominators then 1Q, fx 
+        else  
+            // get rid of denominators by multiplying by their least common multiple  
+            let lcm = Numbers.lcm denominators
+            if lcm = undefined then 1Q, fx
+            else lcm, fx * lcm |> Algebraic.expand 
+ 
+    ///The rational roots method to factor polynomials with rational roots with degree > 2
+    let factor x fx =
+        //this will iterate 
+        let rec loop zeros fx =
+
+            //Simple cases
+            let deg = Polynomial.degree x fx
+        
+            if deg = 0Q then (fx, Operators.undefined)::zeros
+            elif deg = 1Q then
+                let coeff = Polynomial.coefficient x 1 fx 
+                let constant = Polynomial.coefficient x 0 fx
+                (fx, (-constant / coeff))::zeros
+            elif deg = 2Q then
+                let a,b = quadraticSolve x fx 
+                (x-a,a)::(x-b,b)::zeros
+            else //Get all the Polynomial coefficients and their factors.      
+                let coeffs = Polynomial.coefficients x (toIntegerCoefficients fx |> snd) 
+                if Array.forall Expression.isInteger coeffs then //Ensure integer coefficients
+                    let numfactors = Array.collect (abs >> factorsExpr >> List.toArray) coeffs |> Hashset
+
+                    //evaluate each candidate and its negation, collecting all inputs
+                    //which evaluate to zero.
+                    let pfactors =
+                        [ for f in numfactors do
+                            yield!
+                                [for fval in [f;-f] do
+                                    let eval = replaceSymbol fval x fx |> Expression.FullSimplify
+                                    if eval = 0Q then yield x - fval, fval ]]
+                    match pfactors with 
+                    | [] -> zeros
+                    | _ -> 
+                        //The factors can be multiplied such that dividing by them leaves 
+                        //us with a simpler polynomial. 
+                        let p = pfactors |> List.map fst |> List.reduce (*) |> Algebraic.expand
+                        let fx', rem = Polynomial.divide x fx p
+                        if rem <> 0Q then failwith "Polynomial factoring unexpected error"
+                        loop (pfactors @ zeros) fx'
+                else zeros 
+        
+        let fs, zs = List.unzip(loop [] fx)
+
+        (match fs with
+         | [] -> None
+         | _ -> Some(Product fs)), List.filter ((<>) Operators.undefined) zs
 
 let internal reArrangeExprInequality silent focusVar (left, right) =
     let rec iter doflip fx ops =
         match fx with
         | f when f = focusVar -> doflip, f, ops
+        | Power(b, x) when containsVar focusVar x -> 
+            iter doflip x ((fun x -> log b x)::ops)
         | Power(f, p) ->
             if not silent then printfn "raise to power"
             iter doflip f ((fun (x : Expression) -> x ** (1 / p)) :: ops)
@@ -79,8 +158,8 @@ let internal reArrangeExprEquation silent focusVar (left, right) =
     let rec iter fx ops =
         match fx with
         | f when f = focusVar -> f, ops
-        | Power(n, x) when containsVar focusVar x -> 
-            iter x ((fun x -> ln x / ln n)::ops)
+        | Power(b, x) when containsVar focusVar x -> 
+            iter x ((fun x -> log b x)::ops)
         | Power(f, p) ->
             if not silent then printfn "raise to power"
             iter f ((fun (x : Expression) -> x ** (1 / p)) :: ops)
@@ -127,6 +206,12 @@ let internal reArrangeExprEquation silent focusVar (left, right) =
         | Function(Sin, x) ->
             if not silent then printfn "asin"
             iter x ((fun x -> Function(Asin, x)) :: ops) 
+        | IsDerivative(_, f, dx) ->
+            if not silent then printfn "integrate"
+            iter f ((fun x -> integral dx x) :: ops) 
+        | IsIntegral(f, dx) ->
+            if not silent then printfn "differentiate"
+            iter f ((fun x -> diff dx x) :: ops) 
         | Function(Exp, x) ->
             if not silent then printfn "log"
             iter x (ln :: ops)
@@ -141,6 +226,30 @@ let internal reArrangeExprEquation silent focusVar (left, right) =
       
 let reArrangeEquation focusVar (e : Equation) =
     reArrangeExprEquation true focusVar e.Definition |> Equation
+       
+let solveFor targetVar (eq : Equation) =
+    let adjust (eq:Equation) = //move it left collect as polyonmial
+        eq - eq.Right
+        |> Equation.Apply Algebraic.expand
+        |> Equation.ApplyToLeft(Polynomial.collectTerms targetVar)
+    //does the rhs have targetVar in it?
+    let eq', adjusted =
+        if containsVar targetVar eq.Right then
+            adjust eq, true
+        else eq, false
+    match (reArrangeExprEquation true targetVar eq'.Definition) with
+    | Identifier _, r -> [ targetVar <=> r ]
+    | e ->
+        let peq = if adjusted || eq'.Right = 0Q then eq' else adjust eq'
+        if Polynomial.isPolynomial targetVar peq.Left then
+            let vals =
+                Polynomial.factor targetVar peq.Left
+                |> snd
+                |> List.map (fun e -> targetVar <=> e)
+            match vals with
+            | [] -> [Equation e]
+            | es -> es
+        else [ Equation e ]
 
 let reArrangeInEquality focusVar (e : InEquality) =
     let f,l,r = reArrangeExprInequality true focusVar (e.Left, e.Right) 
@@ -162,20 +271,6 @@ let rec invertFunction x expression =
             printfn "no"
             inv
 
-let quadraticSolve x p =
-    if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
-        let coeffs = Polynomial.coefficients x p
-        let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
-        Expression.simplify true ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
-        Expression.simplify true ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
-    else failwith "Not quadratic"
-
-let completeSquare x p =
-    if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
-        let coeffs = Polynomial.coefficients x p
-        let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
-        a * (x + b / (2 * a)) ** 2 + c - b ** 2 / (4 * a)
-    else failwith "Not quadratic"
 
 let getCandidates (vset : Hashset<_>) vars knowns =
     knowns
@@ -235,63 +330,3 @@ let dispSolvedUnitsA matches newline tx =
 let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx
  
 //========================
-
-module Polynomial =
-    //Sometimes there might be rational coefficients. So multiply by denominators to get out integers.
-    ///Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
-    let toIntegerCoefficients fx =
-        let denominators =
-            [ for c in Polynomial.coefficients x fx do
-                   if not (Expression.isInteger c) then yield Rational.denominator c ]
-           
-        if List.isEmpty denominators then 1Q, fx 
-        else  
-            // get rid of denominators by multiplying by their least common multiple  
-            let lcm = (Numbers.lcm denominators)
-            lcm, fx * lcm |> Algebraic.expand
- 
- 
-///The rational roots method to factor a polynomial 
-let factorPolynomial x fx =
-    //this will iterate 
-    let rec loop zeros fx =
-
-        //Simple cases
-        let deg = Polynomial.degree x fx
-        
-        if deg = 0Q then (fx, Operators.undefined)::zeros
-        elif deg = 1Q then
-            let coeff = Polynomial.coefficient x 1 fx 
-            let constant = Polynomial.coefficient x 0 fx
-            (fx, (-constant / coeff))::zeros
-        elif deg = 2Q then
-            let a,b = quadraticSolve x fx 
-            (x-a,a)::(x-b,b)::zeros
-        else //Get all the Polynomial coefficients and their factors.      
-            let coeffs = Polynomial.coefficients x fx
-            let numfactors = Array.collect (abs >> factorsExpr >> List.toArray) coeffs |> Hashset
-
-            //evaluate each candidate and its negation, collecting all inputs
-            //which evaluate to zero.
-            let pfactors =
-                [ for f in numfactors do
-                    yield!
-                        [for fval in [f;-f] do
-                            let eval = replaceSymbol fval x fx |> Expression.FullSimplify
-                            if eval = 0Q then yield x - fval, fval ]]
-            match pfactors with 
-            | [] -> zeros
-            | _ -> 
-                //The factors can be multiplied such that dividing by them leaves 
-                //us with a simpler polynomial. 
-                let p = pfactors |> List.map fst |> List.reduce (*) |> Algebraic.expand
-                let fx', rem = Polynomial.divide x fx p
-                if rem <> 0Q then failwith "Polynomial factoring unexpected error"
-                loop (pfactors @ zeros) fx'
-    
-    //Ensure integer coefficients
-    let fs, zs = loop [] (Polynomial.toIntegerCoefficients fx |> snd) |> List.unzip
-
-    (match fs with
-     | [] -> None
-     | _ -> Some(Product fs)), List.filter ((<>) Operators.undefined) zs

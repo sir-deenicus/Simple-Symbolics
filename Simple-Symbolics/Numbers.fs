@@ -20,7 +20,9 @@ module BigRational =
     open Microsoft.FSharp.Core.Operators
     open System
 
-    let approximatelyInt x = (floor x) / x > 0.999999
+    let approximatelyInt x = 
+        let ratio = (floor x) / x 
+        ratio > 0.999999 && ratio < 1.000001
 
     let fromFloatDouble (df : float) =
         let rec countDigits n x =
@@ -29,7 +31,8 @@ module BigRational =
             else countDigits (n + 1) x'
         if approximatelyInt df then BigRational.FromBigInt(Numerics.BigInteger df)
         else
-            let dpart = df - floor df
+            let df' = abs df
+            let dpart = df' - floor df'
             let dpow = countDigits 0 dpart
             let pow10 = Numerics.BigInteger 10 ** int dpow
             BigRational.FromBigIntFraction
@@ -353,8 +356,6 @@ let chooseN n k =
         else
             factorial bn / (factorial bk * (factorial (bn - bk))) 
             |> Expression.FromRational
-    
-let fac x = Function(Fac, x)
 
 let expandChooseBinomial = function
     | Binomial(n,k) -> fac n /(fac k * fac(n - k))

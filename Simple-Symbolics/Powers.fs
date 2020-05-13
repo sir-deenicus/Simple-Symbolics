@@ -7,6 +7,9 @@ module Logarithm =
 
     let expand =
         function
+        | Function (Ln,Power (x,n)) when n = -1Q -> -ln x
+        | FunctionN (Log,[b; Power (x,n)]) when n = -1Q ->
+            log b 1Q - log b x
         | Function(Ln, Product l) ->
             Sum(List.map (function
                     | Power(x, n) when n = -1Q -> -ln x
@@ -61,6 +64,16 @@ module Logarithm =
         | Product l -> Product(List.map powerRuleSingleBackwards l)
         | Sum l -> Sum(List.map powerRuleSingleBackwards l)
         | f -> powerRuleSingleBackwards f
+    
+    let Simplify = function
+        | Function(Ln, Power(Constant Constant.E, x))
+        | Function(Ln, Function(Exp, x)) -> x
+        | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
+        | FunctionN(Log, [a;Power(b,x)]) when a = b ->  x 
+        | FunctionN(Log, [a;b]) when a = b -> 1Q
+        | Power(Constant Constant.E, Function(Ln,x))
+        | Function(Exp, Function(Ln, x)) -> x
+        | x -> x
 
 module Exponents =
     let shiftPowerLeftRaw (n:Expression) =

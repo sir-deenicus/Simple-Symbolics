@@ -8,15 +8,149 @@ open Prelude.Common
 open MathNet.Symbolics.NumberTheory
 open Utils.FunctionHelpers
 
-//==========================================
-
 let ln = Operators.ln
 let arctan = Operators.arctan
 let sec = Operators.sec
+let secant = Operators.sec
 
 let symbol = Operators.symbol
 let V = symbol
-let sy = symbol
+
+let (^) a b = Power(a,b)
+
+module Desc =
+    let power = symbol "power"
+    let energy = symbol "energy"
+    let force = symbol "force"
+    let energyflux = symbol "energyflux"
+    let volume = symbol "volume"
+    let velocity = symbol "velocity"
+    let accel = symbol "accel"
+    let time = symbol "time"
+    let mass = symbol "mass"
+    let length = symbol "length"
+    let temperature = symbol "temperature"
+    let current = symbol "current"
+    let currency = symbol "currency" 
+    let charge = symbol "charge"
+    let naira =  symbol "naira"
+    let bpound = symbol "gbp"
+    let dollar = symbol "dollar"
+    let density = symbol "density"
+
+    let Names =
+        set
+            [   "power"
+                "energy"
+                "force"
+                "energyflux"
+                "volume"
+                "velocity"
+                "accel"
+                "time"
+                "mass"
+                "length"
+                "temperature"
+                "current" ]    
+ 
+module Vars =
+    let a = symbol "a"
+    let b = symbol "b"
+    let c = symbol "c"
+    let d = symbol "d"
+    let e = symbol "e"
+    let f = symbol "f"
+    let g = symbol "g"
+    let h = symbol "h"
+    let i = symbol "i"
+    let j = symbol "j"
+    let k = symbol "k"
+    let l = symbol "l"
+    let m = symbol "m"
+    let n = symbol "n"
+    let o = symbol "o"
+    let p = symbol "p"
+    let q = symbol "q"
+    let r = symbol "r"
+    let s = symbol "s"
+    let t = symbol "t"
+    let u = symbol "u"
+    let v = symbol "v"
+    let w = symbol "w"
+    let x = symbol "x"
+    let y = symbol "y"
+    let z = symbol "z"
+    let t0 = symbol "t_0"
+    let t1 = symbol "t_1"
+    let t2 = symbol "t_2"
+    let x0 = symbol "x_0"
+    let x1 = symbol "x_1"
+    let x2 = symbol "x_2"
+    let x3 = symbol "x_3"
+    let v0 = symbol "v_0"
+    let y0 = symbol "y_0"
+    let y1 = symbol "y_1"
+    let y2 = symbol "y_2"
+
+    let A = V"A"
+    let B = V"B"
+    let C = V "C"
+    let D = V"D"
+    let E = V"E"
+    let F = V"F"
+    let G = V"G"
+    let H = V"H"
+    let I = V"I"
+    let J = V "J"
+    let K = V "K"
+    let L = V "L"
+    let M = V "M"
+    let N = V "N"
+    let O = V "O"
+    let P = V "P" 
+    let Q = V "Q" 
+    let R = V"R"
+    let S = V"S"
+    let T = V "T"
+    let U = V"U"  
+    let W = V"W" 
+    let X = V"X" 
+    let Y = V"Y" 
+    let Z = V"Z" 
+    
+    let Pi = Constants.pi  
+
+    let ofChar (c:char) = symbol (string c) 
+
+type Vars() = 
+    //Α α, Β β, Γ γ, Δ δ, Ε ε, Ζ ζ, Η η, Θ θ, Ι ι, Κ κ, Λ λ, Μ μ, Ν ν, Ξ ξ, Ο ο, Π π, Ρ ρ,  σ,Ω ω.
+    static member internal letter greek latex =
+        match expressionFormat with 
+        | InfixFormat -> greek
+        | _ -> latex
+    static member D = V"D" 
+    static member V = V"V" 
+    static member alpha = Vars.letter "α" "\\alpha" |> V
+    static member beta = Vars.letter "β" "\\beta" |> V
+    static member gamma = Vars.letter "γ" "\\gamma" |> V
+    static member Gamma = Vars.letter "Γ" "\\alpha" |> V
+    static member delta = Vars.letter "δ" "\\delta" |> V
+    static member Delta = Vars.letter "Δ" "\\Delta"  |> V
+    static member epsilon = Vars.letter "ε" "\\epsilon" |> V
+    static member eta = Vars.letter "η" "\\eta" |> V
+    static member Lambda = Vars.letter "Λ" "\\Lambda" |> V
+    static member lambda = Vars.letter "λ" "\\lambda" |> V
+    static member mu = Vars.letter "μ" "\\mu" |> V
+    static member nu = Vars.letter "v" "\\nu" |> V
+    static member Theta = Vars.letter "Θ" "\\Theta" |> V
+    static member theta = Vars.letter "θ" "\\theta" |> V
+    static member rho = Vars.letter "ρ" "\\rho" |> V
+    static member sigma = Vars.letter "σ" "\\sigma" |> V
+    static member omega = Vars.letter "ω" "\\omega" |> V
+    static member Omega = Vars.letter "Ω" "\\Omega" |> V
+    
+//==========================================
+ 
 let mkSymbolMap l = l |> List.map (fun s -> s, symbol s) |> Map
  
 let symbolString =
@@ -114,6 +248,8 @@ module Structure =
         | Function(_, x) -> depth x + 1
         | Approximation _ | Number _ -> 1
         | f -> failwith ("unimplemented compute depth for " + (f.ToFormattedString()))
+
+    let size e = width e + depth e 
 
     let averageDepth =
         function
@@ -259,6 +395,8 @@ module Structure =
         | Power(x,n) -> Power(fx(applyInFunctionRec fx x), n)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability, s::fx(applyInFunctionRec fx x)::rest)
+        | FunctionN(fn, x::parameters) when functionFirstTermOnly fn ->
+            FunctionN(fn, fx (applyInFunctionRec fx x)::parameters) 
         | FunctionN(fn, parameters) ->
             FunctionN(fn, List.map (applyInFunctionRec fx >> fx) parameters) 
         | x -> x
@@ -269,6 +407,8 @@ module Structure =
         | Power(x,n) -> Power(fx x, n)
         | FunctionN(Probability, s::x::rest) ->
             FunctionN(Probability, s::fx x::rest)
+        | FunctionN(fn, x::param) when functionFirstTermOnly fn ->
+            FunctionN(fn, fx x::param) 
         | FunctionN(fn, xs) ->
             FunctionN(fn, List.map fx xs) 
         | x -> x
@@ -439,7 +579,7 @@ module Expression =
             Expression.FromRational(n ** (int m))
         | f -> f
 
-    let simplifySquareRoot (expr : Expression) =
+    let private simplifySquareRoot (expr : Expression) =
         let sqRootGrouping =
             function
             | (Power(x, Number n)) when n > 1N ->
@@ -464,7 +604,7 @@ module Expression =
         let innersums, rest = List.partition test l
         let ls = List.collect Structure.toList innersums
         ls @ rest
-
+    
     let rec simplifyLite =
         function
         | Sum [ x ] | Product [ x ] -> simplifyLite x
@@ -494,7 +634,7 @@ module Expression =
         | Function(fn, f) -> Function(fn, simplifyLite f) 
         | x -> x
 
-    let simplify simplifysqrt fx =
+    let internal simplify simplifysqrt fx =
         let rec simplifyLoop =
             function
             | Power(x, Number n) when n = 1N -> simplifyLoop x
@@ -734,28 +874,127 @@ module Expression =
         if den = 1Q then Polynomial.isPolynomial var f
         else Polynomial.isPolynomial var num && Polynomial.isPolynomial var den
 
-
-module Rational = 
-    let rec simplifyNumbersAux (minval) (roundto : int) =
-        function
-        | Approximation (Approximation.Real r) ->
-            Approximation (Approximation.Real (round roundto r))
-        | Number n as num ->
-            let f = float n
-            let pf = abs f
-            if pf > 10000. || pf < minval then
-                let p10 = floor (log10 pf)
-                let x = Math.Round(f / 10. ** p10, roundto) |> Expression.fromFloat
-                Product [ x
-                          Power(10Q, p10 |> Expression.fromFloat) ]
-            else num
-        | Power(x, n) -> Power(simplifyNumbersAux minval roundto x, n)
-        | Sum l -> Sum(List.map (simplifyNumbersAux minval roundto) l)
-        | Product l -> Product(List.map (simplifyNumbersAux minval roundto) l)
-        | Function(f, x) -> Function(f, simplifyNumbersAux minval roundto x)
+    let evaluateFunction = function
+        | RealConstant _
+        | Function _ as f -> Option.defaultValue f (Option.map real (Expression.toFloat f))
         | x -> x
 
-    let rec simplifyNumbers(roundto : int) = simplifyNumbersAux 0.0001 roundto
+type Expression with 
+    static member toRational e =
+        let e' = Trigonometric.simplify e |> Expression.simplify true
+        match e' with
+        | Number(n) -> n
+        | _ ->
+            failwith
+                (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
+                     (e'.ToFormattedString()) e')
+
+    static member Simplify e =
+        Expression.simplify true e 
+
+    static member FullSimplify e =
+        e
+        |> Expression.simplifyLite
+        |> Expression.simplify true
+        |> Expression.simplify true
+        |> Rational.rationalize
+        |> Algebraic.expand
+
+    static member FullerSimplify e =
+        Trigonometric.simplify e 
+        |> Expression.FullSimplify
+
+    static member isNumericOrVariable anyVar =
+        let keep s =
+            anyVar || Strings.strcontains "Var" s
+            || Desc.Names.Contains s
+        function 
+        | Identifier(Symbol s) when keep s -> true
+        | IsNumber _ -> true 
+        | Function (_, IsNumber _) -> true 
+        | FunctionN(Max, [a;b]) ->
+            match(a,b) with
+            | Identifier(Symbol s), Identifier(Symbol s2) 
+                when keep s && keep s2 -> true
+            | Identifier(Symbol s), IsNumber _   
+            | IsNumber _ , Identifier(Symbol s) 
+                when keep s -> true
+            | Product l, IsNumber _
+            | Sum l, IsNumber _  
+            | Product l, IsNumber _
+            | IsNumber _ , Sum l
+            | IsNumber _, Product l 
+                when List.filter Expression.isVariable l 
+                    |> List.forall (symbolString >> keep) -> true 
+            | Identifier(Symbol s), Sum l
+            | Identifier(Symbol s), Product l
+            | Sum l, Identifier(Symbol s)
+            | Product l, Identifier(Symbol s) 
+                when keep s && 
+                    List.filter Expression.isVariable l 
+                    |> List.forall (symbolString >> keep) -> true 
+            | IsNumber _ , IsNumber _ -> true
+            | _ -> false
+        | FunctionN(_, l) -> not (List.exists (Expression.isNumber >> not) l)
+        | _ -> false
+
+    static member evalExprVarsGen anyVar vars x =
+        let v = replaceSymbols vars x |> Expression.FullSimplify  
+        maybe {
+            let! v' =
+                Structure.recursiveFilter (Expression.isNumericOrVariable anyVar) v
+            if v = v' then return v
+            else return! None
+        }  
+
+    static member evalExprVars vars x = Expression.evalExprVarsGen false vars x     
+     
+let evalExpr vars x =
+    replaceSymbols vars x |> Expression.FullerSimplify |> Some  
+
+let evalExprNum vars x =
+    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
+    if Seq.isEmpty nums then None
+    else let symb = replaceSymbols nums x |> Expression.FullSimplify
+         if containsAnyVar symb then None else Some symb 
+                   
+module Rational = 
+    let internal simplifynumber (roundto:int) num (fn, fd, f) =
+        let npow f =
+            if f > 0. then Some(floor (log10 f))
+            elif f < 0. then Some(floor (log10 -f))
+            else None
+        let test = function | Some x -> x < -3. || x > 3. | _ -> false 
+        let fpow = npow f
+        if test(fpow) || test(npow fn) || test(npow fd) then
+            let n = fpow.Value
+            let pow10 = Power(10Q, seal(Expression.FromInt32(int n)))
+            let num = Math.Round(f / (10. ** n), roundto)
+            if abs(log10 num + n) <= 3. then (real num) * pow10 
+            else Product[(real num) ; pow10 ]
+        else num
+    let rec simplifyNumbers (roundto : int) =
+        function
+        | Approximation (Approximation.Real r) ->
+            simplifynumber roundto ( Approximation (Approximation.Real (round roundto r)) ) (r,1.,r)
+        | Number n as num ->
+            let f = float n
+            simplifynumber roundto num (float n.Numerator, float n.Denominator, f)
+        | Power(x, n) -> Power(simplifyNumbers roundto x, n)
+        | Sum l -> Sum(List.map (simplifyNumbers roundto) l)
+        | Product l -> Product(List.map (simplifyNumbers roundto) l)
+        | Function(f, x) -> Function(f, simplifyNumbers roundto x)
+        | x -> x
+         
+    let round r x =
+        match Expression.toFloat x with
+        | None -> x
+        | Some f ->
+            f
+            |> Expression.fromFloatDouble
+            |> simplifyNumbers r
+            |> Expression.FullSimplify
+            |> simplifyNumbers r 
 
     let radicalRationalize x =
         let den = Rational.denominator x
@@ -806,133 +1045,7 @@ module Rational =
               |> List.map (snd >> List.sum >> Rational.expand) 
               |> Sum
         | f -> f 
-    
-type Expression with 
-    static member toRational e =
-        let e' = Trigonometric.simplify e |> Expression.simplify true
-        match e' with
-        | Number(n) -> n
-        | _ ->
-            failwith
-                (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
-                     (e'.ToFormattedString()) e')
-
-    static member Simplify e =
-        Expression.simplify true e 
-
-    static member FullSimplify e =
-        e
-        |> Expression.simplifyLite
-        |> Expression.simplify true
-        |> Expression.simplify true
-        |> Rational.rationalize
-        |> Algebraic.expand
-
-    static member FullerSimplify e =
-        Trigonometric.simplify e 
-        |> Expression.FullSimplify
          
-
-let evalExpr vars x =
-    replaceSymbols vars x |> Expression.FullerSimplify |> Some  
-
-let evalExprNum vars x =
-    let nums = vars |> Seq.filter (snd >> containsAnyVar >> not) 
-    if Seq.isEmpty nums then None
-    else let symb = replaceSymbols nums x |> Expression.FullSimplify
-         if containsAnyVar symb then None else Some symb 
-         
-module Vars =
-    let a = symbol "a"
-    let b = symbol "b"
-    let c = symbol "c"
-    let d = symbol "d"
-    let e = symbol "e"
-    let f = symbol "f"
-    let g = symbol "g"
-    let h = symbol "h"
-    let i = symbol "i"
-    let j = symbol "j"
-    let k = symbol "k"
-    let l = symbol "l"
-    let m = symbol "m"
-    let n = symbol "n"
-    let o = symbol "o"
-    let p = symbol "p"
-    let q = symbol "q"
-    let r = symbol "r"
-    let s = symbol "s"
-    let t = symbol "t"
-    let u = symbol "u"
-    let v = symbol "v"
-    let w = symbol "w"
-    let x = symbol "x"
-    let y = symbol "y"
-    let z = symbol "z"
-    let t0 = symbol "t_0"
-    let t1 = symbol "t_1"
-    let t2 = symbol "t_2"
-    let x0 = symbol "x_0"
-    let x1 = symbol "x_1"
-    let x2 = symbol "x_2"
-    let x3 = symbol "x_3"
-    let v0 = symbol "v_0"
-    let y0 = symbol "y_0"
-    let y1 = symbol "y_1"
-    let y2 = symbol "y_2"
-
-    let A = V"A"
-    let B = V"B"
-    let C = V "C"
-    let F = V"F"
-    let G = V"G"
-    let J = V "J"
-    let K = V "K"
-    let L = V "L"
-    let M = V "M"
-    let N = V "N"
-    let P = V "P" 
-    let Q = V "Q" 
-    let R = V"R"
-    let S = V"S"
-    let T = V "T"
-    let U = V"U"  
-    let W = V"W" 
-    let X = V"X" 
-    let Y = V"Y" 
-    let Z = V"Z" 
-    
-    let Pi = Constants.pi  
-
-    let ofChar (c:char) = symbol (string c) 
-
-type Vars() = 
-    //Α α, Β β, Γ γ, Δ δ, Ε ε, Ζ ζ, Η η, Θ θ, Ι ι, Κ κ, Λ λ, Μ μ, Ν ν, Ξ ξ, Ο ο, Π π, Ρ ρ,  σ,Ω ω.
-    static member internal letter greek latex =
-        match expressionFormat with 
-        | InfixFormat -> greek
-        | _ -> latex
-    static member D = V"D"
-    static member I = V"I"
-    static member alpha = Vars.letter "α" "\\alpha" |> V
-    static member beta = Vars.letter "β" "\\beta" |> V
-    static member gamma = Vars.letter "γ" "\\gamma" |> V
-    static member Gamma = Vars.letter "Γ" "\\alpha" |> V
-    static member delta = Vars.letter "δ" "\\delta" |> V
-    static member Delta = Vars.letter "Δ" "\\Delta"  |> V
-    static member epsilon = Vars.letter "ε" "\\epsilon" |> V
-    static member Lambda = Vars.letter "Λ" "\\Lambda" |> V
-    static member lambda = Vars.letter "λ" "\\lambda" |> V
-    static member mu = Vars.letter "μ" "\\mu" |> V
-    static member nu = Vars.letter "v" "\\nu" |> V
-    static member Theta = Vars.letter "Θ" "\\Theta" |> V
-    static member theta = Vars.letter "θ" "\\theta" |> V
-    static member rho = Vars.letter "ρ" "\\rho" |> V
-    static member sigma = Vars.letter "σ" "\\sigma" |> V
-    static member omega = Vars.letter "ω" "\\omega" |> V
-    static member Omega = Vars.letter "Ω" "\\Omega" |> V
-    
-
 let rec replaceWithIntervals (defs : seq<Expression * IntSharp.Types.Interval>) e =
     let map = dict defs 
     let rec replace = function

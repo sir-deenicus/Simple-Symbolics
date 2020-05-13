@@ -231,7 +231,10 @@ let solveFor targetVar (eq : Equation) =
     let adjust (eq:Equation) = //move it left collect as polyonmial
         eq - eq.Right
         |> Equation.Apply Algebraic.expand
-        |> Equation.ApplyToLeft(Polynomial.collectTerms targetVar)
+        |> Equation.ApplyToLeft(fun f ->
+                if Polynomial.isPolynomial targetVar f then
+                    Polynomial.collectTerms targetVar f
+                else f)
     //does the rhs have targetVar in it?
     let eq', adjusted =
         if containsVar targetVar eq.Right then

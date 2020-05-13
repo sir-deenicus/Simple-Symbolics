@@ -15,7 +15,9 @@ type TraceExplain<'a> =
 module List =
     let filterMap filter map xs =
         [ for x in xs do
-              if filter x then yield map x ]
+              if filter x then yield map x ] 
+    
+    let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
                
 module Hashset =
     let union (h1:Hashset<_>) h2 = h1.UnionWith(h2); h1
@@ -33,6 +35,10 @@ module Constants =
     let e = Constant Constant.E  
     let i = Constant Constant.I
 
+let ⅈ = Constants.i
+let ⅇ = Constants.e
+let π = pi
+
 let safeEval f x = try f x with _ -> x
 let flip f a b = f b a
 let swap (a,b) = (b,a)
@@ -40,9 +46,7 @@ let fst3 (a, _, _) = a
 let pairmap f (x, y) = f x, f y
 let max2 (a,b) = max a b
 let ignoreFirst f _ = f
-let signstr x = if x < 0. then "-" else ""
-
-let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
+let signstr x = if x < 0. then "-" else "" 
 
 let [<Literal>] InfixFormat = "Infix"
 
@@ -50,7 +54,17 @@ let mutable expressionFormater = Infix.format
 let mutable expressionFormat = "Infix"
 
 let space() = if expressionFormat = InfixFormat then " " else " \\; "
-let newline() = if expressionFormat = InfixFormat then "\n" else "\n \\\\ "
+let newline() = if expressionFormat = InfixFormat then "\n" else "\n \\\\ " 
+
+let leftBrackets s = if expressionFormat = InfixFormat then "[" else "\\left" + s
+let rightBrackets s = if expressionFormat = InfixFormat then "]" else "\\right" + s
+
+let leftBrace () = leftBrackets "\\{"
+let rightBrace () = rightBrackets "\\}"
+
+let leftBracket () = leftBrackets "\\["
+let rightBracket () = rightBrackets "\\]"
+ 
 let fmt e = expressionFormater e
 
 let symbol = Operators.symbol
@@ -115,6 +129,8 @@ let stepTracer isverbose iseq fmt current instructions =
     loop 1 current instructions 
 
 let expressionTrace = stepTracer true false fmt
+
+let expressionTracer expr instrs = stepTracer true false fmt expr (List.map Op instrs)
  
 //======================== 
 
@@ -159,6 +175,8 @@ let functionFirstTermOnly = function
     | Gradient
     | Derivative
     | PartialDerivative
+    | SumOver
+    | ProductOver
     | Integral    
     | Expectation -> true
     | _ -> false      
@@ -192,13 +210,22 @@ let gradn var x = FunctionN(Gradient, [x;var] )
 let diff dx x = FunctionN(Derivative, [x;dx])
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx]) 
 
+let fac x = Function(Fac, x)
 let choose n k = FunctionN(Choose, [n;k])
 let binomial n k = FunctionN(Choose, [n;k])
 let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probc x theta = FunctionN(Probability, [ symbol "P"; x; theta ])
 let probparam x theta = FunctionN(Probability, [symbol "P";  x; theta; Parameter ";" ])
 
-let expectation distr x = FunctionN(Function.Expectation, [ x; distr ])
+let expectation distr x = FunctionN(Function.Expectation, [ x; distr ]) 
+
+let summation var start stop fx = FunctionN(SumOver, [fx;var;start;stop])
+
+let products var start stop fx = FunctionN(ProductOver, [fx;var;start;stop])
+
+let Σ var start stop fx = summation var start stop fx
+
+let Π var start stop fx = products var start stop fx
 
 let limit var lim x = FunctionN(Limit, [var;lim;x]) 
  
@@ -225,6 +252,10 @@ let integral dx x = FunctionN(Integral, [ x; dx ])
 let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 
 let hold x = Id x
+
+let cage x = Id x
+
+let seal x = Id x
 
 module Hold = 
     let extractLeadingNegative = function
@@ -293,8 +324,12 @@ let (|IsPartialDerivative|_|) = function
 
 let (|IsLimit|_|) = function
     | FunctionN(Limit, [var;lim;x])  -> Some(var,lim,x)
-    | _ -> None    
- 
+    | _ -> None     
+
+let (|Summation|_|) input =
+     match input with
+     | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
+     | _ -> None
 //========================
 
 let expectationsDistribution = function

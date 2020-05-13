@@ -7,14 +7,7 @@ open MathNet.Symbolics.Core
 open Utils
 open Operators 
 open Prelude.Common
-
-let summation var start stop fx = FunctionN(SumOver, [fx;var;start;stop])
-
-let (|Summation|_|) input =
-     match input with
-     | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
-     | _ -> None
-
+ 
 let isSummation = function | Summation _ -> true | _ -> false
 
 let extractSumConstants = function
@@ -59,6 +52,9 @@ let simplifySums =
     | Summation(Product [a; Power(r,k)], var, start, n)
         when start = 0Q && k = var && not(isInfinity n) ->
         a * ((1-r**(n+1))/(1-r))
+    | Summation(f, var, start, stop)
+        when start = 1Q && not(containsVar var f) ->
+        f * stop
     | x -> x
 
 /// condition: r <= 1, r > 0

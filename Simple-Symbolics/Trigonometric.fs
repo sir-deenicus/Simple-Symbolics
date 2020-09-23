@@ -104,41 +104,6 @@ module TrigTables =
                      sqrt 3Q, Pi / 3 ]
                      
 
-[<RequireQualifiedAccess>]
-module DoubleAngle =
-    let Sine =
-        function 
-        | IsSin (Product [Two; x]) -> 2 * sin x * cos x
-        | Product [Two; IsSin x ;IsCos x2 ] when x = x2 -> sin (2*x) 
-        | x -> x
-
-    let Cos = 
-        function 
-        | IsCos(Product [Two; x]) -> 2 * (cos x)**2 - 1
-        | Sum[Number n; Product [Two; Power(IsCos x,Two)]] when n = -1N -> cos (2*x)
-        | x -> x
-
-[<RequireQualifiedAccess>]
-module SumDifferenceRule =
-    let Sine =
-        function
-        | IsSin (Sum [ a; b ]) -> sin a * cos b + cos a * sin b
-        | IsSin (Minus (a, b)) -> sin a * cos b - cos a * sin b
-        | Sum [ Product [ IsSin b; IsCos a ]; Product [ IsSin a2; IsCos b2 ] ] when a = a2 && b = b2 -> sin (a + b)
-        | Sum [ Product [ NegativeOne; IsSin b; IsCos a ]; Product [ IsSin a2; IsCos b2 ] ]
-        | Sum [ Product [ IsSin a2; IsCos b2 ]; Product [ NegativeOne; IsSin b; IsCos a ] ] when a = a2 && b = b2 ->
-            sin (a - b)
-        | x -> x
-
-    let Cos =
-        function
-        | IsCos (Sum [ a; b ]) -> cos a * cos b - sin a * sin b
-        | IsCos (Minus (a, b)) -> cos a * cos b + sin a * sin b
-        | Sum [ Product [ NegativeOne; IsSin a; IsSin b ]; Product [ IsCos a2; IsCos b2 ] ] when a = a2 && b = b2 ->
-            cos (a + b)
-        | Sum [ Product [ IsSin a2; IsSin b2 ]; Product [ IsCos a; IsCos b ] ] when a = a2 && b = b2 -> cos (a - b)
-        | x -> x
-
 let evalAtan y x =
     let xn, yn = rational x, rational y
     if x > 0N then arctan (yn / xn)
@@ -170,16 +135,7 @@ let simplifyTrigTerm =
             |> TrigTables.aTanLookUp.tryFind
             |> Option.defaultValue atanx'
         | _ -> atanx
-    | x -> x
-    
-   
-let cosToSin = function 
-    | IsCos(x) -> sin (Pi/2 - x)
-    | x -> x
-
-let sinToCos = function 
-    | IsSin(x) -> cos (Pi/2 - x)
-    | x -> x
+    | x -> x 
 
 let x = symbol "x"
 let a = symbol "a"

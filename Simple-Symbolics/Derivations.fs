@@ -5,17 +5,18 @@ open Core
 open Solving 
 open Prelude.Common
 open NumberTheory
-open Equations
-
-let deriveTrivialEqualitiesSingle (e1, eq) =
-    [ yield Equation(e1, eq)
-      for var in Expression.findVariables eq do
-          match reArrangeExprEquation true var (eq, e1) with
-          | Identifier _ as var, req ->
-              yield Equation(var, Expression.simplify true req)
-          | _ -> () ]
+open Equations 
 
 let deriveTrivialEqualities eqs =
+    //try to solve for all variables in `right`
+    let deriveTrivialEqualitiesSingle (left, right) =
+        [ yield Equation(left, right)
+          for var in Expression.findVariables right do
+              match reArrangeExprEquation true var (right, left) with
+              | Identifier _ as var, req ->
+                  yield Equation(var, Expression.simplify true req)
+              | _ -> () ]
+
     let removeRepeats (eqlist : _ list) =
         if eqlist.Length = 0 then eqlist
         else
@@ -29,6 +30,7 @@ let deriveTrivialEqualities eqs =
                   yield! deriveTrivialEqualitiesSingle eq.Equalities.Head ]
 
         let deriveds = Hashset deqs |> Seq.toList
+        //solving sometimes introduces new forms that can be solved for. Two iterations should be enough.
         if n = 1 then deriveds
         else loop (n + 1) deriveds
 

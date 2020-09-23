@@ -3,13 +3,16 @@ open Core
 open Utils 
 
 module Logarithm =
-    open MathNet.Symbolics.Operators
+    open MathNet.Symbolics.Operators 
+    open NumberTheory
 
     let expand =
         function
         | Function (Ln,Power (x,n)) when n = -1Q -> -ln x
         | FunctionN (Log,[b; Power (x,n)]) when n = -1Q ->
             log b 1Q - log b x
+        | Function (Ln, Fraction (a,b)) -> ln (biginteger a) - ln (biginteger b)
+        | FunctionN(Log, [b; Fraction (n,m)]) -> log b (biginteger n) - log b (biginteger m)
         | Function(Ln, Product l) ->
             Sum(List.map (function
                     | Power(x, n) when n = -1Q -> -ln x
@@ -53,18 +56,18 @@ module Logarithm =
         | Sum l -> Sum(List.map powerRule l)
         | f -> powerRuleSingle f
 
-    let internal powerRuleSingleBackwards =
-        function
+    let powerRuleBackwards vx =
+        match vx with
         | Product[a; Function(Ln, x)] -> Function(Ln, (x**a))
         | Product[a; FunctionN(Log, [b;x])] -> FunctionN(Log,[b; (x**a)])
-        | f -> f
+        | Product ps as f ->
+            let haslog, rest = List.partition Expression.containsLog ps
+            match haslog with 
+            | [FunctionN(Log, [b;x])] -> FunctionN(Log, [b; (x** Product rest)] )
+            | [Function(Ln, x)] -> Function(Ln, (x** Product rest) )
+            | _ -> f 
+        | f -> f 
 
-    let rec powerRuleBackwards =
-        function
-        | Product l -> Product(List.map powerRuleSingleBackwards l)
-        | Sum l -> Sum(List.map powerRuleSingleBackwards l)
-        | f -> powerRuleSingleBackwards f
-    
     let Simplify = function
         | Function(Ln, Power(Constant Constant.E, x))
         | Function(Ln, Function(Exp, x)) -> x

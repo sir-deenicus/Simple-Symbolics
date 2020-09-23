@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net47;netstandard2.0;netcoreapp2.1</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.3.1</Version>
+    <Version>0.3.3</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
@@ -52,23 +52,25 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EvolutionaryBayes" Version="0.2.5" />
+    <PackageReference Include="EvolutionaryBayes" Version="0.2.6" />
     <PackageReference Include="FParsec" Version="1.0.3" />
     <PackageReference Include="FSharp.Data" Version="3.3.2" />
-    <PackageReference Include="Hansei" Version="0.3.2.2" />
+    <PackageReference Include="Hansei" Version="0.3.2.3" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.25.1" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.25.2.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.0" />
-  </ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.7.2" />
+  </ItemGroup> 
+
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net47|AnyCPU'">
-    <DocumentationFile>Prelude.XML</DocumentationFile>
+    <DocumentationFile>Simple-Symbolics.xml</DocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net47|AnyCPU'">
-    <DocumentationFile>Prelude.XML</DocumentationFile>
+    <DocumentationFile>Simple-Symbolics.xml</DocumentationFile>
   </PropertyGroup>
+  
 </Project>

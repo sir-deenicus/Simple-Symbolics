@@ -59,13 +59,18 @@ let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
         .``GDP per capita, PPP (current international $)`` 
         |> Seq.last
 
+let getGDPperCapitaPP (c:WorldBankData.ServiceTypes.Country) =
+    c.Indicators
+        .``GDP per capita, PPP (current international $)`` 
+        |> Seq.last
+
 module Units =
     open Units
     open MathNet.Symbolics.Core
 
     let usd = Units("USD")
 
-    let internal setCurrency eps curr = 
+    let setCurrency eps curr = 
         (checkCurrency eps curr) * usd |> setAlt curr
     
     let currencyFriction = 1e-04
@@ -73,9 +78,13 @@ module Units =
     let mutable ngn = setCurrency 1e-04 "NGN"
     let mutable gbp = setCurrency 8e-03 "GBP"
 
+    let redoCurrencyConversions () = 
+        ngn <- setCurrency 1e-04 "NGN"
+        gbp <- setCurrency 8e-03 "GBP"
+
     let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
         if s.Unit = usd.Unit then 
-            let _, gdpsource = getGDPperCapita sourcecountry  
-            let _, gdptarget = getGDPperCapita targetcountry 
+            let _, gdpsource = getGDPperCapitaPP sourcecountry  
+            let _, gdptarget = getGDPperCapitaPP targetcountry 
             s.Quantity/gdpsource * gdptarget * usd
         else failwith "Not a currency"

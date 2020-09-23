@@ -47,7 +47,7 @@ let pairmap f (x, y) = f x, f y
 let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else "" 
-
+  
 let [<Literal>] InfixFormat = "Infix"
 
 let mutable expressionFormater = Infix.format
@@ -138,6 +138,7 @@ let inline absf x = Core.Operators.abs x
 let inline logf x = Core.Operators.log x
 let inline expf x = Core.Operators.exp x
 let inline log10f x = Core.Operators.log10 x
+let inline sqrtf x = Core.Operators.sqrt x
 
 let smartroundEx n x =
     if x > -1. && x < 1. && x <> 0. then
@@ -216,6 +217,10 @@ let binomial n k = FunctionN(Choose, [n;k])
 let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probc x theta = FunctionN(Probability, [ symbol "P"; x; theta ])
 let probparam x theta = FunctionN(Probability, [symbol "P";  x; theta; Parameter ";" ])
+
+let erf x = Function(Erf, x)
+
+let inverf x = Function(ErfInv, x)
 
 let expectation distr x = FunctionN(Function.Expectation, [ x; distr ]) 
 
@@ -329,6 +334,8 @@ let (|IsLimit|_|) = function
 let (|Summation|_|) input =
      match input with
      | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
+     | FunctionN(SumOver, [fx]) -> Some(fx, symbol "", NegativeInfinity, PositiveInfinity)
+     | FunctionN(SumOver, [fx; var]) -> Some(fx, var, NegativeInfinity, PositiveInfinity)
      | _ -> None
 //========================
 

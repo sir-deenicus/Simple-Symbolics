@@ -6,18 +6,46 @@ open MathNet.Symbolics.NumberTheory
 open MathNet.Symbolics.Core
 open Utils
 open Operators 
-open Prelude.Common
- 
+open Prelude.Common 
+
+///Adjusts summation to have a start, stop or var if it does not already
+let adjustSummationTo var start stop = function
+  | FunctionN (SumOver,[p; v]) ->
+       summation v start stop p
+  | FunctionN (SumOver,[p]) ->
+       summation var start stop p
+  | x -> x
+  
 let isSummation = function | Summation _ -> true | _ -> false
 
 let extractSumConstants = function
-    | Summation(p,v,start,stop) ->
-         Expression.extractNonVariables v (summation v start stop) p
-    | x -> x
+  | FunctionN (SumOver,[p; var]) ->
+       Expression.extractNonVariables var (fun x -> PiSigma.Σ(x, var)) p
+  | Summation(p,v,start,stop) ->
+       Expression.extractNonVariables v (summation v start stop) p
+  | x -> x
 
 let expandSummation = function
     | Summation(Sum _ as s,v,start,stop) ->
          Expression.expandSumsOrProducts (summation v start stop) s
+    | x -> x 
+
+///merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x+y)
+let mergeSummationsInSum =
+    let getSummation =
+        function
+        | Summation(fx, v, s, stop) -> fx, (v, s, stop)
+        | _ -> failwith "Unexpected error in getsummation"
+    function
+    | Sum es ->
+        let sums, nonsum = //split to sums and non-sums
+            List.partition (function
+                | Summation _ -> true
+                | _ -> false) es
+        Sum //group by summation parameters
+            [ for ((v, s, stop), l) in List.groupBy (getSummation >> snd) sums ->
+                Σ v s stop (Sum (List.map (getSummation >> fst) l)) ] //need to extract inside content of summation
+        + Sum(nonsum)
     | x -> x 
 
 let simplifySums =
@@ -99,12 +127,10 @@ let rewriteAsExpectation = function
     | f -> f
 
 let rewriteExpectationAsSum = function
-    | IsExpectation(expr, distr) ->
-        let dx =
-            match Structure.first Expression.isVariable (innerProb distr) with
-            | Some e -> e  
-            | None -> V""
-        FunctionN(SumOver, [(distr * expr);dx; Parameter ""; Parameter ""])
+    | IsExpectation(expr, distr) -> 
+        match Structure.first Expression.isVariable (innerProb distr) with
+        | Some dx -> FunctionN(SumOver, [(distr * expr);dx])  
+        | None -> FunctionN(SumOver, [(distr * expr)]) 
     | f -> f
 
 let expandVarianceExpectation = function

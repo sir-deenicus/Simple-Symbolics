@@ -483,7 +483,11 @@ module Structure =
 
 let recmap = Structure.recursiveMap
 
+let rm = recmap 
+
 let recmapf = Structure.recursiveMapFilter
+
+let rmf = recmapf 
 
 module Expression =   
     let rewriteAsOne x = Product [ x; x ** -1] 
@@ -529,7 +533,8 @@ module Expression =
 
     let containsLog =
         function
-        | Function(Ln, _) -> true
+        | Function(Ln, _)
+        | FunctionN(Log, _) -> true
         | _ -> false
 
     let containsTrig =
@@ -571,15 +576,14 @@ module Expression =
                 | [ x ] -> x
                 | _ -> Product hasvar
             consts' * f vars
-        | v -> if containsVar x v then f v else v * f 1Q
+        | v -> if containsVar x v then f v else v * f 1Q 
 
-    let simplifyNumericPower =
-        function
-        | Power(Number n, Number m) when m.IsInteger ->
-            Expression.FromRational(n ** (int m))
-        | f -> f
-
-    let private simplifySquareRoot (expr : Expression) =
+    let private simplifySquareRoot (expr : Expression) = 
+        let simplifyNumericPower =
+            function
+            | Power(Number n, Number m) when m.IsInteger ->
+                Expression.FromRational(n ** (int m))
+            | f -> f
         let sqRootGrouping =
             function
             | (Power(x, Number n)) when n > 1N ->
@@ -671,7 +675,7 @@ module Expression =
                 fn x (diff dx (simplifyLoop e))   
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
-            | FunctionN(f, [ fx; var; a; Identifier(Symbol "="); b ]) as expr ->
+            | FunctionN(f, [ fx; var; a; b ]) as expr ->
                 match simplifyLoop a, simplifyLoop b with
                 | Number n, Number m ->
                     match f with
@@ -686,9 +690,7 @@ module Expression =
                     | ProductOver ->
                         FunctionN(f, [simplifyLoop fx; var; a'; Identifier(Symbol "="); b' ]) 
                     | _ -> expr
-            | FunctionN(Choose,[Number n;Number k]) -> 
-                if n < k then 0Q  
-                else Number(factorial n/(factorial k * factorial(n - k)))
+            | FunctionN(Choose,[AsInteger n;AsInteger k]) -> chooseN n k 
             | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
             | Product [] -> 1Q
             | Sum [] -> 0Q
@@ -1093,8 +1095,10 @@ type PiSigma(expr) =
             FunctionN(f, [operator fx y;var;start; stop])
         | x -> x
 
-    static member Σ fx = FunctionN(SumOver, [fx;Parameter "";Parameter ""; Parameter "" ])
-    static member Σ (fx,start) = FunctionN(SumOver, [fx;Vars.i;start; Vars.n])
+    static member Σ fx = FunctionN(SumOver, [fx])
+    static member Σ (fx,start:BigRational) = FunctionN(SumOver, [fx;Vars.i;Number start; Vars.n])
+    static member Σ (fx,start:string) = FunctionN(SumOver, [fx;Vars.i;symbol start; Vars.n]) 
+    static member Σ (fx,var) = FunctionN(SumOver, [fx;var])
     static member Σ (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start; stop])
     static member Σ (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;stop]) 
     static member Π fx = FunctionN(ProductOver, [fx;Vars.i;0Q;Vars.n])
@@ -1157,7 +1161,7 @@ let makefuncAlt xvar f =
 
 let applyfn f x = makefunc f x
 
-module private Ops =
+module Ops =
     let max2 a b = 
         match (a,b) with
             | PositiveInfinity, _ -> a

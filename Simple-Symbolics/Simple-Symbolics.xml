@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<doc>
+<assembly><name>Simple-Symbolics</name></assembly>
+<members>
+<member name="M:Equations.EquationModule.multiplyDenominatorsAndSubtract(Equations.Equation)">
+<summary>
+convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -&gt; a * d = b * c -&gt; a * d - b * c = 0
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Create a function with symbol, body and default name &quot;f&quot;: fn x x^2 = `x |-&gt; x^2`
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fx(MathNet.Symbolics.Expression)">
+<summary>
+Create a function with symbol and default name &quot;f&quot;: fx y = `f(y)`
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.func(System.String,MathNet.Symbolics.Expression)">
+<summary>
+Create a function with name and symbol: func &quot;g&quot; y = `g(y)`
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.NumberTheory.BigRational.fromFloat(System.Double)">
+<summary>
+limited by range of decimal (which is used as a less noisy alternative to floats)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.extractNegativeOne(MathNet.Symbolics.Expression)">
+<summary>
+This rewrites the expression in terms of its negation, but multiplies it with -1 so as to keep it equal, effectively pulling out a -1. Useful for cancelling sometimes.
+Example: -a - b becomes -1 * (a + b) = -(a+b).
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.cancelAbs(MathNet.Symbolics.Expression)">
+<summary>
+ condition: x &gt; 0
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Summation.binomialTheorem(MathNet.Symbolics.Expression)">
+<summary>
+ condition: n &gt;= 0
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Summation.simplifyInfiniteGeometricSum(MathNet.Symbolics.Expression)">
+<summary>
+ condition: r &lt;= 1, r &gt; 0
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Solving.Polynomial.factor(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+The rational roots method to factor polynomials with rational roots with degree &gt; 2
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Solving.Polynomial.toIntegerCoefficients(MathNet.Symbolics.Expression)">
+<summary>
+Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
+</summary>
+</member>
+</members>
+</doc>

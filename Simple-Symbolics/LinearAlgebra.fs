@@ -4,6 +4,7 @@ open MathNet.Symbolics
 open Core
 open Utils
 open NumberTheory
+open Prelude.Common
 
 let formatGeneric (e : obj) =
     match e with
@@ -81,14 +82,12 @@ let inline det (m : ^a list list) =
         else
             let m' = removeRow 0 m
 
-            let detf =
-                if i = 3 then det2
-                else loop
+            let detf = if i = 3 then det2 else loop
+            
             [ for c in 0..m.[0].Length - 1 ->
-                  let var = m.[0].[c]
-                  let detm = var * detf (removeCol c m')
-                  if c % 2 = 0 then detm
-                  else -detm ]
+                let var = m.[0].[c]
+                let detm = var * detf (removeCol c m')
+                if c % 2 = 0 then detm else -detm ]
             |> List.sum
     loop m
 
@@ -202,6 +201,20 @@ module Matrix =
     let inline identity n = Matrix(identityM 0Q 1Q n)
     let inline identity2 zero one n = Matrix(identityM zero one n)
     let inline transpose (m:Matrix<_>) = Matrix(List.transpose m.AsList)
+
+    let LU_decomposition (m : Matrix<_>) =
+        let M = array2D m.AsList
+        let U = Array2D.map id M
+        let L = array2D (identityM 0Q 1Q M.RowCount)
+        let n = M.RowCount
+        for k in 0..n-2 do
+            for j in k+1..n-1 do
+                L.[j,k] <- U.[j,k] / U.[k,k]
+                let ljk = L.[j,k]
+                for r in k..n-1 do
+                    U.[j,r] <- U.[j,r] - ljk * U.[k, r]
+        L, U
+     
     let reshape (r,c) (vs:_ seq) =
         let avs = Seq.toArray vs
         Matrix ([for x in 0..r-1 -> [for y in 0..c-1 -> avs.[x * c + y]]])

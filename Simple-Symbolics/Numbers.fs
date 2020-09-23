@@ -16,6 +16,10 @@ let (|RealApproximation|_|) =
     | Approximation (Approximation.Real r) -> Some r
     | _ -> None
 
+let (|AsInteger|_|) = function
+    | Number n when n.IsInteger -> Some n.Numerator
+    | _ -> None
+
 module BigRational =
     open Microsoft.FSharp.Core.Operators
     open System
@@ -39,7 +43,7 @@ module BigRational =
                 (Numerics.BigInteger(df * double pow10), pow10)
 
     ///limited by range of decimal (which is used as a less noisy alternative to floats)
-    let fromFloat (f : float) =
+    let fromFloat (f : float) = 
         let df = decimal f
         if df = floor df then BigRational.FromBigInt(Numerics.BigInteger df)
         else
@@ -63,6 +67,10 @@ type Expression with
     member t.ToFormattedString() = expressionFormater t
     member t.ToFloat() = try Some (Evaluate.evaluate (Map.empty) t).RealValue with _ -> None
     member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue 
+    member t.ToBigInt() = 
+        match t with
+        | AsInteger n -> n
+        | _ -> failwith "not an integer"
 
     member t.ToInt() =
         match t with
@@ -85,6 +93,7 @@ module Expression =
         BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat (x : Expression) = x.ToFloat()
     let toInt (i : Expression) = i.ToInt()
+    let toBigInt(i:Expression) = i.ToBigInt()
     let toRational (i : Expression) = i.ToRational()
     let toPlainString = Infix.format
     let toFormattedString (e : Expression) = e.ToFormattedString()
@@ -196,6 +205,10 @@ let (|ProductHasNumber|_|) =
         | _ -> None
     | _ -> None 
 
+let (|Fraction|_|) = function 
+    | Number n when n.Denominator <> 1I -> Some((n.Numerator, n.Denominator))
+    | _ -> None 
+
 let (|RationalLiteral|_|) r = function
     | Number n as q when n = BigRational.FromIntFraction r -> Some q
     | _ -> None
@@ -206,7 +219,7 @@ let (|IntegerLiteral|_|) m = function
 
 let (|IntegerNumber|_|) = function
     | Number n as q when n.IsInteger -> Some q
-    | _ -> None
+    | _ -> None 
 
 let (|IsNumber|_|) = function
       | e when Expression.isNumber e -> Some e
@@ -234,9 +247,10 @@ let (|Minus|_|) = function
       | Sum [Number n; a] when n < 0N -> Some(Number n, a)
       | _ -> None  
        
-let (|Divide|_|) = function
-      | Product [a; Power (b,Number n)] when n = -1N -> Some (a,b)
-      | _ -> None  
+let (|Divide|_|) e =
+    let den = Rational.denominator e 
+    if den = 1Q then None 
+    else Some(Rational.numerator e, den)
 
 let (|NegativeOne|NotNegativeOne|) = function
     | Number n when n = -1N -> NegativeOne
@@ -274,14 +288,12 @@ let rec gcd c d =
     | (a, n) when n = 0N -> a
     | (a,b) -> gcd b (rem a b) 
 
-let rec factorial (n : BigRational) =
-    if n <= 1N then 1N
-    else n * factorial (n - 1N)
+let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ] 
 
 let rec factorialSymbolic (e : Expression) =
     match e with 
-    | Number m when m < 15N -> Number(factorial m)
-    | _ -> failwith "Must be a number < 15"
+    | AsInteger m -> biginteger(factorial m)
+    | _ -> failwith "Must be an integer"
 
 let inline primefactors factor x =
     let rec loop x =
@@ -318,24 +330,6 @@ let primefactorsPartial x =
     | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
     | None -> None
 
-///n is integer, k number of summands              
-let rec num_partitions =
-    function 
-    | (k, n) when k > n -> 0
-    | (k, n) when k = n -> 1
-    | k, n -> num_partitions (k + 1, n) + num_partitions (k, n - k)
-
-let rec partitions =
-    function
-    | 0 -> []
-    | n ->
-        let k = [ 1 ] :: partitions (n - 1)
-        [ for p in k do
-              yield [ 1 ] @ p
-              if p.Length < 2 || p.Tail.Head > p.Head then
-                  yield [ p.Head + 1 ] @ p.Tail ]
-        |> List.filter (List.sum >> (=) n)
-
 let primeFactorsExpr =
     abs
     >> primefactors factorsExpr
@@ -348,14 +342,11 @@ let primeFactorsPartialExpr =
                    >> groupPowers (fun x -> Sum [ x ])
                    >> Product) 
 
-let chooseN n k = 
-    if k < n then 0Q
-    else
-        let bn, bk = BigRational.FromInt n, BigRational.FromInt k
-        if k = 0 || n = k then 1Q 
-        else
-            factorial bn / (factorial bk * (factorial (bn - bk))) 
-            |> Expression.FromRational
+let permutations n k = List.reduce (*) [ (n - k + 1I)..n ] 
+
+let chooseN n k =   
+    permutations n k / (factorial k)
+    |> Expression.FromInteger
 
 let expandChooseBinomial = function
     | Binomial(n,k) -> fac n /(fac k * fac(n - k))
@@ -367,6 +358,12 @@ let sterlingsApproximation = function
     | x -> x
 
 let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
+
+let evalFactorial = function Function(Fac,x) -> factorialSymbolic x | x -> x
+
+let evalBigIntLog = function
+    | Function(Ln, AsInteger x) -> real (BigInteger.Log x)
+    | x -> x
   
 let tryNumber =
     function

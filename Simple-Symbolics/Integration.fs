@@ -16,12 +16,11 @@ open MathNet.Symbolics.Core
 open Expression
 open Equations
 
-
-let rewriteIntegralAsSum = function 
-   | IsIntegral(x,(Identifier (Symbol sdx) as dx)) -> 
+let rewriteIntegralAsSum = function
+   | IsIntegral(x,(Identifier (Symbol sdx) as dx)) ->
         let delta = if Utils.InfixFormat = "Infix" then "Δ" else "\\Delta "
-        PiSigma.Σ(Product[x;V(delta + sdx)],dx, Parameter "",Expression.PositiveInfinity)     
-   | x -> x
+        PiSigma.Σ(Product[x;V(delta + sdx)] |> Expression.simplifyLite ,dx)
+   | x -> x 
  
 module Expression =
     let isIntegral = function IsIntegral _ -> true | _ -> false
@@ -433,7 +432,14 @@ module Riemann =
 module Units =
     open Units
     let integrate (dx:Units) (fx : Units) = 
-        Units (evalIntegral (integral dx.Quantity fx.Quantity), fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx
+        Units (evalIntegral (integral dx.Quantity fx.Quantity), fx.Unit * dx.Unit, fx.AltUnit + " " + dx.AltUnit) 
 
     let definiteIntegrate a b (dx:Units) (fx : Units) = 
-        Units (evalDefiniteIntegral (defintegral dx.Quantity a b fx.Quantity), fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx
+        Units (evalDefiniteIntegral (defintegral dx.Quantity a b fx.Quantity), fx.Unit * dx.Unit, fx.AltUnit + " " + dx.AltUnit) 
+
+    type Units with
+        static member Integrate(differential:Units,fn : Units) =
+            integrate differential fn
+
+        static member DefiniteIntegrate(start, stop, differential:Units, fn : Units) =
+            definiteIntegrate start stop differential fn

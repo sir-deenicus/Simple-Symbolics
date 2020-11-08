@@ -2,7 +2,7 @@
 
 open MathNet.Numerics
 open MathNet.Symbolics
-open MathNet.Symbolics.NumberTheory
+open MathNet.Symbolics.NumberProperties
 open MathNet.Symbolics.Core
 open Utils
 open Operators 

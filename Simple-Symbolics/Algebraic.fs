@@ -54,7 +54,7 @@ module Rational =
 
 module Algebraic =
     open Core
-    open NumberTheory
+    open NumberProperties
     let groupInSumWith var = function
         | Sum l -> 
             let haves, nots = List.partition (Expression.containsExpression var) l

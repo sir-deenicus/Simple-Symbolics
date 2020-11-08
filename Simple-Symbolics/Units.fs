@@ -5,7 +5,7 @@ open MathNet.Symbolics
 open MathNet.Symbolics.Core
 open MathNet.Symbolics.Utils
 open MathNet.Numerics
-open NumberTheory
+open NumberProperties
  
 type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
     let mutable altunit = defaultArg altUnit ("") 
@@ -37,7 +37,7 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
 
     member t.EvaluateQuantity () = q.ToFloat()
 
-    member __.ToAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
+    member __.GetAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
     
     member __.Reciprocal (u:Units) =
         Units(Rational.reciprocal u.Quantity, Rational.reciprocal u.Unit)
@@ -138,6 +138,8 @@ let setAlt alt (u : Units) =
     u.AltUnit <- alt
     u
 
+let (!) (str:string) = Units(str,str)
+
 let unitless = Units(1Q, 1Q, "")
 let pico = Expression.fromFloat 1e-12
 let nano = Expression.fromFloat 1e-9
@@ -156,6 +158,8 @@ let million = mega
 let billion = giga
 let trillion = tera
 let quadrillion = peta
+let quintillion = 1000 * quadrillion 
+let sextillion = 1000 * quintillion
 //----------Temperature----------
 let K = Units(1Q, symbol "K", "K")
 //----------Mass----------
@@ -170,6 +174,7 @@ let meter = Units(1Q, Operators.symbol "meters", "meter")
 let km = kilo * meter |> setAlt "km"
 let cm = centi * meter |> setAlt "cm"
 let ft =  0.3048  * meter |> setAlt "ft"
+let mile = 1.609344 * km
 let yard = 3 * ft |> setAlt "yards"
 let inches = 1Q/12Q * ft |> setAlt "inches"
 let au =  150Q * mega * km |> setAlt "AU" 
@@ -243,6 +248,7 @@ let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
 let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
 let hbar = planck / (2 * Constants.pi)
 let speed_of_light = 299_792_458 * meter / sec
+let mass_of_sun = 1.989 * 10Q**30 * kg
 let stefan_boltzman =
     Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
 let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
@@ -340,7 +346,7 @@ let getUnitQuantity (u:Units) = u.Quantity
 
 let tounits =  toUnitQuantityValue
 
-let simplifyUnitsAux numsimplify (u : Units) = 
+let simplifyUnitDescAux numsimplify (u : Units) = 
     let trysimplify (u : Units) =
         let uop, adjustedunit, adjustingunit, shorterUnit, _ =
             mostSimilarUnit u |> List.head
@@ -354,7 +360,7 @@ let simplifyUnitsAux numsimplify (u : Units) =
 
         let desc =
             if adjdesc = "" then ""
-            else space() + "(" + adjdesc + uop + ")" 
+            else space() + "(" + adjdesc + space() + uop + ")" 
         fmt (numsimplify fixedunit), shorterUnit, desc
 
     let matched =
@@ -364,14 +370,16 @@ let simplifyUnitsAux numsimplify (u : Units) =
                len, s + space() + "(" + t + ")")
 
     match matched with
-    | [] ->
-        let basic = u.ToString()
-        let chunit, units, desc = trysimplify u
-        if basic.Length <= (chunit + units).Length then basic
-        else chunit + space() + units + desc
+    | [] -> 
+        if Seq.forall unitsName.ContainsKey (Expression.findVariables u.Unit) then
+            let basic = u.ToString()
+            let chunit, units, desc = trysimplify u
+            if basic.Length <= (chunit + units).Length then basic
+            else chunit + space() + units + desc
+        else u.ToString()
     | l -> l |> List.minBy fst |> snd
 
-let simplifyUnits (u : Units) = simplifyUnitsAux (Rational.simplifyNumbers 3) u
+let simplifyUnitDesc (u : Units) = simplifyUnitDescAux (Rational.simplifyNumbers 3) u
 
 let rec replace (defs : seq<Expression * Units>) e =
     let map = dict defs

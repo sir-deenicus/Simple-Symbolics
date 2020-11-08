@@ -7,6 +7,26 @@
 convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -&gt; a * d = b * c -&gt; a * d - b * c = 0
 </summary>
 </member>
+<member name="T:ProbabilityDistributions.Exponential">
+<summary>
+ the exponential distribution is the probability distribution of the time between events in a Poisson point process,
+</summary>
+</member>
+<member name="M:ProbabilityDistributions.Binomial.Prob(MathNet.Symbolics.Expression)">
+<summary>
+Probability of k Heads in n flips each with probability p
+</summary>
+</member>
+<member name="T:ProbabilityDistributions.Binomial">
+<summary>
+From wiki:binomal with distr with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments, each asking a yes–no question, and each with its own Boolean-valued outcome: success/yes/true/one (with probability p)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.defineStr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,System.String)">
+<summary>
+Define with left, right and description
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Create a function with symbol, body and default name &quot;f&quot;: fn x x^2 = `x |-&gt; x^2`
@@ -22,9 +42,19 @@ Create a function with symbol and default name &quot;f&quot;: fx y = `f(y)`
 Create a function with name and symbol: func &quot;g&quot; y = `g(y)`
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.NumberTheory.BigRational.fromFloat(System.Double)">
+<member name="M:MathNet.Symbolics.NumberProperties.BigRational.fromFloat(System.Double)">
 <summary>
 limited by range of decimal (which is used as a less noisy alternative to floats)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrNamedVars.Static(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
+<summary>
+eval with numbers or vars with the phrase &quot;Var&quot; in the symbol name are acceptable
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrVars.Static(System.Boolean,System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
+<summary>
+eval with numbers or vars (optionally) are acceptable
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Core.Expression.extractNegativeOne(MathNet.Symbolics.Expression)">
@@ -38,6 +68,26 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
  condition: x &gt; 0
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">
+<summary>
+a * log x -&gt; log(x^a)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Logarithm.powerRule(MathNet.Symbolics.Expression)">
+<summary>
+log (x**n) -&gt; n * log x
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Logarithm.contract(MathNet.Symbolics.Expression)">
+<summary>
+log a + log b + ... -&gt; log (a*b...)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Logarithm.expand(MathNet.Symbolics.Expression)">
+<summary>
+log (a * b) -&gt; log a + log b
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Summation.binomialTheorem(MathNet.Symbolics.Expression)">
 <summary>
  condition: n &gt;= 0
@@ -46,6 +96,16 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
 <member name="M:MathNet.Symbolics.Summation.simplifyInfiniteGeometricSum(MathNet.Symbolics.Expression)">
 <summary>
  condition: r &lt;= 1, r &gt; 0
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Summation.mergeSummationsInSum">
+<summary>
+merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x+y)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Summation.adjustSummationTo(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Adjusts summation to have a start, stop or var if it does not already
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Solving.Polynomial.factor(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">

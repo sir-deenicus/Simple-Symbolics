@@ -206,7 +206,7 @@ let rec replaceVariableSymbol replacer =
     | x -> x  
 
 ==========
-To unintuitive to use. Better to instead target using filters, optionally applying to only N elements 
+Too unintuitive to use. Better to instead target using filters, optionally applying to only N elements 
 
 let recursiveMapLocation depthonly filter depth breadth fx e =
     let rec loop d b =

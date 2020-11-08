@@ -4,7 +4,7 @@ open Core
 open Core.Vars
 open Utils.Constants
 open MathNet.Numerics
-open MathNet.Symbolics.NumberTheory
+open MathNet.Symbolics.NumberProperties
 
 type Complex(r : Expression, i : Expression) =  
     member __.Real = r

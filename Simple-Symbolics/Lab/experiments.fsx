@@ -138,3 +138,8 @@ let vr = sqrt 32Q |> Algebraic.simplifySquareRoot |> Option.get
 
 Algebraic.intersectAll [a * b * c * (a + b); a + b]
 Algebraic.intersectAll [a * b * c + (a + b); a + b]
+
+
+IntervalF(-1.,1.) * IntervalF(-1.,1.)
+
+IntervalF(2.,3.) * IntervalF(2.,3.) * IntervalF(2.,3.)

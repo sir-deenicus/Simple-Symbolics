@@ -1,10 +1,29 @@
-﻿module MathNet.Symbolics.NumberTheory
+﻿module MathNet.Symbolics.NumberProperties
 
+open Prelude.Math
+open MathNet.Symbolics.Utils
+open FSharp.Core.Operators
+open Prelude.Common
 open MathNet.Numerics
 open MathNet
-open MathNet.Symbolics.Utils
 open System
-         
+
+let pow10ToString = function 
+    | 21 -> " sextillion"
+    | 18 -> " quintillion"
+    | 15 -> " quadrillion"
+    | 12 -> " trillion"
+    | 9 -> " billion"
+    | 6 -> " million" 
+    | 3 -> " thousand" 
+    | x when x < 3 -> ""
+    | x -> string x
+
+let numberToEnglish n (x:float) = 
+    let p = floor(log10f x)
+    let r = bucketRange 0 3. (floor p)
+    sprintf "%g%s" (round n (x / 10. ** r)) (pow10ToString (int r))
+  
 let (|RealConstant|_|) =
     function
     | Constant Constant.I -> None
@@ -19,6 +38,38 @@ let (|RealApproximation|_|) =
 let (|AsInteger|_|) = function
     | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
+    
+type IntervalF(lower:float,upper:float) =
+    member __.LowerBound = lower
+    member __.UpperBound = upper
+    member __.Value = (lower, upper)
+
+    new(x) = IntervalF(x,x)
+    static member (+) (l : IntervalF, r : IntervalF) =
+         IntervalF(l.LowerBound + r.LowerBound, l.UpperBound + r.UpperBound)
+
+    static member (-) (l : IntervalF, r : IntervalF) =
+         IntervalF(l.LowerBound - r.UpperBound, l.UpperBound - r.LowerBound)
+
+    static member (*) (l : IntervalF, r : IntervalF) =
+        let product =
+            [for x in [l.LowerBound; l.UpperBound] do
+                for y in [r.LowerBound; r.UpperBound] ->
+                    x*y]
+        IntervalF(List.min product, List.max product)
+
+    static member (/)  (l : IntervalF, r : IntervalF) =
+        l * IntervalF (1./r.LowerBound, 1./r.UpperBound)
+
+    static member Abs(x:IntervalF) = 
+        let abslb, absub = abs x.LowerBound, abs x.UpperBound 
+        if x.LowerBound = 0. || x.UpperBound = 0. then IntervalF(0., max abslb absub)
+        else IntervalF(min abslb absub, max abslb absub)
+
+    static member Zero = IntervalF(0.)
+
+    override t.ToString() =
+        string t.LowerBound + "," + string t.UpperBound
 
 module BigRational =
     open Microsoft.FSharp.Core.Operators
@@ -61,7 +112,66 @@ module BigRational =
                 (int (df * pow10), int (floor (pow10 - df)))
         else
             BigRational.FromIntFraction
-                (int (df * pow10 - floor df), int (pow10 - 1M))
+                (int (df * pow10 - floor df), int (pow10 - 1M))  
+    
+    let floor (q : BigRational) = q.Numerator / q.Denominator
+
+    let ceil (q : BigRational) =
+        if BigInteger.Remainder(q.Numerator, q.Denominator) <> 0I then
+            floor q + 1I
+        else floor q
+
+    let log10 (q : BigRational) =
+        BigInteger.Log10(q.Numerator) - BigInteger.Log10(q.Denominator)
+        |> fromFloat
+
+    let log (q : BigRational) =
+        BigInteger.Log(q.Numerator) - BigInteger.Log(q.Denominator)
+        |> fromFloat
+
+    let decimalExpansion (q: BigRational) =
+        if q.Numerator < q.Denominator then
+            failwith "magnitude must be > 1"
+        else
+            let n = q.Numerator / q.Denominator 
+            let r =  BigInteger.Remainder(q.Numerator, q.Denominator)
+    
+            let rec remloop p =
+                seq {
+                    let d = p / q.Denominator
+                    let m = d * q.Denominator
+                    yield d
+                    if p - m = 0I then () else yield! (remloop ((p - m) * 10I))
+                }
+    
+            seq {
+                yield n
+                yield! (remloop (r * 10I))
+            }
+            
+    (*13/6 = 
+             2.1 (d)
+       6 | 13 
+           12
+            10 (input)
+             6  (m)
+             40  *)
+    let decimalParts take (q:BigRational) =
+        if q.Numerator < q.Denominator then  
+            //10 ** ceil (log10 q.Denominator)
+            failwith "magnitude must be > 1"
+        else 
+            let n = q.Numerator/ q.Denominator
+            let r = BigInteger.Remainder(q.Numerator, q.Denominator) 
+            let rec remloop l steps p =
+                if steps >= take then List.rev l, false
+                else 
+                    let d = p / q.Denominator
+                    let m = d * q.Denominator  
+                    if p-m = 0I then List.rev (d::l), true
+                    else remloop (d::l) (steps + 1) ((p-m)*10I)
+            n, remloop [] 0 (r*10I) 
+    
 
 type Expression with
     member t.ToFormattedString() = expressionFormater t
@@ -92,6 +202,7 @@ module Expression =
     let fromFloatRepeating f =
         BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat (x : Expression) = x.ToFloat()
+    let forceToFloat (x:Expression) = x.ToFloat() |> Option.get
     let toInt (i : Expression) = i.ToInt()
     let toBigInt(i:Expression) = i.ToBigInt()
     let toRational (i : Expression) = i.ToRational()
@@ -342,24 +453,6 @@ let primeFactorsPartialExpr =
                    >> groupPowers (fun x -> Sum [ x ])
                    >> Product) 
 
-let permutations n k = List.reduce (*) [ (n - k + 1I)..n ] 
-
-let chooseN n k =   
-    permutations n k / (factorial k)
-    |> Expression.FromInteger
-
-let expandChooseBinomial = function
-    | Binomial(n,k) -> fac n /(fac k * fac(n - k))
-    | x -> x
-
-let sterlingsApproximation = function
-    | Function(Fac, x) ->
-        sqrt(2Q * Operators.pi * x) * (x/Constants.e)**x
-    | x -> x
-
-let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
-
-let evalFactorial = function Function(Fac,x) -> factorialSymbolic x | x -> x
 
 let evalBigIntLog = function
     | Function(Ln, AsInteger x) -> real (BigInteger.Log x)
@@ -374,5 +467,33 @@ let tryNumber =
     | x -> Expression.toFloat x 
     | _ -> None
 
-let xor a b = (a && not b) || (not a && b) 
-   
+let interval a b = IntervalF(a,b) 
+
+module Combinatorics =
+    let permutations n k = List.reduce (*) [ (n - k + 1I)..n ] 
+
+    let chooseN n k =   
+        permutations n k / (factorial k)
+        |> Expression.FromInteger
+
+    let expandChooseBinomial = function
+        | Binomial(n,k) -> fac n /(fac k * fac(n - k))
+        | x -> x
+
+    let expandChooseBinomialAsGammaLn = function
+        | Binomial(n,k) -> facln n /(facln k * facln(n - k))
+        | x -> x 
+
+    let stirlingsApproximation = function
+        | Function(Fac, x) ->
+            sqrt(2Q * Operators.pi * x) * (x/Constants.e)**x
+        | x -> x
+
+    let stirlingsGammaApproximation = function
+        | Function(Gamma, x) ->
+            sqrt(2Q * Operators.pi / x) * (x/Constants.e)**x
+        | x -> x
+
+    let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
+
+    let evalFactorial = function Function(Fac,x) -> factorialSymbolic x | x -> x

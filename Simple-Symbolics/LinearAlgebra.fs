@@ -3,7 +3,7 @@ module MathNet.Symbolics.LinearAlgebra
 open MathNet.Symbolics
 open Core
 open Utils
-open NumberTheory
+open NumberProperties
 open Prelude.Common
 
 let formatGeneric (e : obj) =

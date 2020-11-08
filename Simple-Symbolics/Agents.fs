@@ -1,6 +1,6 @@
 ﻿namespace MathNet.Symbolics
 open Hansei.Continuation
-open NumberTheory
+open NumberProperties
 open Utils   
 
 module Expression =    
@@ -86,7 +86,7 @@ module Replicator =
                     | _ ->
                         let! e1, e2 = uniform (List.toArray applicable)
                         let expressionNew =
-                            Expression.replaceExpression e2 e1 currentExpression
+                            Expression.replaceExpressionWith e2 e1 currentExpression
                         if (expressionNew <> currentExpression
                             && Structure.width expressionNew < maxw
                             && List.exists
@@ -221,7 +221,7 @@ module Searcher =
                         | _ ->
                             let! e1, e2 = uniform applicable
                             let expressionNew =
-                                Expression.replaceExpression e2 e1 currentExpression
+                                Expression.replaceExpressionWith e2 e1 currentExpression
                             do! constrain
                                     (expressionNew <> currentExpression
                                      && Structure.width expressionNew < maxwidth
@@ -289,7 +289,7 @@ module Searcher =
                         | _ ->
                             let! e1, e2 = uniform applicable
                             let expressionNew =
-                                replaceExpression e2 e1 currentExpression
+                                replaceExpressionWith e2 e1 currentExpression
                             do! constrain
                                     (expressionNew <> currentExpression
                                      && Structure.width expressionNew < maxwidth

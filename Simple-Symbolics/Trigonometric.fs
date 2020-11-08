@@ -5,7 +5,7 @@ open Utils
 open MathNet.Symbolics.Operators
 open MathNet.Numerics
 open MathNet.Symbolics
-open NumberTheory
+open NumberProperties
 open Equations
 
 let Pi = Constants.pi

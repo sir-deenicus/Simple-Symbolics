@@ -41,7 +41,7 @@ open MathNet.Symbolics.LinearAlgebra
 open MathNet.Symbolics.Solving
 open MathNet.Symbolics.Units
 
-open NumberTheory
+open NumberProperties
 open Expression
  
 setLatex()

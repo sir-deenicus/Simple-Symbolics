@@ -5,7 +5,7 @@ open Core
 open Vars
 open Prelude.Common 
 open Utils
-open MathNet.Symbolics.NumberTheory
+open MathNet.Symbolics.NumberProperties
 open Units
 open Equations
 open MathNet.Symbolics.Operators
@@ -92,9 +92,6 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
         | f when f = focusVar -> doflip, f, ops
         | Power(b, x) when containsVar focusVar x -> 
             iter doflip x ((fun x -> log b x)::ops)
-        | Power(f, p) ->
-            if not silent then printfn "raise to power"
-            iter doflip f ((fun (x : Expression) -> x ** (1 / p)) :: ops)
         | Sum [] | Sum [ _ ] | Product [] | Product [ _ ] -> doflip, fx, ops
         | Product l ->
             if not silent then printfn "divide"
@@ -128,19 +125,7 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
             iter doflip x ((fun x -> b ** x) :: ops)
         | Function(Ln, x) ->
             if not silent then printfn "exponentiate"
-            iter doflip x (exp :: ops)
-        | Function(Tan, x) ->
-            if not silent then printfn "atan"
-            iter doflip x ((fun x -> Function(Atan, x)) :: ops)
-        | Function(Erf, x) ->
-            if not silent then printfn "erf^-1"
-            iter doflip x ((fun x -> Function(ErfInv, x)) :: ops)
-        | Function(Cos, x) ->
-            if not silent then printfn "acos"
-            iter doflip x ((fun x -> Function(Acos, x)) :: ops)
-        | Function(Sin, x) ->
-            if not silent then printfn "asin"
-            iter doflip x ((fun x -> Function(Asin, x)) :: ops)
+            iter doflip x (exp :: ops) 
         | Function(Exp, x) ->
             if not silent then printfn "log"
             iter doflip x (ln :: ops)
@@ -324,7 +309,7 @@ let dispSolvedUnitsA matches newline tx =
             let asunit = 
                 match lookup.tryFindIt u.Unit with 
                 | Some u' -> (Units.toUnitQuantityValue u' u |> fmt) + space() + u'.AltUnit 
-                | _ -> Units.simplifyUnits u
+                | _ -> Units.simplifyUnitDesc u
 
             sprintf "$%s = %s$" (x.ToFormattedString()) asunit)
     |> List.sort

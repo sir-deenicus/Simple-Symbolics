@@ -20,15 +20,16 @@
     <None Include="simpleintegrator.txt" />
     <Compile Include="AssemblyInfo.fs" />
     <None Include="Changes.txt" />
+    <None Include="Lab\Obsolete\solving.fsx" />
+    <None Include="Lab\Obsolete\integration.fsx" />
     <None Include="Lab\propagatingOnIntervals.fsx" />
     <None Include="Lab\summation-tests.fsx" />
     <None Include="Lab\unitspath.fsx" />
+    <None Include="Lab\inequalities.fsx" />
     <None Include="Lab\simplesolve.fsx" />
     <None Include="Lab\deriver2.fsx" />
     <None Include="Lab\linalg-tests.fsx" />
     <None Include="Lab\differential-calculus.fsx" />
-    <None Include="Lab\integration.fsx" />
-    <None Include="Lab\solving.fsx" />
     <None Include="Lab\experiments.fsx" />
     <Compile Include="Utils.fs" />
     <Compile Include="Numbers.fs" />
@@ -48,7 +49,10 @@
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
     <Compile Include="Integration.fs" />
+    <Compile Include="Requirements.fs" />
+    <Compile Include="ProbabilityDistributions.fs" />
     <Compile Include="Agents.fs" />
+    <Compile Include="KnowledgeBase.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,7 +62,8 @@
     <PackageReference Include="Hansei" Version="0.3.2.3" />
     <PackageReference Include="IntSharpCore" Version="1.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.7.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.25.2.3" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.25.9.8" />
+    <PackageReference Include="Prelude" Version="1.3.1" />
   </ItemGroup>
 
   <ItemGroup>

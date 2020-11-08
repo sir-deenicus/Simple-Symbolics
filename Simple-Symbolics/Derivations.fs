@@ -4,7 +4,7 @@ open MathNet.Symbolics
 open Core
 open Solving 
 open Prelude.Common
-open NumberTheory
+open NumberProperties
 open Equations 
 
 let deriveTrivialEqualities eqs =
@@ -36,13 +36,13 @@ let deriveTrivialEqualities eqs =
 
     loop 0 eqs |> removeRepeats
 
-let genEqualitiesList (eqs : Equation list) =
+let equalitiesToPairs (eqs : Equation list) =
     [ for e in eqs do
           yield! e.Equalities ]
     |> Hashset
     |> Seq.toList
 
-let deriveAndGenerateEqualities = deriveTrivialEqualities >> genEqualitiesList
+let deriveAndGenerateEqualities = deriveTrivialEqualities >> equalitiesToPairs
 
 let solveProductForm e =
     function
@@ -60,7 +60,7 @@ let deriveEqualitiesFromProduct (eqs:Equation list) =
            let (e1, e2) = eq.Definition
            (e1, e2) :: solveProductForm e1 e2
            |> List.map Equation
-           |> genEqualitiesList)
+           |> equalitiesToPairs)
 
 let transformNegativeEq =
     function
@@ -74,11 +74,10 @@ let deriveShallowSums (eqs : Equation list) =
            match r with
            | Sum sums ->
                (l, r)
-               :: (sums
-                   |> List.map (fun x -> transformNegativeEq (x, l - (r - x))))
+               :: (sums |> List.map (fun x -> transformNegativeEq (x, l - (r - x))))
            | _ -> [l,r])
     |> List.map Equation
-    |> genEqualitiesList       
+    |> equalitiesToPairs       
 
 let deriveShallowEqualities eqs =
     let deqs = Hashset(deriveShallowSums eqs)

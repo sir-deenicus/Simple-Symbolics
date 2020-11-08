@@ -10,7 +10,7 @@ open Core.Vars
 open Utils
 open MathNet.Symbolics.Differentiation
 open Prelude.Common
-open NumberTheory
+open NumberProperties
 open Summation
 open MathNet.Symbolics.Core
 open Expression
@@ -259,10 +259,10 @@ let substitution substarget expr =
     let usub = symbol "u_{sub}"
     let inner dx innerExpr =
         let du = D dx substarget
-        let innerExprTemp = Expression.replaceExpression usub substarget innerExpr
+        let innerExprTemp = Expression.replaceExpressionWith usub substarget innerExpr
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
-            let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
+            let innerExpr' = Expression.replaceExpressionWith solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 match integratePartialRes usub (du * innerExpr') with
                 | res, true -> replaceSymbol substarget usub res
@@ -280,10 +280,10 @@ let substitutionSteps substarget expr =
     let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
     let inner dx innerExpr =
         let du = D dx substarget
-        let innerExprTemp = Expression.replaceExpression usub substarget innerExpr  
+        let innerExprTemp = Expression.replaceExpressionWith usub substarget innerExpr  
         if innerExprTemp <> innerExpr then
             let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
-            let innerExpr' = Expression.replaceExpression solvefor dx innerExprTemp 
+            let innerExpr' = Expression.replaceExpressionWith solvefor dx innerExprTemp 
             if innerExpr' <> innerExprTemp then 
                 trace.Add (dx <=> solvefor)
                 trace.Add
@@ -425,7 +425,7 @@ module Riemann =
             let deltax = (b - a) / n
             let x_i = a + deltax * i
 
-            summation i 1Q n (deltax * Expression.replaceExpression x_i dx f)
+            summation i 1Q n (deltax * Expression.replaceExpressionWith x_i dx f)
             |> limit n Symbolics.Operators.infinity 
         | _ -> undefined
 

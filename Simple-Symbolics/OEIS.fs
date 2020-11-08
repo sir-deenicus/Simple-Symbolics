@@ -3,7 +3,7 @@ module MathNet.Symbolics.OEIS
 
 open System
 open MathNet.Numerics
-open NumberTheory 
+open NumberProperties 
 
 let [<Literal>] oeisjsonpath = __SOURCE_DIRECTORY__  +  "/oeis-search.json"
 type OEIntegerSequences = FSharp.Data.JsonProvider<oeisjsonpath> //OEISjson.json> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"

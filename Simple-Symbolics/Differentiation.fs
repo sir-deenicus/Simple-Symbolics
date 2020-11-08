@@ -3,7 +3,7 @@
 open Core
 open MathNet.Symbolics
 open Utils
-open NumberTheory
+open NumberProperties
 
 [<RequireQualifiedAccess>]
 type EvalMethod = 

@@ -16,18 +16,18 @@ let adjustSummationTo var start stop = function
        summation var start stop p
   | x -> x
   
-let isSummation = function | Summation _ -> true | _ -> false
+let isSummation = function | Summation _ -> true | _ -> false 
 
 let extractSumConstants = function
   | FunctionN (SumOver,[p; var]) ->
-       Expression.extractNonVariables var (fun x -> PiSigma.Σ(x, var)) p
+       Structure.extractNonVariablesAndApply var (fun x -> PiSigma.Σ(x, var)) p
   | Summation(p,v,start,stop) ->
-       Expression.extractNonVariables v (summation v start stop) p
-  | x -> x
+       Structure.extractNonVariablesAndApply v (summation v start stop) p
+  | x -> x 
 
 let expandSummation = function
     | Summation(Sum _ as s,v,start,stop) ->
-         Expression.expandSumsOrProducts (summation v start stop) s
+         Structure.mapRootList (summation v start stop) s
     | x -> x 
 
 ///merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x+y)

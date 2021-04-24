@@ -77,10 +77,13 @@ module Units =
 
     let mutable ngn = setCurrency 1e-04 "NGN"
     let mutable gbp = setCurrency 8e-03 "GBP"
+    let mutable eur = setCurrency currencyFriction "EUR"
+
 
     let redoCurrencyConversions () = 
         ngn <- setCurrency 1e-04 "NGN"
         gbp <- setCurrency 8e-03 "GBP"
+        eur <- setCurrency currencyFriction "EUR"
 
     let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
         if s.Unit = usd.Unit then 

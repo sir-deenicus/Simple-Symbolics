@@ -1,11 +1,32 @@
 ﻿namespace MathNet.Symbolics
 open Core
 open Utils 
+open NumberProperties 
+open MathNet.Numerics
 
 module Logarithm =
     open MathNet.Symbolics.Operators 
-    open NumberTheory
+    open NumberProperties 
+    
+    let changeOfBaseRule targetBase =
+        function
+        | FunctionN(Log, [ b; x ]) ->
+            match targetBase with
+            | Constant Constant.E -> ln x / ln b
+            | _ -> log targetBase x / log targetBase b
+        | Function(Ln as f, x) | Function(Log as f, x) ->
+            let b =
+                match f with
+                | Ln -> Constants.e
+                | Log -> 10Q
+                | _ -> failwith "unreachable"
+            match targetBase with
+            | Constant Constant.E -> ln x / ln b
+            | _ -> log targetBase x / log targetBase b
+        | x -> x
 
+
+    ///log (a * b) -> log a + log b
     let expand =
         function
         | Function (Ln,Power (x,n)) when n = -1Q -> -ln x
@@ -23,6 +44,7 @@ module Logarithm =
                     | x -> log b x) l)
         | f -> f
 
+    ///log a + log b + ... -> log (a*b...)
     let contract =
         function
         | Sum l as f ->
@@ -37,7 +59,7 @@ module Logarithm =
                 |> List.map (function
                        | Product [ n; Function(Ln, x) ] when n = -1Q -> 1 / x
                        | Function(Ln, x) -> x
-                       | _ -> failwith "never")
+                       | _ -> failwith ("should \"never\" occur error encountered in Logarithm.contract with " + (Infix.format f)))
 
             match logs' with
             | [] -> f
@@ -50,13 +72,15 @@ module Logarithm =
         | FunctionN(Log, [b; Power(x, n)]) -> n * FunctionN(Log, [b;x])
         | f -> f
 
+    ///log (x**n) -> n * log x
     let rec powerRule =
         function
         | Product l -> Product(List.map powerRule l)
         | Sum l -> Sum(List.map powerRule l)
         | f -> powerRuleSingle f
 
-    let powerRuleBackwards vx =
+    ///a * log x -> log(x^a)
+    let powerRuleReverse vx =
         match vx with
         | Product[a; Function(Ln, x)] -> Function(Ln, (x**a))
         | Product[a; FunctionN(Log, [b;x])] -> FunctionN(Log,[b; (x**a)])
@@ -99,12 +123,12 @@ module Exponents =
             Core.Expression.simplifyLite (List.map (fun e -> hold(b ** e)) l |> Product)
         | f -> f
 
-    let replaceExpWithE = function
+    let replaceExpToE = function
         | Function(Exp, x) -> 
             Power(Constant (Constant.E),x)
         | f -> f
 
-    let replaceEWithExp = function
+    let replaceEtoExp = function
         | Power(Constant (Constant.E),x) -> 
             Function(Exp, x)
         | f -> f
@@ -210,3 +234,15 @@ module Exponents =
             | [] -> Product groupedProduct 
             | _ -> Product (groupedProduct @ rest)
         | x -> x
+
+//carry around enforced equalities, eg b > 0
+module SquareRoot =
+    let splitDivisionInRadical = function
+        | Power(Number x, Number n) when n = (1N/2N) && x.Denominator <> 0I -> sqrt (biginteger x.Numerator) / sqrt (biginteger x.Denominator)
+        | Power(Divide(a,b), Number n) when n = (1N/2N) && b <> 0Q -> sqrt a / sqrt b
+        | Power(Number x, Number n) when n = (-1N/2N) && x.Denominator <> 0I -> sqrt (biginteger x.Denominator) / sqrt (biginteger x.Numerator) 
+        | Power(Divide(a,b), Number n) when n = (-1N/2N) && b <> 0Q -> sqrt b/sqrt a
+        | x -> x
+    let bringPowerOutsideRadical = function
+        | Power(Power(a,n), Number m) when m = (1N/2N) -> (sqrt a)**n
+        | x -> x 

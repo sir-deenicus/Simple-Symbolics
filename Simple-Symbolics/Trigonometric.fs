@@ -104,16 +104,16 @@ module TrigTables =
                      sqrt 3Q, Pi / 3 ]
                      
 
-let evalAtan y x =
+let rec evalAtan y x =
     let xn, yn = rational x, rational y
     if x > 0N then arctan (yn / xn)
-    elif x < 0N && y >= 0N then Trigonometric.simplify (arctan (yn / xn) + Pi)
-    elif x < 0N && y < 0N then Trigonometric.simplify (arctan (yn / xn) - Pi)
+    elif x < 0N && y >= 0N then Trigonometric.simplify (simplifyWithTable(arctan (yn / xn)) + Pi)
+    elif x < 0N && y < 0N then Trigonometric.simplify (simplifyWithTable (arctan (yn / xn)) - Pi)
     elif x = 0N && y > 0N then Pi / 2
     elif x = 0N && y < 0N then -Pi / 2
     else Undefined
 
-let simplifyTrigTerm =
+and simplifyWithTable =
     function
     | Function (Cos, n) as cosx ->
         TrigTables.cosineLookUp.tryFind n

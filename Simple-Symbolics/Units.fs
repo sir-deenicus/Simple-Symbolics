@@ -6,10 +6,11 @@ open MathNet.Symbolics.Core
 open MathNet.Symbolics.Utils
 open MathNet.Numerics
 open NumberProperties
- 
+open NumberProperties
+
 type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
-    let mutable altunit = defaultArg altUnit ("") 
-    let mutable dispaltunit = defaultArg dispAltUnit false 
+    let mutable altunit = defaultArg altUnit ("")
+    let mutable dispaltunit = defaultArg dispAltUnit false
     new(unitname:string) = Units(1Q, symbol unitname, unitname)
     new(unitname:string, altunit:string) = Units(1Q, symbol unitname, altunit)
     static member numstr =
@@ -26,19 +27,19 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
 
     member __.AltUnit
         with get () = altunit
-        and set u = altunit <- u 
+        and set u = altunit <- u
 
     member __.DisplayWithAltUnit
         with get () = dispaltunit
         and  set t = dispaltunit <- t
-    
+
     member t.EvaluateQuantity(m) =
         Expression.evaluateFloat m q
 
     member t.EvaluateQuantity () = q.ToFloat()
 
     member __.GetAltString() = sprintf "%s %s" (u.ToFormattedString()) altunit
-    
+
     member __.Reciprocal (u:Units) =
         Units(Rational.reciprocal u.Quantity, Rational.reciprocal u.Unit)
 
@@ -81,11 +82,11 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
 
     static member Abs(a : Units) = Units(abs a.Quantity, a.Unit, a.AltUnit)
 
-    static member Sqrt(x:Units) = 
+    static member Sqrt(x:Units) =
         Units
             (Expression.Simplify((sqrt x.Quantity) |> rm Exponents.expandRationalPower),
                 Expression.Simplify((sqrt x.Unit) |> rm Exponents.expandRationalPower))
-    
+
     static member Pow(a : Units, b : int) =
         Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^" + string b)
 
@@ -114,16 +115,16 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
                 | Some f ->
                     let q, r = smartroundEx 1 f
                     Expression.toSciNumString r q
-                | None -> (Rational.simplifyNumbers 1 (a / b).Quantity).ToFormattedString()   
+                | None -> (Rational.simplifyNumbers 1 (a / b).Quantity).ToFormattedString()
             Some(sprintf "%s%s%s" qstr (space()) altunit, qstr.Length)
         else None
 
     static member ToUnitQuantity(a : Units, b : Units) =
-        if a.Unit = b.Unit then   
+        if a.Unit = b.Unit then
             Some((a / b).Quantity)
         else None
 
-    override t.ToString() = 
+    override t.ToString() =
         match t.Quantity.ToFloat() with
         | Some f ->
             let q, r = smartroundEx 1 f
@@ -133,14 +134,15 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
         | _ ->
             sprintf "%s%s%s" ((Rational.simplifyNumbers 1 t.Quantity).ToFormattedString()) (space())
                 (if dispaltunit then altunit else t.Unit.ToFormattedString())
-                
+
 let setAlt alt (u : Units) =
     u.AltUnit <- alt
-    u
+    u 
 
-let (!) (str:string) = Units(str,str)
+let U = Units
 
 let unitless = Units(1Q, 1Q, "")
+let percent = 0.01
 let pico = Expression.fromFloat 1e-12
 let nano = Expression.fromFloat 1e-9
 let micro = Expression.fromFloat 1e-6
@@ -149,7 +151,7 @@ let centi = Expression.FromRational(1N / 100N)
 let kilo = 1000Q
 let mega = 1_000_000Q
 let giga = 1_000_000_000Q
-let tera = 10Q ** 12  
+let tera = 10Q ** 12
 let peta = 10Q ** 15
 let exa = 10Q ** 18
 let hundred = 100Q
@@ -158,7 +160,7 @@ let million = mega
 let billion = giga
 let trillion = tera
 let quadrillion = peta
-let quintillion = 1000 * quadrillion 
+let quintillion = 1000 * quadrillion
 let sextillion = 1000 * quintillion
 //----------Temperature----------
 let K = Units(1Q, symbol "K", "K")
@@ -177,13 +179,14 @@ let ft =  0.3048  * meter |> setAlt "ft"
 let mile = 1.609344 * km
 let yard = 3 * ft |> setAlt "yards"
 let inches = 1Q/12Q * ft |> setAlt "inches"
-let au =  150Q * mega * km |> setAlt "AU" 
- 
-let liter = 1000 * cm ** 3 |> setAlt "L"  
+let au =  150Q * mega * km |> setAlt "AU"
+let parsec =  206265 * au |> setAlt "parsec"
+
+let liter = 1000 * cm ** 3 |> setAlt "L"
 let cups = 236.588 * milli * liter |> setAlt "cups"
 let tsp = 0.0208333 * cups  |> setAlt "teaspoons"
 let tbsp = 0.0625 * cups  |> setAlt "tablespoons"
-let gallon = 16 * cups |> setAlt "gallons" 
+let gallon = 16 * cups |> setAlt "gallons"
 let ml = milli * liter |> setAlt "milli-liters"
 
 let density_water = 1 * gram / cm**3
@@ -199,7 +202,7 @@ let day = days |> setAlt "day"
 let month = 30.4167 * day |> setAlt "month"
 let months = month |> setAlt "months"
 let weeks = 7Q * days |> setAlt "weeks"
-let years = 52Q * weeks |> setAlt "years"
+let years = 365.24 * days |> setAlt "years"
 let year = years |> setAlt "year"
 //----------
 let N = kg * meter / sec ** 2 |> setAlt "N"
@@ -221,28 +224,28 @@ let amps = Units(1Q, Operators.symbol "Amps", "Amps")
 let amp = amps |> setAlt "amp"
 let C = amps * sec |> setAlt "coulombs"
 let volt = J / C |> setAlt "volt"
-let volts = volt |> setAlt "volts" 
+let volts = volt |> setAlt "volts"
 //----------
 let bits = Units(1Q, Operators.symbol "bits", "bits")
 let bytes = 8Q * bits |> setAlt "bytes"
 let gigabytes = giga * bytes |> setAlt "gigabytes"
 let bp = 2 * bits |> setAlt "base pairs"
 
-let flop = Units(1Q, Operators.symbol "flop", "flop") 
+let flop = Units(1Q, Operators.symbol "flop", "flop")
 let exafloatops = exa * flop |> setAlt "exa flops"
 let terafloatops = tera * flop |> setAlt "tera flops"
-    
+
 let flops = flop / sec |> setAlt "flop/s"
 let gigaflops = giga * flops |> setAlt "gigaflop/s"
-let teraflops = tera * flops |> setAlt "teraflop/s" 
+let teraflops = tera * flops |> setAlt "teraflop/s"
 
-let ops = Units(1Q, Operators.symbol "op", "op") 
+let ops = Units(1Q, Operators.symbol "op", "op")
 let exaops = exa * ops |> setAlt "exa-ops"
 let teraops = tera * ops |> setAlt "tera-ops"
-    
+
 let opspersec = flop / sec |> setAlt "ops/s"
 let gigaopspersec = giga * flops |> setAlt "gigaops/s"
-let teraopspersec = tera * flops |> setAlt "teraops/s" 
+let teraopspersec = tera * flops |> setAlt "teraops/s"
 //==============
 let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
 let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
@@ -253,8 +256,13 @@ let stefan_boltzman =
     Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
 let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
 //==============
-let integrateWith (integral:Expression->Expression) (dx:Units) (fx : Units) = 
-    Units(integral fx.Quantity, fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx 
+
+let lightyear = speed_of_light * year
+let lightsecond = speed_of_light * sec
+
+//=============
+let integrateWith (integral:Expression->Expression) (dx:Units) (fx : Units) =
+    Units(integral fx.Quantity, fx.Unit, fx.AltUnit + " " + dx.AltUnit) * dx
 
 let differentiate (dy : Units) (dx : Units) =
     Units
@@ -289,11 +297,11 @@ let units =
         tera * bytes, "information"
         flops, "flop/s"
         gigaflops, "flop/s"
-        teraflops, "flop/s"  
+        teraflops, "flop/s"
         peta * flops |> setAlt "petaflop/s", "flop/s"
         opspersec, "ops/s"
         gigaopspersec, "ops/s"
-        teraopspersec, "ops/s"  
+        teraopspersec, "ops/s"
         peta * opspersec |> setAlt "peta-ops/s", "ops/s"
         ml, "volume"
         liter, "volume"
@@ -320,7 +328,7 @@ let trylookupUnit e =
     | None ->
         match unitsName.tryFind (1 / e) with
         | None -> "" | Some s -> "Inverse" + space() + s
-    | Some s -> s 
+    | Some s -> s
 
 let mostSimilarUnit (unitExpr : Units) =
     [ for (u, s) in units do
@@ -332,21 +340,36 @@ let mostSimilarUnit (unitExpr : Units) =
                 Structure.size (unitAdj2) ]
     |> List.groupBy fst5
     |> List.map (snd >> List.minBy (fourth5 >> String.length))
-    |> List.sortBy fifth 
+    |> List.sortBy fifth
 
 let toUnitQuantity (b : Units) (a : Units) =
-    if a.Unit = b.Unit then   
+    if a.Unit = b.Unit then
         Some((a / b).Quantity)
-    else None 
-          
-let toUnitQuantityValue (a : Units) (b : Units) = 
-    toUnitQuantity a b |> Option.get 
+    else None
 
-let getUnitQuantity (u:Units) = u.Quantity   
+let toUnitQuantityValue (a : Units) (b : Units) =
+    toUnitQuantity a b |> Option.get
+
+let getUnitQuantity (u:Units) = u.Quantity
 
 let tounits =  toUnitQuantityValue
 
-let simplifyUnitDescAux numsimplify (u : Units) = 
+let toUnitsN units x =
+    let rec iterate x converted = function
+        | [] -> List.rev converted
+        | u::us ->
+            let M = tounits u x
+            let f = Expression.forceToFloat M
+
+            let majorQ = real (floorf f)
+            let minor = real (f - floorf f) * u
+
+            iterate minor ((majorQ, u.AltUnit)::converted) us
+    iterate x [] units
+
+let toUnits2 major minor x = toUnitsN [major;minor] x
+
+let simplifyUnitDescAux numsimplify (u : Units) =
     let trysimplify (u : Units) =
         let uop, adjustedunit, adjustingunit, shorterUnit, _ =
             mostSimilarUnit u |> List.head
@@ -360,7 +383,7 @@ let simplifyUnitDescAux numsimplify (u : Units) =
 
         let desc =
             if adjdesc = "" then ""
-            else space() + "(" + adjdesc + space() + uop + ")" 
+            else space() + "(" + adjdesc + space() + uop + ")"
         fmt (numsimplify fixedunit), shorterUnit, desc
 
     let matched =
@@ -370,7 +393,7 @@ let simplifyUnitDescAux numsimplify (u : Units) =
                len, s + space() + "(" + t + ")")
 
     match matched with
-    | [] -> 
+    | [] ->
         if Seq.forall unitsName.ContainsKey (Expression.findVariables u.Unit) then
             let basic = u.ToString()
             let chunit, units, desc = trysimplify u
@@ -395,7 +418,7 @@ let rec replace (defs : seq<Expression * Units>) e =
         | Sum l -> List.sumBy replaceLoop l
         | Product l ->
             l |> List.fold (fun p x -> p * (replaceLoop x)) (Units(1Q, 1Q))
-        | FunctionN(Min as mf, l)  
+        | FunctionN(Min as mf, l)
         | FunctionN(Max as mf, l) as f ->
             match List.map replaceLoop l with
             | l' when (l'
@@ -422,8 +445,8 @@ let tryreplace vars e =
 
 let map f (q:Units) =
     Units(f q.Quantity, q.Unit )
-        
-let toCelsius (u:Units) = 
+
+let toCelsius (u:Units) =
     if u.Unit = Vars.K then
         Some(u.Quantity - 273.15)
     else None
@@ -436,7 +459,7 @@ let fahrenheitToCelsius f =
 
 let fromCelsius (x:float) =
     (x + 273.15) * K
-          
-let MargolusLevitinLimit (e:Units) = 
-    if e.Unit <> J.Unit then failwith "Not an energy unit" 
-    else planck / (4 * e) 
+
+let MargolusLevitinLimit (e:Units) =
+    if e.Unit <> J.Unit then failwith "Not an energy unit"
+    else planck / (4 * e)

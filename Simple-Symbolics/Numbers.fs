@@ -235,10 +235,15 @@ module Expression =
         | Power(Number _, Number _)  
         | Power(Number _, Approximation _) 
         | Power(Approximation _, Number _)  
+        | Power(Approximation _, Approximation _)  
         | Power(Constant _, Number _)  
         | Power(Number _, Constant _)
+        | Power(Constant _, Approximation _)  
+        | Power(Approximation _, Constant _)
         | Power(Constant _, Constant _) 
-        | Product [ Number _; Constant _ ] ->
+        | Product [ Approximation _; Constant _ ]  
+        | Product [ Number _; Constant _ ]
+        | Product [ Constant _; Constant _ ] ->
             true
         | _ -> false 
 
@@ -248,10 +253,15 @@ module Expression =
         | Power(Number _, Number _)  
         | Power(Number _, RealApproximation _) 
         | Power(RealApproximation _, Number _)  
+        | Power(RealApproximation _, RealApproximation _)  
         | Power(RealConstant _, Number _)  
         | Power(Number _, RealConstant _)
         | Power(RealConstant _, RealConstant _) 
-        | Product [ Number _; RealConstant _ ] ->
+        | Power(RealConstant _, RealApproximation _) 
+        | Power(RealApproximation _, RealConstant _) 
+        | Product [ RealApproximation _; Constant _ ]  
+        | Product [ Number _; RealConstant _ ]
+        | Product [ Constant _; Constant _ ] ->
             true
         | _ -> false       
 
@@ -352,10 +362,15 @@ let (|IsNegativeNumber|_|) = function
       | e when Expression.isNegativeNumber e -> Some e
       | _ -> None 
 
+
+// match (a - b) with | Minus(a,b) -> Some(a,b) | _  -> None 
+// match (-a + b) with | Minus(a,b) -> Some(a,b) | _  -> None
+// match (-4 + b) with | Minus(a,b) -> Some(a,b) | _  -> None
+// match (b - 4) with | Minus(a,b) -> Some(a,b) | _  -> None
 let (|Minus|_|) = function
-      | Sum [Product [Number n; a]; b]
+      | Sum [Product [Number n; a]; b] when n = -1N -> Some (b,a)
       | Sum [a; Product [Number n; b]] when n = -1N -> Some (a,b)
-      | Sum [Number n; a] when n < 0N -> Some(Number n, a)
+      | Sum [Number n; a] when n < 0N -> Some(a, Number n)
       | _ -> None  
        
 let (|Divide|_|) e =
@@ -451,13 +466,14 @@ let primeFactorsPartialExpr =
     primefactorsPartial
     >> Option.map (fst
                    >> groupPowers (fun x -> Sum [ x ])
-                   >> Product) 
-
-
+                   >> Product)  
+ 
 let evalBigIntLog = function
     | Function(Ln, AsInteger x) -> real (BigInteger.Log x)
+    | Function(Log, AsInteger x) -> real (BigInteger.Log10 x)
+    | FunctionN(Log, [Number n; AsInteger x]) when n = 10N -> real (BigInteger.Log10 x)
     | x -> x
-  
+
 let tryNumber =
     function
     | Number n -> Some(float n)

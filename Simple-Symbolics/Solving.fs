@@ -301,7 +301,7 @@ let iterativeSolveFilter neq eval vars knowns =
 let iterativeSolve eval vars knowns =
     iterativeSolveFilter (fun _ _ -> true) eval vars knowns
 
-let dispSolvedUnitsA matches newline tx =
+let dispSolvedUnits matches newline tx =
     let lookup = dict matches
     tx
     |> List.map
@@ -314,7 +314,6 @@ let dispSolvedUnitsA matches newline tx =
             sprintf "$%s = %s$" (x.ToFormattedString()) asunit)
     |> List.sort
     |> String.concat newline
-
-let dispSolvedUnits newline tx = dispSolvedUnitsA newline tx
+     
  
 //========================

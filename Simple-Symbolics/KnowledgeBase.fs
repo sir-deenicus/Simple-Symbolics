@@ -1,4 +1,4 @@
-﻿module KnowledgeBase
+﻿module MathNet.Symbolic.KnowledgeBase
 
 open MathNet.Symbolics
 open MathNet.Symbolics.Core

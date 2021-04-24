@@ -1,4 +1,4 @@
-﻿namespace MathNet.Symbolics
+namespace MathNet.Symbolics
 
 open Core
 open Core.Vars
@@ -10,18 +10,19 @@ type Complex(r : Expression, i : Expression) =
     member __.Real = r
     member __.Imaginary = i
     member __.Conjugate = Complex(r, -i)
-    member __.Magnitude = sqrt (r ** 2 + i ** 2)
+    member __.Magnitude = Expression.Simplify (sqrt (r ** 2 + i ** 2))
     member __.ToComplex() = 
         match (r, i) with 
         | IsFloatingPoint x, IsFloatingPoint y ->
             Some(System.Numerics.Complex(x, y))
         | _ -> None
-    member __.Phase = Trigonometry.simplifyTrigTerm (Operators.arctan2 i r)
+    member __.Phase = Trigonometry.simplifyWithTable (Operators.arctan2 i r)
     static member Abs(c:Complex) = Complex c.Magnitude
     static member Zero = Complex(0Q, 0Q)
     static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
     static member magnitude (c:Complex) = c.Magnitude
 
+    static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * V"n_{integer}")
     static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
 
     static member Pow(c : Complex, n : Expression) = 
@@ -42,10 +43,12 @@ type Complex(r : Expression, i : Expression) =
             let angle = c.Phase
             r ** n * Complex(cos (n * angle)
                         |> Expression.simplify false 
-                        |> Trigonometric.simplify,
+                        |> Trigonometric.simplify
+                        |> Trigonometry.simplifyWithTable,
                         sin (n * angle)
                         |> Expression.simplify false 
-                        |> Trigonometric.simplify)
+                        |> Trigonometric.simplify
+                        |> Trigonometry.simplifyWithTable)
 
     static member (+) (a : Complex, b : Expression) =
         Complex(a.Real + b, a.Imaginary)
@@ -110,16 +113,18 @@ module Complex =
     let toExpression (c:Complex) =
         c.Real + (c.Imaginary * Constants.i)
 
-    //powers of i have a simple pattern with a cycle of 4.
+    //powers of i have a simple pattern with a cycle of 4.  
     let imaginaryPowerExpression n = 
-        let effectiveN = n % 4
-        match effectiveN with 
-        | 0 -> 1Q
-        | 1 -> Constants.i
-        | 2 -> -1Q
-        | 3 -> -Constants.i
-        | _ -> 1Q
-    
+        let effectiveN = (abs n) % 4
+        let i =
+            match effectiveN with
+            | 0 -> 1Q
+            | 1 -> Constants.i
+            | 2 -> -1Q
+            | 3 -> -Constants.i
+            | _ -> 1Q
+        if n < 0 then 1/i else i
+
     //Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.   
     let simplifyExpression x =
         x
@@ -135,9 +140,11 @@ module Complex =
                | x -> x)
         |> Expression.FullSimplify
         |> Algebraic.groupInSumWith Constants.i
+        |> Expression.Simplify
 
     let ofExpression zx =
         Structure.partition (Expression.containsExpression Constants.i) zx
         |> function
         | (Some b, a) -> Complex(a, b / Constants.i)
         | (_, a) -> Complex(a, 0Q)
+     

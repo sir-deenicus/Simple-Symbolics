@@ -1,4 +1,4 @@
-﻿module ProbabilityDistributions
+﻿module MathNet.Symbolics.ProbabilityDistributions
 
 open MathNet.Symbolics
 open MathNet.Symbolics.Core

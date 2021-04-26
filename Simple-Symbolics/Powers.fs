@@ -32,8 +32,9 @@ module Logarithm =
         | Function (Ln,Power (x,n)) when n = -1Q -> -ln x
         | FunctionN (Log,[b; Power (x,n)]) when n = -1Q ->
             log b 1Q - log b x
-        | Function (Ln, Fraction (a,b)) -> ln (biginteger a) - ln (biginteger b)
-        | FunctionN(Log, [b; Fraction (n,m)]) -> log b (biginteger n) - log b (biginteger m)
+        | Function (Ln, Fraction (a,b)) -> ln (ofBigInteger a) - ln (ofBigInteger b)
+        | FunctionN(Log, [b; Fraction (n,m)]) -> log b (ofBigInteger n) - log b (ofBigInteger m)
+        | Function(Ln, Products(fx,var,start, stop)) -> summation var start stop (ln fx)
         | Function(Ln, Product l) ->
             Sum(List.map (function
                     | Power(x, n) when n = -1Q -> -ln x
@@ -238,9 +239,9 @@ module Exponents =
 //carry around enforced equalities, eg b > 0
 module SquareRoot =
     let splitDivisionInRadical = function
-        | Power(Number x, Number n) when n = (1N/2N) && x.Denominator <> 0I -> sqrt (biginteger x.Numerator) / sqrt (biginteger x.Denominator)
+        | Power(Number x, Number n) when n = (1N/2N) && x.Denominator <> 0I -> sqrt (ofBigInteger x.Numerator) / sqrt (ofBigInteger x.Denominator)
         | Power(Divide(a,b), Number n) when n = (1N/2N) && b <> 0Q -> sqrt a / sqrt b
-        | Power(Number x, Number n) when n = (-1N/2N) && x.Denominator <> 0I -> sqrt (biginteger x.Denominator) / sqrt (biginteger x.Numerator) 
+        | Power(Number x, Number n) when n = (-1N/2N) && x.Denominator <> 0I -> sqrt (ofBigInteger x.Denominator) / sqrt (ofBigInteger x.Numerator) 
         | Power(Divide(a,b), Number n) when n = (-1N/2N) && b <> 0Q -> sqrt b/sqrt a
         | x -> x
     let bringPowerOutsideRadical = function

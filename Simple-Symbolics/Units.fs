@@ -70,9 +70,9 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
     static member (*) (a : int, b : Units) = Expression.FromInt32 a * b
 
     static member (*) (a : Units, b : float) =
-        Units(a.Quantity * real b, a.Unit, a.AltUnit)
+        Units(a.Quantity * ofFloat b, a.Unit, a.AltUnit)
 
-    static member (*) (a : float, b : Units) = real a * b
+    static member (*) (a : float, b : Units) = ofFloat a * b
 
     static member (*) (a : Expression, b : Units) =
         Units(a * b.Quantity, b.Unit,
@@ -361,8 +361,8 @@ let toUnitsN units x =
             let M = tounits u x
             let f = Expression.forceToFloat M
 
-            let majorQ = real (floorf f)
-            let minor = real (f - floorf f) * u
+            let majorQ = ofFloat (floorf f)
+            let minor = ofFloat (f - floorf f) * u
 
             iterate minor ((majorQ, u.AltUnit)::converted) us
     iterate x [] units

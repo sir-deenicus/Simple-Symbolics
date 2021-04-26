@@ -22,6 +22,11 @@ Probability of k Heads in n flips each with probability p
 From wiki:binomal with distr with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments, each asking a yes–no question, and each with its own Boolean-valued outcome: success/yes/true/one (with probability p)
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Utils.|Products|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx,var,start, stop)
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.defineStr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,System.String)">
 <summary>
 Define with left, right and description
@@ -42,9 +47,46 @@ Create a function with symbol and default name &quot;f&quot;: fx y = `f(y)`
 Create a function with name and symbol: func &quot;g&quot; y = `g(y)`
 </summary>
 </member>
+<member name="T:MathNet.Symbolics.Utils">
+ <summary>
+   A module
+ </summary>
+
+ <namespacedoc>
+   <summary>A namespace to remember</summary>
+
+   <remarks>More on that</remarks>
+ </namespacedoc>
+</member>
 <member name="M:MathNet.Symbolics.NumberProperties.BigRational.fromFloat(System.Double)">
 <summary>
 limited by range of decimal (which is used as a less noisy alternative to floats)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.applyfn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Given a function expression, creates a function and then applies parameter. Best for single use.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.makefuncOfExpr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Returns a function given a formula
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.makefunc(MathNet.Symbolics.Expression)">
+<summary>
+Given a function expression with a body, returns an F# function. See also
+makeFuncMV &lt;see cref=&quot;M:MathNet.Symbolics.Core.makefuncMV&quot;/&gt;
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.evalToDecimalFn(Microsoft.FSharp.Core.FSharpFunc{System.Double,System.Double},MathNet.Symbolics.Expression)">
+<summary>
+If the expression is a number converts to a float expression with f applied
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.evalToDecimal(MathNet.Symbolics.Expression)">
+<summary>
+If the expression is a number converts to a float expression instead of its symbolic form
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrNamedVars.Static(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
@@ -52,9 +94,24 @@ limited by range of decimal (which is used as a less noisy alternative to floats
 eval with numbers or vars with the phrase &quot;Var&quot; in the symbol name are acceptable
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrVars.Static(System.Boolean,System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrVars.Static(Microsoft.FSharp.Core.FSharpFunc{System.String,System.Boolean},System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
 <summary>
 eval with numbers or vars (optionally) are acceptable
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Rational.partitionSumInNumerator(Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,System.Boolean},MathNet.Symbolics.Expression)">
+<summary>
+given a rational with a sum in the numerator, partitions into numerators for which f is true vs false. Eg (a+b+c)/x, returns (a+b)/x+c/x if f = ((=) c) as it splits for c only.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Rational.splitSumInNumerator(MathNet.Symbolics.Expression)">
+<summary>
+given (a+b)/x, returns a/x + b/x
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Rational.applyToNumerator(Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+<summary>
+Apply a function to the numerator of any rational whose denominator &lt;&gt; 1
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Core.Expression.extractNegativeOne(MathNet.Symbolics.Expression)">
@@ -66,6 +123,11 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
 <member name="M:MathNet.Symbolics.Core.Expression.cancelAbs(MathNet.Symbolics.Expression)">
 <summary>
  condition: x &gt; 0
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.mapfirstNF(System.Int32,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,System.Boolean},Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+<summary>
+Map the first N while also applying a filter
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">

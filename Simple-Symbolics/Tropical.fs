@@ -25,9 +25,9 @@ type Tropical (e:Expression) =
     static member (+) (l : Tropical, r : Tropical) = 
         Tropical(Ops.min (l.Value, r.Value))
     static member (+) (l : Tropical, r : float) =
-        Tropical(Ops.min(l.Value, (real r)))
+        Tropical(Ops.min(l.Value, (ofFloat r)))
     static member (+) (l : float, r : Tropical) =
-        Tropical(Ops.min((real l), r.Value))
+        Tropical(Ops.min((ofFloat l), r.Value))
     static member (+) (l : Expression, r : Tropical) =
         Tropical(Ops.min(l, r.Value))
     static member (+) (l : Tropical, r : Expression) =
@@ -40,7 +40,7 @@ type Tropical (e:Expression) =
     static member (*) (l : Tropical, r : Tropical) =
         Tropical(l.Value + r.Value)
     static member (*) (l : Tropicalf, r : float) =
-        Tropical(l.Value + real r)
+        Tropical(l.Value + ofFloat r)
     static member (*) (l : float, r : Tropical) =
         Tropical(l + r.Value)
     static member (*) (l : Expression, r : Tropical) =
@@ -58,6 +58,4 @@ type Tropical (e:Expression) =
     static member Pow(t:Tropical, n:int) =
         List.replicate n t.Value |> List.sum |> Tropical  
     new(e:int) = Tropical(Expression.FromInt32 e)
-
-module Tropical =
-    let tr (e:Expression) = Tropical e
+     

@@ -418,7 +418,7 @@ let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ]
 
 let rec factorialSymbolic (e : Expression) =
     match e with 
-    | AsInteger m -> biginteger(factorial m)
+    | AsInteger m -> ofBigInteger(factorial m)
     | _ -> failwith "Must be an integer"
 
 let inline primefactors factor x =
@@ -469,9 +469,9 @@ let primeFactorsPartialExpr =
                    >> Product)  
  
 let evalBigIntLog = function
-    | Function(Ln, AsInteger x) -> real (BigInteger.Log x)
-    | Function(Log, AsInteger x) -> real (BigInteger.Log10 x)
-    | FunctionN(Log, [Number n; AsInteger x]) when n = 10N -> real (BigInteger.Log10 x)
+    | Function(Ln, AsInteger x) -> ofFloat (BigInteger.Log x)
+    | Function(Log, AsInteger x) -> ofFloat (BigInteger.Log10 x)
+    | FunctionN(Log, [Number n; AsInteger x]) when n = 10N -> ofFloat (BigInteger.Log10 x)
     | x -> x
 
 let tryNumber =

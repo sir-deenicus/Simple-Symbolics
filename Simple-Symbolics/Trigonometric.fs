@@ -105,7 +105,7 @@ module TrigTables =
                      
 
 let rec evalAtan y x =
-    let xn, yn = rational x, rational y
+    let xn, yn = ofRational x, ofRational y
     if x > 0N then arctan (yn / xn)
     elif x < 0N && y >= 0N then Trigonometric.simplify (simplifyWithTable(arctan (yn / xn)) + Pi)
     elif x < 0N && y < 0N then Trigonometric.simplify (simplifyWithTable (arctan (yn / xn)) - Pi)

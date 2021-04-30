@@ -261,3 +261,4 @@ __pycache__/
 *.pyc
 /.ionide/symbolCache.db
 /Simple-Symbolics/Prelude.XML
+/Simple-Symbolics/docs

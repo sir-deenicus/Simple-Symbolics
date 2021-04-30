@@ -74,3 +74,11 @@ Complex(1/4Q,3Q) * Vector ([Complex 1Q; Complex (2Q, 1Q)])
 
 
 Matrix.inverse (Matrix mu) * (Matrix mu)
+
+let rpm2 = Matrix [[1Q;0Q;-1Q];[1Q;0Q;0Q];[1Q;-1Q;0Q];[0Q;-1Q;1Q];[-1Q;0Q;1Q]]
+rpm2.[*, 1] = Vector [0Q;0Q;-1Q;-1Q;0Q]
+
+rpm2.[0, *] = Vector [1Q;0Q;-1Q]
+
+
+rpm2.[1..3,1..2].AsList = [[0Q;0Q];[-1Q;0Q];[-1Q;1Q]]

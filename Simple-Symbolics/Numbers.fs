@@ -416,11 +416,6 @@ let rec gcd c d =
 
 let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ] 
 
-let rec factorialSymbolic (e : Expression) =
-    match e with 
-    | AsInteger m -> ofBigInteger(factorial m)
-    | _ -> failwith "Must be an integer"
-
 let inline primefactors factor x =
     let rec loop x =
         match factor x with
@@ -486,7 +481,7 @@ let tryNumber =
 let interval a b = IntervalF(a,b) 
 
 module Combinatorics =
-    let permutations n k = List.reduce (*) [ (n - k + 1I)..n ] 
+    let permutations n k = List.fold (*) 1I [ (n - k + 1I)..n ] 
 
     let chooseN n k =   
         permutations n k / (factorial k)
@@ -512,4 +507,4 @@ module Combinatorics =
 
     let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
 
-    let evalFactorial = function Function(Fac,x) -> factorialSymbolic x | x -> x
+    let evalFactorial = function Function(Fac,AsInteger m) -> ofBigInteger(factorial m) | x -> x

@@ -286,10 +286,6 @@ let sub x subscript = FunctionN(Indexed, [x; subscript])
 
 let subs x subscripts = FunctionN(Indexed, x::subscripts)
 
-let (@.) a b = sub a b
-
-let (@@) a bs = subs a bs
-
 let (^^) a b = super a b
 
 let define a b = Definition(a,b, "")
@@ -386,6 +382,7 @@ let (|IsLimit|_|) = function
     | FunctionN(Limit, [var;lim;x])  -> Some(var,lim,x)
     | _ -> None
 
+///(fx,var,start, stop)
 let (|Summation|_|) input =
      match input with
      | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)

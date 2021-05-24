@@ -8,22 +8,24 @@ open MathNet.Numerics
 open MathNet
 open System
 
-let pow10ToString = function 
+let pow10ToString = function
     | 21 -> " sextillion"
     | 18 -> " quintillion"
     | 15 -> " quadrillion"
     | 12 -> " trillion"
     | 9 -> " billion"
-    | 6 -> " million" 
-    | 3 -> " thousand" 
+    | 6 -> " million"
+    | 3 -> " thousand"
     | x when x < 3 -> ""
     | x -> string x
 
-let numberToEnglish n (x:float) = 
-    let p = floor(log10f x)
-    let r = bucketRange 0 3. (floor p)
-    sprintf "%g%s" (round n (x / 10. ** r)) (pow10ToString (int r))
-  
+let numberToEnglish n (x:float) =
+    if x = 0. then "zero"
+    else
+        let p = floor(log10f (abs x))
+        let r = bucketRange 0 3. (floor p) 
+        sprintf "%g%s" (round n (x / 10. ** r)) (pow10ToString (int r))
+
 let (|RealConstant|_|) =
     function
     | Constant Constant.I -> None
@@ -31,14 +33,14 @@ let (|RealConstant|_|) =
     | _ -> None
 
 let (|RealApproximation|_|) =
-    function 
+    function
     | Approximation (Approximation.Real r) -> Some r
     | _ -> None
 
 let (|AsInteger|_|) = function
     | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
-    
+
 type IntervalF(lower:float,upper:float) =
     member __.LowerBound = lower
     member __.UpperBound = upper
@@ -61,8 +63,8 @@ type IntervalF(lower:float,upper:float) =
     static member (/)  (l : IntervalF, r : IntervalF) =
         l * IntervalF (1./r.LowerBound, 1./r.UpperBound)
 
-    static member Abs(x:IntervalF) = 
-        let abslb, absub = abs x.LowerBound, abs x.UpperBound 
+    static member Abs(x:IntervalF) =
+        let abslb, absub = abs x.LowerBound, abs x.UpperBound
         if x.LowerBound = 0. || x.UpperBound = 0. then IntervalF(0., max abslb absub)
         else IntervalF(min abslb absub, max abslb absub)
 
@@ -75,8 +77,8 @@ module BigRational =
     open Microsoft.FSharp.Core.Operators
     open System
 
-    let approximatelyInt x = 
-        let ratio = (floor x) / x 
+    let approximatelyInt x =
+        let ratio = (floor x) / x
         ratio > 0.999999 && ratio < 1.000001
 
     let fromFloatDouble (df : float) =
@@ -94,7 +96,7 @@ module BigRational =
                 (Numerics.BigInteger(df * double pow10), pow10)
 
     ///limited by range of decimal (which is used as a less noisy alternative to floats)
-    let fromFloat (f : float) = 
+    let fromFloat (f : float) =
         let df = decimal f
         if df = floor df then BigRational.FromBigInt(Numerics.BigInteger df)
         else
@@ -112,8 +114,8 @@ module BigRational =
                 (int (df * pow10), int (floor (pow10 - df)))
         else
             BigRational.FromIntFraction
-                (int (df * pow10 - floor df), int (pow10 - 1M))  
-    
+                (int (df * pow10 - floor df), int (pow10 - 1M))
+
     let floor (q : BigRational) = q.Numerator / q.Denominator
 
     let ceil (q : BigRational) =
@@ -133,9 +135,9 @@ module BigRational =
         if q.Numerator < q.Denominator then
             failwith "magnitude must be > 1"
         else
-            let n = q.Numerator / q.Denominator 
+            let n = q.Numerator / q.Denominator
             let r =  BigInteger.Remainder(q.Numerator, q.Denominator)
-    
+
             let rec remloop p =
                 seq {
                     let d = p / q.Denominator
@@ -143,41 +145,41 @@ module BigRational =
                     yield d
                     if p - m = 0I then () else yield! (remloop ((p - m) * 10I))
                 }
-    
+
             seq {
                 yield n
                 yield! (remloop (r * 10I))
             }
-            
-    (*13/6 = 
+
+    (*13/6 =
              2.1 (d)
-       6 | 13 
+       6 | 13
            12
             10 (input)
              6  (m)
              40  *)
     let decimalParts take (q:BigRational) =
-        if q.Numerator < q.Denominator then  
+        if q.Numerator < q.Denominator then
             //10 ** ceil (log10 q.Denominator)
             failwith "magnitude must be > 1"
-        else 
+        else
             let n = q.Numerator/ q.Denominator
-            let r = BigInteger.Remainder(q.Numerator, q.Denominator) 
+            let r = BigInteger.Remainder(q.Numerator, q.Denominator)
             let rec remloop l steps p =
                 if steps >= take then List.rev l, false
-                else 
+                else
                     let d = p / q.Denominator
-                    let m = d * q.Denominator  
+                    let m = d * q.Denominator
                     if p-m = 0I then List.rev (d::l), true
                     else remloop (d::l) (steps + 1) ((p-m)*10I)
-            n, remloop [] 0 (r*10I) 
-    
+            n, remloop [] 0 (r*10I)
+
 
 type Expression with
     member t.ToFormattedString() = expressionFormater t
     member t.ToFloat() = try Some (Evaluate.evaluate (Map.empty) t).RealValue with _ -> None
-    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue 
-    member t.ToBigInt() = 
+    member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
+    member t.ToBigInt() =
         match t with
         | AsInteger n -> n
         | _ -> failwith "not an integer"
@@ -191,8 +193,8 @@ type Expression with
         match t with
         | Number n -> Some n
         | _ -> None
-         
-module Expression = 
+
+module Expression =
     open MathNet.Symbolics
     open System
 
@@ -222,76 +224,76 @@ module Expression =
                 (pow10.ToFormattedString())
         | _ ->
             if r > 6 then string x
-            else x.ToString("N" + string r) 
+            else x.ToString("N" + string r)
 
     let isRationalNumber =
         function
         | Number _ -> true
         | _ -> false
-         
+
     let isNumber =
         function
         | Number _ | Constant _ | Approximation _
-        | Power(Number _, Number _)  
-        | Power(Number _, Approximation _) 
-        | Power(Approximation _, Number _)  
-        | Power(Approximation _, Approximation _)  
-        | Power(Constant _, Number _)  
+        | Power(Number _, Number _)
+        | Power(Number _, Approximation _)
+        | Power(Approximation _, Number _)
+        | Power(Approximation _, Approximation _)
+        | Power(Constant _, Number _)
         | Power(Number _, Constant _)
-        | Power(Constant _, Approximation _)  
+        | Power(Constant _, Approximation _)
         | Power(Approximation _, Constant _)
-        | Power(Constant _, Constant _) 
-        | Product [ Approximation _; Constant _ ]  
+        | Power(Constant _, Constant _)
+        | Product [ Approximation _; Constant _ ]
         | Product [ Number _; Constant _ ]
         | Product [ Constant _; Constant _ ] ->
             true
-        | _ -> false 
+        | _ -> false
 
     let isRealNumber =
         function
         | Number _ | RealConstant _ | RealApproximation _
-        | Power(Number _, Number _)  
-        | Power(Number _, RealApproximation _) 
-        | Power(RealApproximation _, Number _)  
-        | Power(RealApproximation _, RealApproximation _)  
-        | Power(RealConstant _, Number _)  
+        | Power(Number _, Number _)
+        | Power(Number _, RealApproximation _)
+        | Power(RealApproximation _, Number _)
+        | Power(RealApproximation _, RealApproximation _)
+        | Power(RealConstant _, Number _)
         | Power(Number _, RealConstant _)
-        | Power(RealConstant _, RealConstant _) 
-        | Power(RealConstant _, RealApproximation _) 
-        | Power(RealApproximation _, RealConstant _) 
-        | Product [ RealApproximation _; Constant _ ]  
+        | Power(RealConstant _, RealConstant _)
+        | Power(RealConstant _, RealApproximation _)
+        | Power(RealApproximation _, RealConstant _)
+        | Product [ RealApproximation _; Constant _ ]
         | Product [ Number _; RealConstant _ ]
         | Product [ Constant _; Constant _ ] ->
             true
-        | _ -> false       
+        | _ -> false
 
     let isInteger =
         function
         | Number n when n.IsInteger -> true
-        | _ -> false 
+        | _ -> false
 
     let isNegativeOrZeroNumber n =
         if isNumber n then
-            match n.ToFloat() with 
-            | Some x -> x <= 0. 
+            match n.ToFloat() with
+            | Some x -> x <= 0.
             | None -> false
         else false
 
     let isNegativeNumber n =
         if isNumber n then
-            match n.ToFloat() with 
-            | Some x -> x < 0. 
-            | None -> false 
+            match n.ToFloat() with
+            | Some x -> x < 0.
+            | None -> false
         else false
 
     let hasNegative = function
         | Product (Number n::_) -> n < 0N
-        | x -> isNegativeNumber x 
+        | x -> isNegativeNumber x
 
     let isPositiveNumber n =
-        if isNumber n then 
-            match n.ToFloat() with 
-            | Some x -> x >= 0. 
+        if isNumber n then
+            match n.ToFloat() with
+            | Some x -> x >= 0.
             | None -> false
         else false
 
@@ -300,9 +302,9 @@ module Expression =
         | Power(_,Number n) when (int n)%2 = 0 -> true
         | Sum l
         | Product l -> List.forall isPositiveExpression l
-        | x -> isPositiveNumber x 
+        | x -> isPositiveNumber x
 
-module Structure = 
+module Structure =
     let productToConstantsAndVarsAux test =
         function
         | Number _ as n when test n -> Some(n, [])
@@ -315,7 +317,7 @@ module Structure =
 
     let productToIntConstantsAndVars =
         productToConstantsAndVarsAux Expression.isInteger
-          
+
 ///////////////////////////////////////////////
 
 let (|ProductHasNumber|_|) =
@@ -324,11 +326,11 @@ let (|ProductHasNumber|_|) =
         match l |> List.filter (Expression.isRationalNumber) with
         | [ Number n ] -> Some(Expression.FromRational n)
         | _ -> None
-    | _ -> None 
+    | _ -> None
 
-let (|Fraction|_|) = function 
+let (|Fraction|_|) = function
     | Number n when n.Denominator <> 1I -> Some((n.Numerator, n.Denominator))
-    | _ -> None 
+    | _ -> None
 
 let (|RationalLiteral|_|) r = function
     | Number n as q when n = BigRational.FromIntFraction r -> Some q
@@ -340,7 +342,7 @@ let (|IntegerLiteral|_|) m = function
 
 let (|IntegerNumber|_|) = function
     | Number n as q when n.IsInteger -> Some q
-    | _ -> None 
+    | _ -> None
 
 let (|IsNumber|_|) = function
       | e when Expression.isNumber e -> Some e
@@ -349,21 +351,21 @@ let (|IsNumber|_|) = function
 let (|IsRealNumber|_|) = function
       | e when Expression.isRealNumber e -> Some e
       | _ -> None
-       
+
 let (|IsFloatingPoint|_|) = function
     | IsRealNumber n -> n.ToFloat()
     | _ -> None
-     
+
 let (|SquareRoot|_|) = function
       | Power(e, n) when n = 1Q/2Q -> Some e
       | _ -> None
-   
+
 let (|IsNegativeNumber|_|) = function
       | e when Expression.isNegativeNumber e -> Some e
-      | _ -> None 
+      | _ -> None
 
 
-// match (a - b) with | Minus(a,b) -> Some(a,b) | _  -> None 
+// match (a - b) with | Minus(a,b) -> Some(a,b) | _  -> None
 // match (-a + b) with | Minus(a,b) -> Some(a,b) | _  -> None
 // match (-4 + b) with | Minus(a,b) -> Some(a,b) | _  -> None
 // match (b - 4) with | Minus(a,b) -> Some(a,b) | _  -> None
@@ -371,50 +373,50 @@ let (|Minus|_|) = function
       | Sum [Product [Number n; a]; b] when n = -1N -> Some (b,a)
       | Sum [a; Product [Number n; b]] when n = -1N -> Some (a,b)
       | Sum [Number n; a] when n < 0N -> Some(a, Number n)
-      | _ -> None  
-       
+      | _ -> None
+
 let (|Divide|_|) e =
-    let den = Rational.denominator e 
-    if den = 1Q then None 
+    let den = Rational.denominator e
+    if den = 1Q then None
     else Some(Rational.numerator e, den)
 
 let (|NegativeOne|NotNegativeOne|) = function
     | Number n when n = -1N -> NegativeOne
     | RealApproximation f when f = -1. -> NegativeOne
-    | _ -> NotNegativeOne      
+    | _ -> NotNegativeOne
 
 let (|Zero|NotZero|) = function
     | Number n when n = 0N -> Zero
     | RealApproximation f when f = 0. -> Zero
-    | _ -> NotZero     
+    | _ -> NotZero
 
 let (|One|NotOne|) = function
     | Number n when n = 1N -> One
     | RealApproximation f when f = 1. -> One
-    | _ -> NotOne      
-    
+    | _ -> NotOne
+
 let (|Two|NotTwo|) = function
     | Number n when n = 2N -> Two
     | RealApproximation f when f = 2. -> Two
-    | _ -> NotTwo 
+    | _ -> NotTwo
 
 let (|OneHalf|NotOneHalf|) = function
     | Number n when n = 1N/2N -> OneHalf
     | RealApproximation f when f = 0.5 -> OneHalf
     | _ -> NotOneHalf
-            
+
 let xIsMultipleOfy y x = x % y = 0
 
 let inline rem n d =
     let rec loop n = if n >= d then loop (n-d) else n
-    loop n   
+    loop n
 
-let rec gcd c d = 
+let rec gcd c d =
     match (abs c,abs d) with
     | (a, n) when n = 0N -> a
-    | (a,b) -> gcd b (rem a b) 
+    | (a,b) -> gcd b (rem a b)
 
-let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ] 
+let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ]
 
 let inline primefactors factor x =
     let rec loop x =
@@ -461,8 +463,8 @@ let primeFactorsPartialExpr =
     primefactorsPartial
     >> Option.map (fst
                    >> groupPowers (fun x -> Sum [ x ])
-                   >> Product)  
- 
+                   >> Product)
+
 let evalBigIntLog = function
     | Function(Ln, AsInteger x) -> ofFloat (BigInteger.Log x)
     | Function(Log, AsInteger x) -> ofFloat (BigInteger.Log10 x)
@@ -475,15 +477,15 @@ let tryNumber =
     | IsRealNumber n -> Some(n.ToFloat().Value)
     | PositiveInfinity -> Some(Double.PositiveInfinity)
     | NegativeInfinity -> Some(Double.NegativeInfinity)
-    | x -> Expression.toFloat x 
+    | x -> Expression.toFloat x
     | _ -> None
 
-let interval a b = IntervalF(a,b) 
+let interval a b = IntervalF(a,b)
 
 module Combinatorics =
-    let permutations n k = List.fold (*) 1I [ (n - k + 1I)..n ] 
+    let permutations n k = List.fold (*) 1I [ (n - k + 1I)..n ]
 
-    let chooseN n k =   
+    let chooseN n k =
         permutations n k / (factorial k)
         |> Expression.FromInteger
 
@@ -493,7 +495,7 @@ module Combinatorics =
 
     let expandChooseBinomialAsGammaLn = function
         | Binomial(n,k) -> facln n /(facln k * facln(n - k))
-        | x -> x 
+        | x -> x
 
     let stirlingsApproximation = function
         | Function(Fac, x) ->

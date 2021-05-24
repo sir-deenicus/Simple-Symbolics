@@ -2,26 +2,6 @@
 <doc>
 <assembly><name>Simple-Symbolics</name></assembly>
 <members>
-<member name="M:Equations.EquationModule.multiplyDenominatorsAndSubtract(Equations.Equation)">
-<summary>
-convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -&gt; a * d = b * c -&gt; a * d - b * c = 0
-</summary>
-</member>
-<member name="T:ProbabilityDistributions.Exponential">
-<summary>
- the exponential distribution is the probability distribution of the time between events in a Poisson point process,
-</summary>
-</member>
-<member name="M:ProbabilityDistributions.Binomial.Prob(MathNet.Symbolics.Expression)">
-<summary>
-Probability of k Heads in n flips each with probability p
-</summary>
-</member>
-<member name="T:ProbabilityDistributions.Binomial">
-<summary>
-From wiki:binomal with distr with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments, each asking a yes–no question, and each with its own Boolean-valued outcome: success/yes/true/one (with probability p)
-</summary>
-</member>
 <member name="M:MathNet.Symbolics.Utils.|Products|_|(MathNet.Symbolics.Expression)">
 <summary>
 (fx,var,start, stop)
@@ -32,30 +12,45 @@ From wiki:binomal with distr with parameters n and p is the discrete probability
 Define with left, right and description
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.pdiff(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
-Create a function with symbol, body and default name &quot;f&quot;: fn x x^2 = `x |-&gt; x^2`
+use partial differentiation Leibniz notation
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.diff(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+wrap input expression in Leibniz notation for differentiation.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fxn(System.String,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Create a function with parameter, body and name : fxn &quot;g&quot; x x^2 = `x |-&gt; x^2`
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fx2(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+Create a function with parameter, body and default name &quot;f&quot;: fx2 x x^2 = `x |-&gt; x^2`
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fx(MathNet.Symbolics.Expression)">
 <summary>
-Create a function with symbol and default name &quot;f&quot;: fx y = `f(y)`
+Create a function symbol with default name &quot;f&quot;: fx y = `f(y)`
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.func(System.String,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fn(System.String,MathNet.Symbolics.Expression)">
 <summary>
-Create a function with name and symbol: func &quot;g&quot; y = `g(y)`
+Create a function symbol with name and parameter symbol `x`: fn &quot;g&quot; y = `g(y)`
 </summary>
 </member>
 <member name="T:MathNet.Symbolics.Utils">
  <summary>
-   A module
+  Core Util functions.
  </summary>
 
  <namespacedoc>
-   <summary>A namespace to remember</summary>
+   <summary>Extension to MathNet.Symbolics which allows for flexible descriptions of and computations on symbolic math expressions.</summary>
 
-   <remarks>More on that</remarks>
+   <remarks>Simple Symbolics is a library built atop MathNet Symbolics. It is not meant to be a replacement for computer algebra systems. Such systems are largely automatic and quite heavyweight. This project intends to diverge a bit from typical CAS to look at what happens when you simply automate tedium and slightly augment a human? The manipulations are meant as much as possible to mirror what a human would do. The code can thus serve as a description of how humans typically approach these problems. Otherwise, it also provide tools that can be combined to do so. An example is indefinite integration. CAS systems can in instances give very unintuitive answers or otherwise fail to complete where a human could. Another difference is the intention to combine with basic logic programming and serve as a note taking tool when reading mathematical papers. This system will then augment the working memory for the reader but also (end goal) allow manipulation of some of the claims.</remarks>
  </namespacedoc>
 </member>
 <member name="M:MathNet.Symbolics.NumberProperties.BigRational.fromFloat(System.Double)">
@@ -63,20 +58,25 @@ Create a function with name and symbol: func &quot;g&quot; y = `g(y)`
 limited by range of decimal (which is used as a less noisy alternative to floats)
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Equations.EquationModule.multiplyDenominatorsAndSubtract(MathNet.Symbolics.Equations.Equation)">
+<summary>
+convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -&gt; a * d = b * c -&gt; a * d - b * c = 0
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Core.applyfn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Given a function expression, creates a function and then applies parameter. Best for single use.
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.makefuncOfExpr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.funcOfExpr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
-Returns a function given a formula
+Returns an F# function given a formula expression
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.makefunc(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.toFunc(MathNet.Symbolics.Expression)">
 <summary>
 Given a function expression with a body, returns an F# function. See also
-makeFuncMV &lt;see cref=&quot;M:MathNet.Symbolics.Core.makefuncMV&quot;/&gt;
+toFuncMV &lt;see cref=&quot;M:MathNet.Symbolics.Core.toFuncMV&quot;/&gt;
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Core.evalToDecimalFn(Microsoft.FSharp.Core.FSharpFunc{System.Double,System.Double},MathNet.Symbolics.Expression)">
@@ -170,6 +170,26 @@ merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x
 Adjusts summation to have a start, stop or var if it does not already
 </summary>
 </member>
+<member name="P:MathNet.Symbolics.Differentiation.Dx">
+<summary>
+short-hand for evalDerivativeExprs which recursively evaluates all derivative notation expressions in expression.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Differentiation.D(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+calculates (partial) derivative of given expression, compare with diff which wraps an expression in leibniz differentiation notation
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Differentiation.evalDerivativeExprs">
+<summary>
+Recursively evaluates all derivative notation expressions in expression. see also Dx shorthand.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Differentiation.evalDerivative(MathNet.Symbolics.Expression)">
+<summary>
+Given an input expression that&apos;s a Leibniz notation expression of the derivative of a function, calculates its derivative.
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Solving.Polynomial.factor(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 The rational roots method to factor polynomials with rational roots with degree &gt; 2
@@ -178,6 +198,21 @@ The rational roots method to factor polynomials with rational roots with degree 
 <member name="M:MathNet.Symbolics.Solving.Polynomial.toIntegerCoefficients(MathNet.Symbolics.Expression)">
 <summary>
 Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
+</summary>
+</member>
+<member name="T:MathNet.Symbolics.ProbabilityDistributions.Exponential">
+<summary>
+ the exponential distribution is the probability distribution of the time between events in a Poisson point process,
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.ProbabilityDistributions.Binomial.Prob(MathNet.Symbolics.Expression)">
+<summary>
+Probability of k Heads in n flips each with probability p
+</summary>
+</member>
+<member name="T:MathNet.Symbolics.ProbabilityDistributions.Binomial">
+<summary>
+From wiki:binomal with distr with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments, each asking a yes–no question, and each with its own Boolean-valued outcome: success/yes/true/one (with probability p)
 </summary>
 </member>
 </members>

@@ -20,6 +20,7 @@
     <None Include="simpleintegrator.txt" />
     <Compile Include="AssemblyInfo.fs" />
     <None Include="Changes.txt" />
+    <None Include="Lab\logic-reckoner.fsx" />
     <None Include="Lab\Obsolete\solving.fsx" />
     <None Include="Lab\Obsolete\integration.fsx" />
     <None Include="Lab\propagatingOnIntervals.fsx" />
@@ -52,6 +53,7 @@
     <Compile Include="Requirements.fs" />
     <Compile Include="ProbabilityDistributions.fs" />
     <Compile Include="Agents.fs" />
+    <Compile Include="Logic.fs" />
     <Compile Include="KnowledgeBase.fs" />
   </ItemGroup>
 
@@ -60,8 +62,9 @@
     <PackageReference Include="FSharp.Data" Version="3.3.2" />
     <PackageReference Include="Hansei" Version="0.3.2.3" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.15.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.30.0" />
-    <PackageReference Include="Prelude" Version="1.7.0" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.33.0" />
+    <PackageReference Include="PeterO.Numbers" Version="1.8.2" />
+    <PackageReference Include="Prelude" Version="1.7.3" />
   </ItemGroup>
 
   <ItemGroup>

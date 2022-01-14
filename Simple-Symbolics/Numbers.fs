@@ -7,6 +7,7 @@ open Prelude.Common
 open MathNet.Numerics
 open MathNet
 open System
+open PeterO.Numbers
 
 let pow10ToString = function
     | 21 -> " sextillion"
@@ -41,27 +42,57 @@ let (|AsInteger|_|) = function
     | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
  
-module BigRational =
-    open Microsoft.FSharp.Core.Operators
-    open System
+type Numerics.BigInteger with
+    static member FromString(str : string) =
+        let nsign =
+            if str.Length > 0 && str.[0] = '-' then -1I
+            else 1I
 
+        let charnums =
+            let dl = Seq.toList str
+            if nsign = -1I then dl.[1..]
+            else dl
+
+        let p = charnums.Length - 1
+
+        let i, _ =
+            charnums
+            |> Seq.fold (fun (n, p) d ->
+                n + bigint (int (string d)) * 10I ** p, p - 1) (0I, p) 
+
+        nsign * i
+
+type ERational with 
+    static member FromBigRational(q:BigRational) =
+        let n = EInteger.FromString(string q.Numerator)
+        let d = EInteger.FromString (string q.Denominator)
+
+        ERational.Create(n,d)
+
+    static member ToBigRational(q:ERational) =
+        let n = BigInteger.FromString(string q.Numerator)
+        let d = BigInteger.FromString (string q.Denominator) 
+        BigRational.FromBigIntFraction(n,d) 
+       
+
+module BigRational =
     let approximatelyInt x =
         if abs(floor x - x) < 0.000001 then true
         else 
             let ratio = (floor x) / x
             ratio > 0.999999 && ratio < 1.000001 
-
-    let fromFloatRepeating (f : float) =
-        let df = decimal f
+    
+    ///limited by range of decimal (which is used as a less noisy alternative to floats)
+    let fromRepeatingDecimal (df : Decimal) = 
         let len = float ((string (df - floor df)).Length - 2)
         let pow10 = decimal (10. ** len)
-        if abs f < 1. then
+        if abs df < 1M then
             BigRational.FromIntFraction
                 (int (df * pow10), int (floor (pow10 - df)))
         else
             BigRational.FromIntFraction
                 (int (df * pow10 - floor df), int (pow10 - 1M))
-
+                  
     let floor (q : BigRational) = q.Numerator / q.Denominator
 
     let ceil (q : BigRational) =
@@ -75,27 +106,40 @@ module BigRational =
 
     let log (q : BigRational) =
         BigInteger.Log(q.Numerator) - BigInteger.Log(q.Denominator)
-        |> decimal |> BigRational.FromDecimal
-
-    let decimalExpansion (q: BigRational) =
-        if q.Numerator < q.Denominator then
-            failwith "magnitude must be > 1"
-        else
-            let n = q.Numerator / q.Denominator
-            let r =  BigInteger.Remainder(q.Numerator, q.Denominator)
-
-            let rec remloop p =
-                seq {
-                    let d = p / q.Denominator
-                    let m = d * q.Denominator
-                    yield d
-                    if p - m = 0I then () else yield! (remloop ((p - m) * 10I))
-                }
-
+        |> decimal |> BigRational.FromDecimal 
+    
+    let fromFloat64 (f : float) = 
+        f |> ERational.FromDouble |> ERational.ToBigRational  
+    
+     
+    ///first index is sign of the number
+    let decimalExpansion (q : BigRational) =
+        let n, r, leadingZeros, numsign =
+            let qnum, qden, nsign = BigInteger.Abs q.Numerator, BigInteger.Abs q.Denominator, q.Sign
+            if qnum < qden && q <> 0N then
+                let p10 =
+                    ceilf (BigInteger.Log10(qden) - BigInteger.Log10(qnum)) 
+                    |> int
+                let num = qnum * 10I ** p10
+                num / qden, BigInteger.Remainder(num, qden), p10, nsign
+            else
+                qnum / qden, BigInteger.Remainder(qnum, qden), 0, nsign
+    
+        let rec remloop p =
             seq {
-                yield n
-                yield! (remloop (r * 10I))
+                let d = p / q.Denominator
+                let m = d * q.Denominator
+                yield (int d)
+                if p - m = 0I then ()
+                else yield! (remloop ((p - m) * 10I))
             }
+    
+        seq {
+            yield numsign
+            yield! (List.replicate leadingZeros 0)
+            yield (int n)
+            yield! (remloop (r * 10I))
+        } 
 
     (*13/6 =
              2.1 (d)
@@ -104,7 +148,7 @@ module BigRational =
             10 (input)
              6  (m)
              40  *)
-    let decimalParts take (q:BigRational) =
+    let decimalPart take (q:BigRational) =
         if q.Numerator < q.Denominator then
             //10 ** ceil (log10 q.Denominator)
             failwith "magnitude must be > 1"
@@ -145,8 +189,9 @@ module Expression =
     open System
 
     let fromDecimal f = BigRational.FromDecimal f |> Expression.FromRational
-    let fromFloatRepeating f =
-        BigRational.fromFloatRepeating f |> Expression.FromRational
+    let fromFloat64 f = BigRational.fromFloat64 f |> Expression.FromRational
+    let fromDecimalRepeating n =
+        BigRational.fromRepeatingDecimal n |> Expression.FromRational
     let toFloat (x : Expression) = x.ToFloat()
     let forceToFloat (x:Expression) = x.ToFloat() |> Option.get
     let toInt (i : Expression) = i.ToInt()

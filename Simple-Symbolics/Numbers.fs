@@ -40,70 +40,16 @@ let (|RealApproximation|_|) =
 let (|AsInteger|_|) = function
     | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
-
-type IntervalF(lower:float,upper:float) =
-    member __.LowerBound = lower
-    member __.UpperBound = upper
-    member __.Value = (lower, upper)
-
-    new(x) = IntervalF(x,x)
-    static member (+) (l : IntervalF, r : IntervalF) =
-         IntervalF(l.LowerBound + r.LowerBound, l.UpperBound + r.UpperBound)
-
-    static member (-) (l : IntervalF, r : IntervalF) =
-         IntervalF(l.LowerBound - r.UpperBound, l.UpperBound - r.LowerBound)
-
-    static member (*) (l : IntervalF, r : IntervalF) =
-        let product =
-            [for x in [l.LowerBound; l.UpperBound] do
-                for y in [r.LowerBound; r.UpperBound] ->
-                    x*y]
-        IntervalF(List.min product, List.max product)
-
-    static member (/)  (l : IntervalF, r : IntervalF) =
-        l * IntervalF (1./r.LowerBound, 1./r.UpperBound)
-
-    static member Abs(x:IntervalF) =
-        let abslb, absub = abs x.LowerBound, abs x.UpperBound
-        if x.LowerBound = 0. || x.UpperBound = 0. then IntervalF(0., max abslb absub)
-        else IntervalF(min abslb absub, max abslb absub)
-
-    static member Zero = IntervalF(0.)
-
-    override t.ToString() =
-        string t.LowerBound + "," + string t.UpperBound
-
+ 
 module BigRational =
     open Microsoft.FSharp.Core.Operators
     open System
 
     let approximatelyInt x =
-        let ratio = (floor x) / x
-        ratio > 0.999999 && ratio < 1.000001
-
-    let fromFloatDouble (df : float) =
-        let rec countDigits n x =
-            let x' = x * 10.
-            if approximatelyInt x' then n + 1
-            else countDigits (n + 1) x'
-        if approximatelyInt df then BigRational.FromBigInt(Numerics.BigInteger df)
-        else
-            let df' = abs df
-            let dpart = df' - floor df'
-            let dpow = countDigits 0 dpart
-            let pow10 = Numerics.BigInteger 10 ** int dpow
-            BigRational.FromBigIntFraction
-                (Numerics.BigInteger(df * double pow10), pow10)
-
-    ///limited by range of decimal (which is used as a less noisy alternative to floats)
-    let fromFloat (f : float) =
-        let df = decimal f
-        if df = floor df then BigRational.FromBigInt(Numerics.BigInteger df)
-        else
-            let decimalpart = string (df - floor df)
-            let pow10 = Numerics.BigInteger 10 ** (decimalpart.Length - 2)
-            BigRational.FromBigIntFraction
-                (Numerics.BigInteger(df * decimal pow10), pow10)
+        if abs(floor x - x) < 0.000001 then true
+        else 
+            let ratio = (floor x) / x
+            ratio > 0.999999 && ratio < 1.000001 
 
     let fromFloatRepeating (f : float) =
         let df = decimal f
@@ -125,11 +71,11 @@ module BigRational =
 
     let log10 (q : BigRational) =
         BigInteger.Log10(q.Numerator) - BigInteger.Log10(q.Denominator)
-        |> fromFloat
+        |> decimal |> BigRational.FromDecimal
 
     let log (q : BigRational) =
         BigInteger.Log(q.Numerator) - BigInteger.Log(q.Denominator)
-        |> fromFloat
+        |> decimal |> BigRational.FromDecimal
 
     let decimalExpansion (q: BigRational) =
         if q.Numerator < q.Denominator then
@@ -198,9 +144,7 @@ module Expression =
     open MathNet.Symbolics
     open System
 
-    let fromFloatDouble f =
-        BigRational.fromFloatDouble f |> Expression.FromRational
-    let fromFloat f = BigRational.fromFloat f |> Expression.FromRational
+    let fromDecimal f = BigRational.FromDecimal f |> Expression.FromRational
     let fromFloatRepeating f =
         BigRational.fromFloatRepeating f |> Expression.FromRational
     let toFloat (x : Expression) = x.ToFloat()
@@ -479,9 +423,7 @@ let tryNumber =
     | NegativeInfinity -> Some(Double.NegativeInfinity)
     | x -> Expression.toFloat x
     | _ -> None
-
-let interval a b = IntervalF(a,b)
-
+     
 module Combinatorics =
     let permutations n k = List.fold (*) 1I [ (n - k + 1I)..n ]
 

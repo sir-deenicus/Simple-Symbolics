@@ -234,4 +234,64 @@ let recursiveMapDepth filter depth fx e =
 
 =================== 
 
+ Interval math, use library don't reinvent wheel
+
  
+type IntervalF(lower:float,upper:float) =
+    member __.LowerBound = lower
+    member __.UpperBound = upper
+    member __.Value = (lower, upper)
+
+    new(x) = IntervalF(x,x)
+    static member (+) (l : IntervalF, r : IntervalF) =
+         IntervalF(l.LowerBound + r.LowerBound, l.UpperBound + r.UpperBound)
+
+    static member (-) (l : IntervalF, r : IntervalF) =
+         IntervalF(l.LowerBound - r.UpperBound, l.UpperBound - r.LowerBound)
+
+    static member (*) (l : IntervalF, r : IntervalF) =
+        let product =
+            [for x in [l.LowerBound; l.UpperBound] do
+                for y in [r.LowerBound; r.UpperBound] ->
+                    x*y]
+        IntervalF(List.min product, List.max product)
+
+    static member (/)  (l : IntervalF, r : IntervalF) =
+        l * IntervalF (1./r.LowerBound, 1./r.UpperBound)
+
+    static member Abs(x:IntervalF) =
+        let abslb, absub = abs x.LowerBound, abs x.UpperBound
+        if x.LowerBound = 0. || x.UpperBound = 0. then IntervalF(0., max abslb absub)
+        else IntervalF(min abslb absub, max abslb absub)
+
+    static member Zero = IntervalF(0.)
+
+    override t.ToString() =
+        string t.LowerBound + "," + string t.UpperBound
+
+let rec replaceWithIntervals (defs : seq<Expression * IntervalF>) e =
+    let map = dict defs
+    let rec replace = function
+        | IsRealNumber n ->
+            IntervalF(n.ToFloat().Value)
+            |> Some
+        | Identifier _ as v when map.ContainsKey v -> Some map.[v]
+        | Sum l ->
+            List.map replace l
+            |> List.filterMap Option.isSome Option.get
+            |> List.sum
+            |> Some
+        | Product l ->
+            List.map replace l
+            |> List.filterMap Option.isSome Option.get
+            |> List.fold (*) (IntervalF 1.)
+            |> Some
+        | FunctionN(Max, l) ->
+            match l with
+            | l' when (l' |> List.forall Expression.isRealNumber) ->
+                let largest = l' |> List.map (fun x -> x.ToFloat().Value) |> List.max
+                IntervalF largest
+                |> Some
+            | _ -> None
+        | _ -> None
+    replace e

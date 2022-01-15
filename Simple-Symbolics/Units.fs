@@ -6,7 +6,6 @@ open MathNet.Symbolics.Core
 open MathNet.Symbolics.Utils
 open MathNet.Numerics
 open NumberProperties
-open NumberProperties
 
 type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
     let mutable altunit = defaultArg altUnit ("")
@@ -52,8 +51,11 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
             Units(a.Quantity + b.Quantity, a.Unit, a.AltUnit)
         elif b.Unit = 0Q then Units(a.Quantity, a.Unit, a.AltUnit)
         elif a.Unit = 0Q then Units(b.Quantity, b.Unit, b.AltUnit)
-        else failwith "Units don't match"
-
+        else failwith $"Units don't match {a.Unit}, {b.Unit}"
+    static member (+) (a : Units, b : int) = a + Units(ofInteger b, 1Q, "")
+    static member (+) (a : int, b:Units) = Units(ofInteger a, 1Q, "") + b
+    static member (-) (a : Units, b : int) = a - Units(ofInteger b, 1Q, "")
+    static member (-) (a : int, b:Units) = Units(ofInteger a, 1Q, "") - b
     static member (~-) (a : Units) = (-a.Quantity, a.Unit, a.AltUnit)
     static member (-) (a : Units, b : Units) = a + -1 * b
     static member (*) (a : Units, b : Units) =
@@ -127,12 +129,12 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
     override t.ToString() =
         match t.Quantity.ToFloat() with
         | Some f ->
-            let q, r = smartroundEx 1 f
+            let q, r = smartroundEx 3 f
             let qstr = Expression.toSciNumString r q
             if t.Unit = 1Q then qstr
             else sprintf "%s%s%s" qstr (space()) (if dispaltunit then altunit else t.Unit.ToFormattedString())
         | _ ->
-            sprintf "%s%s%s" ((Rational.simplifyNumbers 1 t.Quantity).ToFormattedString()) (space())
+            sprintf "%s%s%s" ((Rational.simplifyNumbers 3 t.Quantity).ToFormattedString()) (space())
                 (if dispaltunit then altunit else t.Unit.ToFormattedString())
 
 let setAlt alt (u : Units) =
@@ -143,10 +145,10 @@ let U = Units
 
 let unitless = Units(1Q, 1Q, "")
 let percent = 0.01
-let pico = Expression.fromFloat 1e-12
-let nano = Expression.fromFloat 1e-9
-let micro = Expression.fromFloat 1e-6
-let milli = Expression.fromFloat (0.001)
+let pico = Expression.fromFloat64 1e-12
+let nano = Expression.fromFloat64 1e-9
+let micro = Expression.fromFloat64 1e-6
+let milli = Expression.fromFloat64 (0.001)
 let centi = Expression.FromRational(1N / 100N)
 let kilo = 1000Q
 let mega = 1_000_000Q
@@ -247,14 +249,14 @@ let opspersec = flop / sec |> setAlt "ops/s"
 let gigaopspersec = giga * flops |> setAlt "gigaops/s"
 let teraopspersec = tera * flops |> setAlt "teraops/s"
 //==============
-let planck = Expression.fromFloatDouble 6.62607004e-34 * J * sec
-let G = Expression.fromFloat 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
+let planck = Expression.fromFloat64 6.62607004e-34 * J * sec
+let G = Expression.fromFloat64 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
 let hbar = planck / (2 * Constants.pi)
 let speed_of_light = 299_792_458 * meter / sec
 let mass_of_sun = 1.989 * 10Q**30 * kg
 let stefan_boltzman =
-    Expression.fromFloat 5.670367e-8 * W * meter ** -2 * K ** -4
-let boltzman_constant = Expression.fromFloat 1.38064852e-23 * J / K
+    Expression.fromFloat64 5.670367e-8 * W * meter ** -2 * K ** -4
+let boltzman_constant = Expression.fromFloat64 1.38064852e-23 * J / K
 //==============
 
 let lightyear = speed_of_light * year

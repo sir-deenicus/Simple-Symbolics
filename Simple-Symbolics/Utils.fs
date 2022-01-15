@@ -57,6 +57,14 @@ let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
 
+let xor a b = (a && not b) || (not a && b)
+
+let inline pairwiseDiff sequence = sequence |> Seq.pairwise |> Seq.map (fun (a,b) -> b - a)
+
+///repeated application of f n times
+let rec rapply n f x =
+    if n = 0 then x else rapply (n-1) f (f x)
+
 let [<Literal>] InfixFormat = "Infix"
 let [<Literal>] LatexFormat = "Latex"
 
@@ -179,6 +187,10 @@ let ofBigInteger i = Expression.FromInteger i
 let ofFloat x = Approximation (Real x)
 let todecimal = function | Number n -> ofFloat(float n) | f -> f
 let todecimalr roundto = function | Number n -> ofFloat(float n |> Prelude.Common.round roundto) | f -> f
+let interval a b = Interval (IntSharp.Types.Interval.FromInfSup(a,b))
+let intervalF(a,b) = IntSharp.Types.Interval.FromInfSup(a,b)
+
+let realLine = Interval IntSharp.Types.Interval.Entire
 
 let degreeToRadians deg = 1/180Q * Operators.pi * deg
 let radiansToDegree rad = (180Q * rad)/Operators.pi
@@ -416,5 +428,3 @@ let isProb = function | IsProb _ -> true | _ -> false
 let isExpectation = function IsExpectation _ -> true | _ -> false
 
 //////////
-
-let xor a b = (a && not b) || (not a && b)

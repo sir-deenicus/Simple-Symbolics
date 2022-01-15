@@ -162,6 +162,7 @@ let symbolString =
 let rec replaceSymbolAux doall r x f =
     let rec loop =
         function
+        | Number _ as n when n = x -> r
         | Identifier _ as var when var = x -> r
         | Power(f, n) -> Power(loop f, loop n)
         | Function(fn, f) -> Function(fn, loop f)
@@ -702,6 +703,8 @@ module Expression =
             | Function(Function.Acos, Function(Cos, x)) -> simplifyLoop x
             | Function(Ln, Power(Constant Constant.E, x))
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
+            | Function(Floor, Number n) -> ofBigInteger (n.Numerator / n.Denominator)
+            | Function(Floor, Approximation (Real r)) -> ofFloat (floorf r)
             | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
             | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x
             | FunctionN(Log, [a;b]) when a = b -> 1Q
@@ -1031,6 +1034,7 @@ module Rational =
             if abs(log10 num + n) <= 3. then (ofFloat num) * pow10
             else Product[(ofFloat num) ; pow10 ]
         else num
+
     let rec simplifyNumbers (roundto : int) =
         function
         | Approximation (Approximation.Real r) ->
@@ -1048,8 +1052,8 @@ module Rational =
         match Expression.toFloat x with
         | None -> x
         | Some f ->
-            f
-            |> Expression.fromFloatDouble
+            f 
+            |> Expression.fromFloat64
             |> simplifyNumbers r
             |> Expression.FullSimplify
             |> simplifyNumbers r
@@ -1081,7 +1085,7 @@ module Rational =
     let applyToNumerator f x =
         let num = Rational.numerator x
         let den = Rational.denominator x
-        if den <> 1Q then (f num) / den
+        if den <> 1Q then (f num) / (Expression.Simplify den)
         else x
 
     ///given (a+b)/x, returns a/x + b/x
@@ -1130,34 +1134,6 @@ module Rational =
               |> List.map (snd >> List.sum >> Rational.expand)
               |> Sum
         | f -> f
-
-let rec replaceWithIntervals (defs : seq<Expression * IntervalF>) e =
-    let map = dict defs
-    let rec replace = function
-        | IsRealNumber n ->
-            IntervalF(n.ToFloat().Value)
-            |> Some
-        | Identifier _ as v when map.ContainsKey v -> Some map.[v]
-        | Sum l ->
-            List.map replace l
-            |> List.filterMap Option.isSome Option.get
-            |> List.sum
-            |> Some
-        | Product l ->
-            List.map replace l
-            |> List.filterMap Option.isSome Option.get
-            |> List.fold (*) (IntervalF 1.)
-            |> Some
-        | FunctionN(Max, l) ->
-            match l with
-            | l' when (l' |> List.forall Expression.isRealNumber) ->
-                let largest = l' |> List.map (fun x -> x.ToFloat().Value) |> List.max
-                IntervalF largest
-                |> Some
-            | _ -> None
-        | _ -> None
-    replace e
-
 
 type Prob () =
     static member P(x) = FunctionN(Probability, [symbol "P"; x ])
@@ -1283,3 +1259,14 @@ type Ops () =
     static member min(a,b) = Ops.min2 a b
     static member max(xs) = FunctionN(Max, xs)
     static member min(xs) = FunctionN(Min, xs)
+
+
+module Indices = 
+    ///Given variables such as $c_1, c_2, c_3$ etc, replaces them with `replacement`.
+    let eraseIndexing startIndex stopIndex replacement (var:Expression) = 
+        [for k in startIndex..stopIndex do var.[k], replacement]
+    
+    //Given a symbol name, say s, creates a lookup table with each index s_i assigned to a correpsonding index in table
+    let createIndicesLookUp startIndex (vals:Expression seq) (var:string) =
+        let vs = Seq.toArray vals
+        [for k in 0..vs.Length - 1 -> var + "_" + string (k+startIndex), vs.[k]]

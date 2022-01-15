@@ -102,7 +102,7 @@ let inline minor r c (m : ^a list list) =
 let inline cofactor (m : _ list) =
     let n = m.Length
     [ for r in 1..n ->
-          [ for c in 1..n -> minor r c m ] ]
+        [ for c in 1..n -> minor r c m ] ]
 
 let inline adjugate l =
     l

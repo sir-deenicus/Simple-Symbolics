@@ -45,7 +45,29 @@ type Equation(leq : Expression, req : Expression) =
 
     interface System.IEquatable<Equation> with
         member this.Equals(that : Equation) = this.Definition = that.Definition
-         
+ 
+ type InEquation(leq : Expression, req : Expression) =
+     member __.Definition = leq, req
+     member __.Left = leq
+     member __.Right = req 
+      
+     static member (-) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left - expr, eq.Right - expr)
+     static member (+) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left + expr, eq.Right + expr)
+     static member (*) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left * expr, eq.Right * expr)
+     static member (/) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left / expr, eq.Right / expr)
+     static member Pow(e:InEquation, n : Expression) = 
+         InEquation (e.Left ** n, e.Right ** n)
+     static member Pow(e:InEquation, n : int) = 
+         InEquation (e.Left ** n, e.Right ** n)
+     override __.ToString() =
+         let symbol = if expressionFormat = LatexFormat then " \\neq " else " ≠ "
+         fmt leq + symbol + fmt req 
+ 
+     
 module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
     let right (eq:Equation) = eq.Right
@@ -60,6 +82,8 @@ module Equation =
 
 
 let (<=>) a b = Equation(a, b)
+
+let (=/=) a b = InEquation(a,b)   
 
 let equals a b = Equation(a, b)
 

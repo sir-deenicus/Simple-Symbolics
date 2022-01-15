@@ -5,8 +5,9 @@ open MathNet.Symbolics
 open MathNet.Symbolics.NumberProperties
 open MathNet.Symbolics.Core
 open Utils
-open Operators 
-open Prelude.Common 
+open Operators
+open Prelude.Common
+open NumberProperties
 
 ///Adjusts summation to have a start, stop or var if it does not already
 let adjustSummationTo var start stop = function
@@ -15,20 +16,20 @@ let adjustSummationTo var start stop = function
   | FunctionN (SumOver,[p]) ->
        summation var start stop p
   | x -> x
-  
-let isSummation = function | Summation _ -> true | _ -> false 
+
+let isSummation = function | Summation _ -> true | _ -> false
 
 let extractSumConstants = function
   | FunctionN (SumOver,[p; var]) ->
        Structure.extractNonVariablesAndApplyF var (fun x -> PiSigma.Σ(x, var)) p
   | Summation(p,v,start,stop) ->
        Structure.extractNonVariablesAndApplyF v (summation v start stop) p
-  | x -> x 
+  | x -> x
 
 let expandSummation = function
     | Summation(Sum _ as s,v,start,stop) ->
          Structure.mapRootList (summation v start stop) s
-    | x -> x 
+    | x -> x
 
 ///merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x+y)
 let mergeSummationsInSum =
@@ -46,7 +47,7 @@ let mergeSummationsInSum =
             [ for ((v, s, stop), l) in List.groupBy (getSummation >> snd) sums ->
                 Σ v s stop (Sum (List.map (getSummation >> fst) l)) ] //need to extract inside content of summation
         + Sum(nonsum)
-    | x -> x 
+    | x -> x
 
 let simplifySums =
     function
@@ -64,15 +65,15 @@ let simplifySums =
         else expr
     | Summation(Product [d;k], var, start, n)
     | Summation(Product [k;d], var, start, n)
-        when (start = 0Q || start = 1Q) && k = var ->
+        when (start = 0Q || start = 1Q) && k = var && not(isInfinity n) ->
         (n+1) * (n * d)/2
     | Summation(Sum [a; Product [d;k]], var, start, n)
     | Summation(Sum [a; Product [k;d]], var, start, n)
-        when start = 1Q && k = var ->
+        when start = 1Q && k = var && not(isInfinity n) ->
         n * (2 * a + (n+1) * d)/2
     | Summation(Sum [a; Product [d;k]], var, start, n)
     | Summation(Sum [a; Product [k;d]], var, start, n)
-        when start = 0Q && k = var ->
+        when start = 0Q && k = var && not(isInfinity n) ->
         (n+1) * (2 * a + n * d)/2
     | Summation(Power(r,k), var, start, n)
         when start = 0Q && k = var && not(isInfinity n) -> ((1-r**(n+1))/(1-r))
@@ -86,17 +87,39 @@ let simplifySums =
     | x -> x
 
 /// condition: r <= 1, r > 0
-let simplifyInfiniteGeometricSum = function
+let simplifyGeometricSum =
+    function
     | Summation(Power(r,k), var, start, n)
-        when start = 0Q && k = var && n = infinity -> 1/(1-r)
+        when start = 0Q && k = var ->
+        if n = infinity then 1/(1-r)
+        else (1-r**(n+1))/(1-r)
     | Summation(Product [Power(r,k); a], var, start, n)
     | Summation(Product [a; Power(r,k)], var, start, n)
-        when start = 0Q && k = var && n = infinity ->
-        a * (1/(1-r))
+        when start = 0Q && k = var ->
+        if n = infinity then a * (1/(1-r))
+        else a * (1-r**(n+1))/(1-r)
     | x -> x
 
+
+let quadraticSequenceNth n sequence =
+    let sndDiff = sequence |> pairwiseDiff |> pairwiseDiff
+    let u1, u2 = Seq.head sequence, Seq.head (Seq.tail sequence)
+    maybe {
+        let! _ = Expression.toFloat u1
+        match (set (Seq.map Expression.forceToFloat sndDiff)).Count with
+        | 1 ->
+            let d = Seq.head sndDiff
+            let a = d/2Q
+            let b = -3*a + (u2 - u1)
+            let c = -(a + b) + u1
+            return a * n**2Q + b * n + c
+        | _ -> return! None
+    }
+
 /// condition: n >= 0
-let binomialTheorem = function
+let binomialTheorem = 
+    printfn "n >= 0"
+    function
     | Summation
         (Product
            [Power (b,k2);
@@ -127,14 +150,14 @@ let rewriteAsExpectation = function
     | f -> f
 
 let rewriteExpectationAsSum = function
-    | IsExpectation(expr, distr) -> 
+    | IsExpectation(expr, distr) ->
         match Structure.first Expression.isVariable (innerProb distr) with
-        | Some dx -> FunctionN(SumOver, [(distr * expr);dx])  
-        | None -> FunctionN(SumOver, [(distr * expr)]) 
+        | Some dx -> FunctionN(SumOver, [(distr * expr);dx])
+        | None -> FunctionN(SumOver, [(distr * expr)])
     | f -> f
 
 let expandVarianceExpectation = function
-    | IsExpectation 
-        (Power (Sum [Product [Number n; IsExpectation(x1, p1)]; x2], p),p2) when n = -1N && p = 2Q -> 
+    | IsExpectation
+        (Power (Sum [Product [Number n; IsExpectation(x1, p1)]; x2], p),p2) when n = -1N && p = 2Q ->
             expectation p1 (x1**2Q) - (expectation p2 x2)**2Q
     | x -> x

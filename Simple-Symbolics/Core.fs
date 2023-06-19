@@ -172,6 +172,8 @@ let rec replaceSymbolAux doall r x f =
         | Definition(a,b, s) -> Definition(loop a, loop b, s)
         | Generic(a, ty) -> Generic(loop a, ty)
         | FunctionN(Probability, h::t) -> FunctionN(Probability, h::(List.map loop t))
+        | Summation(fx,var,start, stop) -> summation var (loop start) (loop stop) (loop fx)
+            
         | IsFunctionExpr(Identifier (Symbol _), x,ex) when doall -> fx2 (loop x) (loop ex)
         | IsFunctionExpr(Identifier (Symbol _), x,ex) -> fx2 x (loop ex)
         | FunctionN(fn, l) -> FunctionN(fn, List.map loop l)
@@ -179,9 +181,9 @@ let rec replaceSymbolAux doall r x f =
         | x -> x
     loop f
 
-let replaceSymbol r x f = replaceSymbolAux false r x f
+let replaceSymbolWith r x f = replaceSymbolAux false r x f
 
-let replaceSymbolAll r x f = replaceSymbolAux true r x f
+let replaceSymbolAllWith r x f = replaceSymbolAux true r x f
 
 let rec containsVar x =
     function
@@ -391,16 +393,6 @@ module Structure =
         let falses = recursiveFilter (filter >> not) f
         trues, falses
 
-    let rec mapSumOrProductRec fx =
-        function
-        | Sum l -> Sum (List.map (mapSumOrProductRec fx) l)
-        | Product l -> Product (List.map (mapSumOrProductRec fx) l)
-        | Function(fn, f) -> fx (Function(fn, (mapSumOrProductRec fx f)))
-        | Power(x,n) -> fx (Power(mapSumOrProductRec fx x, n))
-        | FunctionN(fn, parameters) ->
-            fx (FunctionN(fn, List.map (mapSumOrProductRec fx) parameters))
-        | x -> fx x
-
     let rec applyInFunctionRec fx =
         function
         | Function(fn, f) -> Function(fn, applyInFunctionRec fx f)
@@ -461,47 +453,6 @@ module Structure =
 
     let recursiveMap fx e = recursiveMapFilter (fun _ -> true) fx e
 
-    ///Map the first N while also applying a filter
-    let mapfirstNF n filter map expr =
-        let mutable count = 0
-        recursiveMapFilter (fun x -> count < n && filter x) (function
-            | f when count < n ->
-                let f' = map f
-                if f' <> f then count <- count + 1
-                f'
-            | f -> f) expr
-
-    let mapfirstN n map expr = mapfirstNF n (konst true) map expr
-
-    let mapJustFirstF filter map expr = mapfirstNF 1 filter map expr
-
-    let mapJustFirst map expr = mapfirstN 1 map expr
-
-    let skipfirstNThenMapF n filter map expr =
-        let mutable skipCount = 0
-        recursiveMapFilter (fun x ->
-            let t = filter x
-            if t then skipCount <- skipCount + 1
-            skipCount > n && t) map expr
-
-    let skipfirstNThenMap n map expr = skipfirstNThenMapF n (konst true) map expr
-
-    let skipfirstNThenMapMF n m filter map expr =
-        let mutable count = 0
-        let mutable skipCount = 0
-        recursiveMapFilter
-            (fun x ->
-                let t = filter x
-                if t then skipCount <- skipCount + 1
-                skipCount > n && t && count < n)
-            (function
-            | f when count < m ->
-                let f' = map f
-                if f' <> f then count <- count + 1
-                f'
-            | f -> f)
-            expr
-
     let toList =
         function
         | FunctionN(Max,l)
@@ -547,6 +498,113 @@ module Structure =
             | [x] -> c * f x
             | _ -> c * f (Product l)
         | x -> x
+            
+    let applySuperpositionPrinciple = function 
+        | IsLinearFn ((Sum l), f) -> 
+            List.map (fun fx -> f fx) l |> Sum
+        | f -> f
+    
+    let getAtLoc h v expr = 
+        let rec walk ch cv = function 
+        | x when ch = h && cv = v -> Some x 
+        | Function(f, x) -> printfn "%A" (f, ch, cv); walk 0 (cv + 1) x   
+        | Product l -> horizontal 0 (cv+1) l
+        | Sum l -> horizontal 0 (cv+1) l 
+        | _ -> None
+        and horizontal ch cv = function
+            | [] -> None
+            | x :: xs -> 
+                printfn "%A" (Infix.format x, ch,cv)
+                match walk ch cv x with 
+                | Some x -> Some x
+                | None -> horizontal (ch + 1) cv xs
+        walk 0 0 expr
+
+    let getElementsAndLocations expr =
+        let rec walk cv ch = function
+        | Function(_, x) as fn -> 
+            (fn, (ch, cv))::walk (cv + 1) ch x
+        | Power(x, y) as pow -> 
+            (pow, (ch, cv))::walk (cv + 1) ch x @ walk (cv + 2) ch y
+        | Product l as prod -> 
+            (prod, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
+        | Sum l as sum-> 
+            (sum, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
+        | FunctionN(_, l) as fn -> 
+            (fn, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
+        | Id x as idx -> 
+            (idx, (ch, cv))::walk (cv + 1) ch x
+        | x -> [ (x, (ch, cv)) ]
+        walk 0 0 expr
+
+    let getAtDepth v expr =
+        let rec walk cv =  
+            function 
+            | x when cv = v -> Some x
+            | Function(f, x) -> walk (cv + 1) x
+            | Power(x, y) -> walk (cv + 1) x |> Option.orElse (walk (cv + 2) y)
+            | Product l -> List.tryPick (walk (cv + 1)) l
+            | Sum l -> List.tryPick (walk (cv + 1)) l
+            | FunctionN(f, l) -> List.tryPick (walk (cv + 1)) l
+            | Id x -> walk (cv + 1) x
+            | _ -> None
+        walk 0 expr
+
+    let mapAtDepth v f (expr, substs) =
+        let rec walk cv = function
+            | x when cv = v ->
+                let fx = f x
+                (fx,  List.removeDuplicates(substs @ [(x, fx)]))
+            | Function(f, x) ->
+                let (x', r) = walk (cv + 1) x
+                (Function (f, x'), r)
+            | Power(x, y) ->
+                let (x', rx) = walk (cv + 1) x
+                let (y', ry) = walk (cv + 2) y
+                (Power (x', y'), rx @ ry)
+            | Product l ->
+                let (l', r) = List.unzip (List.map (walk (cv + 1)) l)
+                (Product l', List.concat r)
+            | Sum l ->
+                let (l', r) = List.unzip (List.map (walk (cv + 1)) l)
+                (Sum l', List.concat r)
+            | FunctionN(f, l) ->
+                let (l', r) = List.unzip (List.map (walk (cv + 1)) l)
+                (FunctionN(f, l'), List.concat r)
+            | Id x ->
+                let (x', r) = walk (cv + 1) x
+                (Id x', r)
+            | x -> (x, substs)
+        walk 0 expr
+
+    let mapAtLoc h v f (expr, substs) =
+        let rec walk cv ch = function
+            | x when ch = h && cv = v ->
+                let fx = f x
+                (fx, [(x, fx)])
+            | Function(f, x) ->
+                let (x', r) = walk (cv + 1) ch x
+                (Function (f, x'), r)
+            | Power(x, y) ->
+                let (x', rx) = walk (cv + 1) ch x
+                let (y', ry) = walk (cv + 2) ch y
+                (Power (x', y'), rx @ ry)
+            | Product l ->
+                let (l', r) = List.unzip (List.mapi (walk (cv + 1)) l)
+                (Product l', List.concat r)
+            | Sum l ->
+                let (l', r) = List.unzip (List.mapi (walk (cv + 1)) l)
+                (Sum l', List.concat r)
+            | FunctionN(f, l) ->
+                let (l', r) = List.unzip (List.mapi (walk (cv + 1)) l)
+                (FunctionN(f, l'), List.concat r)
+            | Id x ->
+                let (x', r) = walk (cv + 1) ch x
+                (Id x', r)
+            | x -> (x, substs)
+        let res, substs' = walk 0 0 expr
+        (res, List.removeDuplicates(substs @ substs'))
+         
 
 let recmap = Structure.recursiveMap
 
@@ -557,16 +615,8 @@ let recmapf = Structure.recursiveMapFilter
 let rmf = recmapf
 
 module Expression =
-    let rewriteAsOne x = Product [ x; x ** -1]
-
-    let evaluateFloat vars expr =
-        let map =
-            Seq.map (fun (x, y) -> symbolString x, FloatingPoint.Real y) vars
-        let symbvals = System.Collections.Generic.Dictionary(dict map)
-        try
-            Some(let v = Evaluate.evaluate symbvals expr in v.RealValue)
-        with _ -> None
-
+    let ``rewrite 1 as x*x^-1 (=1)`` x = Product [ hold x; x ** -1]
+      
     let isProduct =
         function
         | Product _ -> true
@@ -676,7 +726,7 @@ module Expression =
         | Function(fn, f) -> Function(fn, simplifyLite f)
         | x -> x
 
-    let internal simplify simplifysqrt fx =
+    let internal simplifyaux simplifysqrt fx =
         let rec simplifyLoop =
             function
             | Power(_, Number n) when n = 0N -> 1Q
@@ -684,6 +734,7 @@ module Expression =
             | Power(Number x, _) when x = 1N -> 1Q
             | Power(Product [ x ], n) | Power(Sum [ x ], n) ->
                 simplifyLoop (Power(x, n))
+            | Power(Number n, _) when n = 0N -> 0Q
             | Power(Number n, Number m) when m.IsInteger && m <= 100_000N ->
                 Expression.FromRational(n ** (int m))
             | Power(Power(x, a), b) -> simplifyLoop (Power(x, (a * b)))
@@ -697,14 +748,24 @@ module Expression =
                 match simplifySquareRoot (sqrt x) with
                 | Some x -> x** Operators.fromInteger n.Numerator
                 | None -> Power(simplifyLoop x, simplifyLoop p)
-            | Power(a, FunctionN(Log,[b;c])) when a = b -> simplifyLoop c
+            | Power(a, FunctionN(Log,[b;c])) when a = b -> simplifyLoop c 
+            //|a|^2 -> a^2
+            | Power(Function(Abs, x), Number n) when n = 2N -> simplifyLoop (x ** 2Q)
             | Power(x, n) -> Power(simplifyLoop x, simplifyLoop n)
+            | Interval(a,b) -> interval (simplifyLoop a) (simplifyLoop b)
             | Function(Function.Cos, Function(Acos, x))
             | Function(Function.Acos, Function(Cos, x)) -> simplifyLoop x
             | Function(Ln, Power(Constant Constant.E, x))
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
             | Function(Floor, Number n) -> ofBigInteger (n.Numerator / n.Denominator)
             | Function(Floor, Approximation (Real r)) -> ofFloat (floorf r)
+            | Function(Ceil, Number n) -> ofBigInteger (BigRational.ceil n) 
+            | Function(Ceil, Approximation (Real r)) -> ofFloat (ceilf r)
+            | Function (Fac, Number n)  when n = 0N -> 1Q
+            | Function(Ceil, IntervalF i) -> intervalF (ceilf i.Infimum) (ceilf i.Supremum)
+            | Function(Floor, IntervalF i) -> intervalF (floorf i.Infimum) (floorf i.Supremum) 
+            | Function(Floor, Interval (a,b)) -> interval (simplifyLoop (floor a)) (simplifyLoop (floor b))
+            | Function(Ceil, Interval (a,b)) -> interval (simplifyLoop (ceil a)) (simplifyLoop (ceil b))
             | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
             | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x
             | FunctionN(Log, [a;b]) when a = b -> 1Q
@@ -723,9 +784,9 @@ module Expression =
                 | Number n, Number m ->
                     match f with
                     | SumOver ->
-                        List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ] |> simplifyLoop
+                        List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ] |> simplifyLoop
                     | ProductOver ->
-                        List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ] |> simplifyLoop
+                        List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ] |> simplifyLoop
                     | _ -> expr
                 | a', b' ->
                     match f with
@@ -744,10 +805,25 @@ module Expression =
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
             | Id x -> simplifyLoop x
             | Sum l -> List.map simplifyLoop l |> List.sum
+            | IntervalF i when i.Infimum = i.Supremum -> ofFloat i.Infimum
+            | Interval(a,b) when a = b -> a
             | x -> x
         simplifyLoop fx |> Rational.reduce
+    
+    let simplify e = simplifyaux true e
+    
+    let fullSimplify e =
+        e
+        |> simplifyLite
+        |> repeat 2 simplify
+        |> Rational.rationalize
+        |> Algebraic.expand
 
-    let replaceExpressionWithAux autosimplify replacement expressionToFind formula =
+    let fullerSimplify e =
+        Trigonometric.simplify e
+        |> fullSimplify
+        
+    let replaceWithAux autosimplify replacement expressionToFind formula =
         let tryReplaceCompoundExpression replacement
             (expressionToFindContentSet : Hashset<_>) (expressionList : _ list) =
             let expressionListSet = Hashset expressionList
@@ -784,19 +860,19 @@ module Expression =
                 FunctionN (fn, List.map iterReplaceIn l)
             | x -> x
         let newexpr = iterReplaceIn (simplifyLite formula)
-        if autosimplify then simplify true newexpr else newexpr
+        if autosimplify then simplify newexpr else newexpr
 
-    let replaceExpressionWith replacement expressionToFind formula =
-        replaceExpressionWithAux true replacement expressionToFind formula
+    let replaceWith replacement expressionToFind formula =
+        replaceWithAux true replacement expressionToFind formula
 
-    let replaceExpressions expressionsToFind formula =
+    let replace expressionsToFind formula =
         let rec loop f =
             function
             | [] -> f
-            | (x,replacement)::xs -> loop (replaceExpressionWith replacement x f) xs
+            | (x,replacement)::xs -> loop (replaceWith replacement x f) xs
         loop formula expressionsToFind
 
-    let containsExpression expressionToFind formula =
+    let contains expressionToFind formula =
         let tryFindCompoundExpression (expressionToFindContentSet : Hashset<_>)
             (expressionList : _ list) =
             let expressionListSet = Hashset expressionList
@@ -860,9 +936,9 @@ module Expression =
             | nl -> FunctionN (fn, nl) |> Some
         | x -> Some x
 
-    let removeExpression x f =
+    let remove x f =
         let placeholder = Operators.symbol "__PLACE_HOLDER__"
-        let replaced = replaceExpressionWith placeholder x f
+        let replaced = replaceWith placeholder x f
         removeSymbol placeholder replaced
 
     let rec findVariables =
@@ -928,47 +1004,17 @@ module Expression =
         | RealConstant _
         | Function _ as f -> Option.defaultValue f (Option.map ofFloat (Expression.toFloat f))
         | x -> x
-
-type Expression with
-
-    member x.Item
-        with get (y:int) = sub x (ofInteger y)
-
-    member x.Item
-        with get (y:Expression) = sub x y
-
-    member x.Item
-        with get (y:Expression list) = subs x y
-
-    member x.sub(y) = sub x y
-
-    member x.sub(ys) = subs x ys
-
-    static member toRational e =
-        let e' = Trigonometric.simplify e |> Expression.simplify true
+    
+    let toRational e =
+        let e' = Trigonometric.simplify e |> simplify
         match e' with
         | Number(n) -> n
         | _ ->
             failwith
                 (sprintf "not a number : %s => %s | %A" (e.ToFormattedString())
-                     (e'.ToFormattedString()) e')
-
-    static member Simplify e =
-        Expression.simplify true e
-
-    static member FullSimplify e =
-        e
-        |> Expression.simplifyLite
-        |> Expression.simplify true
-        |> Expression.simplify true
-        |> Rational.rationalize
-        |> Algebraic.expand
-
-    static member FullerSimplify e =
-        Trigonometric.simplify e
-        |> Expression.FullSimplify
-
-    static member isNumericOrVariable keepVars x =
+                     (e'.ToFormattedString()) e') 
+     
+    let isNumericOrVariable keepVars x =
         let keep s =
             keepVars s
             || Desc.Names.Contains s
@@ -984,79 +1030,162 @@ type Expression with
             | Sum l
             | FunctionN(_, l) -> List.forall exprTest l
             | _ -> false
-        exprTest x
+        exprTest x 
 
+    ///If the expression is a number converts to a float expression instead of its symbolic form
+    let evalToDecimal e =
+        match (NumberProperties.Expression.toFloat e) with
+        | None -> e
+        | Some x -> ofFloat x
+
+    ///If the expression is a number converts to a float expression with f applied
+    let evalToDecimalFn f e =
+        match (NumberProperties.Expression.toFloat e) with
+        | None -> e
+        | Some x -> ofFloat (f x) 
+          
     ///eval with numbers or vars (optionally) are acceptable
-    static member evalExprToNumericOrVars keepAllVars vars x =
-        let v = replaceSymbols vars x |> Expression.FullSimplify
-        if Expression.isNumericOrVariable keepAllVars v then Some v
+    let evalToNumericOrVars keepVars vars x =
+        let v = replaceSymbols vars x |> fullSimplify
+        if isNumericOrVariable keepVars v then Some v
         else None
 
-    ///eval with numbers or vars with the phrase "Var" in the symbol name are acceptable
-    static member evalExprToNumericOrNamedVars vars x = Expression.evalExprToNumericOrVars (konst false) vars x
+    ///eval with numbers or vars with special physics concepts (see Core.Desc) in the symbol name are acceptable
+    let evalToNumeric vars x = evalToNumericOrVars (konst false) vars x
+      
+    let coarsen (var:Expression) depth e =
+        let mutable i = -1
+        Structure.mapAtDepth depth (fun _ -> i <- i + 1; sub var (ofInteger i)) e
 
-let evalExpr vars x =
-    replaceSymbols vars x |> Expression.FullerSimplify
+    let substituteUntilDone (expr: Expression, substs: (Expression * Expression) list) : Expression =
+        let rec substitute acc =
+            let acc' = replace (List.map swap substs) acc
+            if List.exists (fun (orig, _) -> containsVar orig acc') substs then
+                substitute acc'
+            else
+                acc'
+        substitute expr
 
-///If the expression is a number converts to a float expression instead of its symbolic form
-let evalToDecimal e =
-    match (NumberProperties.Expression.toFloat e) with
-    | None -> e
-    | Some x -> ofFloat x
+    let isLinearFn = function 
+        | IsDerivative _ -> true
+        | IsIntegral _ -> true
+        | Summation _ -> true
+        | Sum _ -> true
+        | _ -> false
 
-///If the expression is a number converts to a float expression with f applied
-let evalToDecimalFn f e =
-    match (NumberProperties.Expression.toFloat e) with
-    | None -> e
-    | Some x -> ofFloat (f x)
 
+type SimplificationLevel =
+    | Low 
+    | Default 
+    | Mid 
+    | High 
+    
+type Expression with
+    member x.Item
+        with get (i:int) = sub x (ofInteger i)
+
+    member x.Item
+        with get (i:Expression) = sub x i
+
+    member x.Item
+        with get (i:Expression, j:Expression) = subs x [i;j]
+
+    member x.Item
+        with get (i:Expression, j:Expression, k:Expression) = subs x [i;j;k]
+
+    member x.Item
+        with get (indxs:Expression list) = subs x indxs
+
+    member x.sub(i) = sub x i
+
+    member x.sub(indices) = subs x indices 
+    
+    static member Simplify(e,?simplificationLevel) =
+        let simpllevel = defaultArg simplificationLevel SimplificationLevel.Default 
+        match simpllevel with 
+        | SimplificationLevel.Default -> Expression.simplify e
+        | SimplificationLevel.Low -> Expression.simplifyLite e
+        | SimplificationLevel.Mid -> Expression.fullSimplify e
+        | SimplificationLevel.High -> Expression.fullerSimplify e
+
+
+module Approximation =
+    let round n =
+        function
+        | Approximation(Approximation.Real r) -> Approximation(round n r)
+        | x -> x
 
 module Rational =
     open FSharp.Core.Operators
     open Prelude.Common
 
     let toEnglish n x =
-        match Expression.toFloat x with
-        | None -> ""
-        | Some f -> numberToEnglish n f
+        match x with
+        | IntervalF i ->
+            let (a,b) = i.Pair.ToTuple()
+            let l = numberToEnglish n a
+            let r = numberToEnglish n b
+            $"{l} to {r}"
+        | Interval(l,r) -> 
+            match(Expression.toFloat l, Expression.toFloat r) with
+            | Some a, Some b -> 
+                let l = numberToEnglish n a
+                let r = numberToEnglish n b
+                $"{l} to {r}"
+            | _ -> ""
+        | _ ->
+            match Expression.toFloat x with
+            | None -> ""
+            | Some f -> numberToEnglish n f
 
-    let internal simplifynumber (roundto:int) num (fn, fd, f) =
-        let npow f =
-            if f > 0. then Some(floor (log10 f))
-            elif f < 0. then Some(floor (log10 -f))
-            else None
-        let test = function | Some x -> x < -3. || x > 3. | _ -> false
+    let private simplifynumber (roundto:int) num (f:BigRational) = 
+        let npow = function
+            | f when f <> 0N -> Some(BigRational.floor (BigRational.log10 (abs f)))
+            | _ -> None
+            
+        let test = function | Some x -> x < -3I || x > 3I | _ -> false 
+        let fn, fd = BigRational.FromBigInt (f.Numerator), BigRational.FromBigInt (f.Denominator)
         let fpow = npow f
         if test(fpow) || test(npow fn) || test(npow fd) then
-            let n = fpow.Value
-            let pow10 = Power(10Q, seal(Expression.FromInt32(int n)))
-            let num = Math.Round(f / (10. ** n), roundto)
-            if abs(log10 num + n) <= 3. then (ofFloat num) * pow10
-            else Product[(ofFloat num) ; pow10 ]
+            let n = fpow.Value 
+            let pow10 = if absf n < 3I then 10Q ** (ofBigInteger n) else Power(10Q, seal(ofBigInteger n))
+            let num = f / (10N ** int n)  
+            let numf = smartround roundto (float num)
+        
+            if BigRational.Abs (BigRational.log10(BigRational.Abs num) + BigRational.FromBigInt n) <= 3N then numf * pow10
+            else Product[ofFloat numf ; pow10 ]
         else num
 
-    let rec simplifyNumbers (roundto : int) =
-        function
-        | Approximation (Approximation.Real r) ->
-            simplifynumber roundto ( Approximation (Approximation.Real (round roundto r)) ) (r,1.,r)
+    let private simplifyAtoms roundto = function  
+        | Approximation (Approximation.Real r) -> 
+            simplifynumber roundto (Approximation (Approximation.Real (round roundto r))) (BigRational.fromFloat64 r)  
+      
+        | IntervalF i -> 
+            let (l,r) = i.Pair.ToTuple() 
+            let a = simplifynumber roundto (Approximation (Approximation.Real (round roundto l))) (BigRational.fromFloat64 l)
+            let b = simplifynumber roundto (Approximation (Approximation.Real (round roundto r))) (BigRational.fromFloat64 r) 
+            if a = b then a else Interval (a, b)
+   
         | Number n as num ->
-            let f = float n
-            simplifynumber roundto num (float n.Numerator, float n.Denominator, f)
+            simplifynumber roundto num n 
+        | x -> x
+        
+    let rec simplifyNumbers (roundto : int) =
+        function  
+        | Interval(a,b) -> Interval(simplifyNumbers roundto a, simplifyNumbers roundto b)
         | Power(x, n) -> Power(simplifyNumbers roundto x, n)
         | Sum l -> Sum(List.map (simplifyNumbers roundto) l)
-        | Product l -> Product(List.map (simplifyNumbers roundto) l)
+        | Product l -> 
+            List.map (simplifyNumbers roundto) l 
+            |> List.reduce (*)  
+            |> simplifyAtoms roundto
         | Function(f, x) -> Function(f, simplifyNumbers roundto x)
-        | x -> x
+        | x -> simplifyAtoms roundto x 
 
     let round r x =
-        match Expression.toFloat x with
-        | None -> x
-        | Some f ->
-            f 
-            |> Expression.fromFloat64
-            |> simplifyNumbers r
-            |> Expression.FullSimplify
-            |> simplifyNumbers r
+        rm (simplifyNumbers r) x
+        |> rm (Expression.evalToDecimalFn (smartround2 r))
+        |> rm (simplifyNumbers r) 
 
     let radicalRationalize x =
         let den = Rational.denominator x
@@ -1113,6 +1242,20 @@ module Rational =
             | _ -> x
         else x
 
+    ///given (a*b)/(c*d) return a/c * b/d
+    let splitQuotientOfProducts = function 
+        | Divide(x,y) ->
+            printfn "here"
+            match x, y with
+            | Product l1, Product l2 when List.length l1 = List.length l2 ->
+                let qs = List.map2 (/) l1 l2
+                printfn "%A" qs
+                Product (List.map hold qs)
+
+            | _ -> x/y
+        | x -> x
+
+
     let applyToDenominator f x =
         let num = Rational.numerator x
         let den = Rational.denominator x
@@ -1154,20 +1297,20 @@ type PiSigma(expr) =
         | x -> x
 
     static member Σ fx = FunctionN(SumOver, [fx])
-    static member Σ (fx,start:BigRational) = FunctionN(SumOver, [fx;Vars.i;Number start; Vars.n])
-    static member Σ (fx,start:string) = FunctionN(SumOver, [fx;Vars.i;symbol start; Vars.n])
-    static member Σ (fx,var) = FunctionN(SumOver, [fx;var])
-    static member Σ (fx,start,stop) = FunctionN(SumOver, [fx;Vars.i;start; stop])
-    static member Σ (fx,var,start,stop) = FunctionN(SumOver, [fx;var;start;stop])
-    static member Π fx = FunctionN(ProductOver, [fx;Vars.i;0Q;Vars.n])
+    static member Σ (start:BigRational, fx) = FunctionN(SumOver, [fx;Vars.i;Number start; Vars.n])
+    static member Σ (start:string, fx) = FunctionN(SumOver, [fx;Vars.i;symbol start; Vars.n])
+    static member Σ (var, fx) = FunctionN(SumOver, [fx;var])
+    static member Σ (start,stop,fx) = FunctionN(SumOver, [fx;Vars.i;start; stop])
+    static member Σ (var,start,stop,fx) = FunctionN(SumOver, [fx;var;start;stop])
+    static member Π fx = FunctionN(ProductOver, [fx])
     static member (/) (a:PiSigma, b : Expression) = b * (a.op (/) b a.Expression)
 
     static member Evaluate(expr, ?parameters) =
         match expr, parameters with
         | FunctionN(SumOver, [ fx; var; Number n; Number m ]), _ ->
-            List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+            List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
         | FunctionN(ProductOver, [ fx; var; Number n; Number m ]), _ ->
-            List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+            List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
         | FunctionN(SumOver as f, [ fx; var; a; b ]), Some p
         | FunctionN(ProductOver as f, [ fx; var; a; b ]), Some p ->
             let lookup = dict p
@@ -1175,11 +1318,10 @@ type PiSigma(expr) =
             let runvar e =
                 e
                 |> replaceSymbols [ for (a, b) in p -> a, Operators.fromRational b ]
-                |> Expression.toRational
-                |> Option.get
+                |> Expression.toRational 
 
             let n, m =
-                match Expression.FullSimplify a, Expression.FullSimplify b with
+                match Expression.fullSimplify a, Expression.fullSimplify b with
                 | Number n, Number m -> n, m
                 | Number n, y -> n, runvar y
                 | x, Number m -> lookup.[x], m
@@ -1187,18 +1329,18 @@ type PiSigma(expr) =
 
             match f with
             | SumOver ->
-                List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
             | ProductOver ->
-                List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
             | _ -> expr
         | FunctionN(f, [ fx; var; a; b ]), None ->
-            match Expression.FullSimplify a, Expression.FullSimplify b with
+            match Expression.fullSimplify a, Expression.fullSimplify b with
             | Number n, Number m ->
                 match f with
                 | SumOver ->
-                    List.sum [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                    List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
                 | ProductOver ->
-                    List.reduce (*) [ for i in n .. m -> replaceSymbol (Number i) var fx ]
+                    List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
                 | _ -> expr
             | _ -> expr
         | _ -> expr
@@ -1212,7 +1354,7 @@ type PiSigma(expr) =
 ///toFuncMV <see cref="M:MathNet.Symbolics.Core.toFuncMV"/>
 let toFunc f =
     match f with
-    | IsFunctionExpr (_, xvar, fx) -> fun x -> replaceSymbol x xvar fx
+    | IsFunctionExpr (_, xvar, fx) -> fun x -> replaceSymbolWith x xvar fx
     | IsFunctionExpr (_, Tupled vars, fx) ->
         function
         | (Tupled xs) -> replaceSymbols (List.zip vars xs) fx
@@ -1228,7 +1370,7 @@ let toFuncMV f =
 
 ///Returns an F# function given a formula expression
 let funcOfExpr xvar f =
-    fun x -> replaceSymbol x xvar f
+    fun x -> replaceSymbolWith x xvar f
 
 let funcOfExprMV vars f =
     fun xs -> replaceSymbols (List.zip vars xs) f
@@ -1261,12 +1403,58 @@ type Ops () =
     static member min(xs) = FunctionN(Min, xs)
 
 
-module Indices = 
+/// <summary>
+/// Module containing functions for symbol indexing on provided expressions and variables.
+/// The module includes several functions such as `createSymbolLookUp`, `eraseIndexing`, 
+/// `applySymbolLookUp`, and `createLookUp` that work together to replace indexed variables with 
+/// a given replacement, create look up tables with each index assigned to a corresponding index 
+/// in a table, apply symbol lookup to an expression, and create a symbol lookup for the given 
+/// values starting from the given start index respectively.
+/// </summary>
+module Indices =
     ///Given variables such as $c_1, c_2, c_3$ etc, replaces them with `replacement`.
-    let eraseIndexing startIndex stopIndex replacement (var:Expression) = 
+    let eraseIndexing startIndex stopIndex replacement (var:Expression) =
         [for k in startIndex..stopIndex do var.[k], replacement]
-    
-    //Given a symbol name, say s, creates a lookup table with each index s_i assigned to a correpsonding index in table
-    let createIndicesLookUp startIndex (vals:Expression seq) (var:string) =
+
+    ///Given a symbol name, say s, creates a lookup table with each index s_i assigned to a correpsonding index in table
+    let createLookUp startIndex (vals:Expression seq) (var:string) =
         let vs = Seq.toArray vals
         [for k in 0..vs.Length - 1 -> var + "_" + string (k+startIndex), vs.[k]]
+
+    // <summary>
+    /// Creates a symbol lookup for the given values starting from the given startIndex.
+    /// </summary>
+    /// <param name="startIndex">The start index for the variables.</param>
+    /// <param name="vals">An enumerable collection of expressions.</param>
+    /// <param name="var">The variable for which symbol lookup needs to be created.</param>
+    let createSymbolLookUp startIndex (vals:Expression seq) (var:Expression) =
+        let vs = Seq.toArray vals
+        [for k in 0..vs.Length - 1 -> var.[(k+startIndex)], vs.[k]]
+        
+    // <summary>
+    /// Creates a function that given an expression, replaces the indexed variables with the given values.
+    /// </summary>
+    /// <param name="startIndex">The starting index for the symbol lookup.</param>
+    /// <param name="vals">A sequence of values.</param>
+    /// <param name="var">A variable expression.</param
+    /// <returns>A function that given an expression, replaces the indexed variables with the given values.</returns>
+    let applySymbolLookUp startIndex (vals:Expression seq) (var:Expression) = 
+        let vs = Seq.toArray vals
+        [for k in 0..vs.Length - 1 -> var.[(k+startIndex)], vs.[k]]
+        |> Expression.replace
+
+//make a class that manages a freshvar state
+///FreshVar is a class that manages the generation of fresh variables which are strings of the form x_1, x_2, x_3, etc.
+/// Letter is the prefix of the variable name, e.g. x_1, x_2, x_3, etc.
+/// StartIndex is the number to start counting from, e.g. 0, 1, 2, etc.
+type FreshVar(?letter, ?startindex) =
+    let letter = defaultArg letter "x"
+    let startindex = defaultArg startindex 0
+    let mutable i = startindex
+    member this.next () =
+        i <- i + 1
+        !(sprintf $"{letter}_{i}")
+
+    member this.Reset () = i <- 0
+    member this.Current = i
+    

@@ -8,23 +8,44 @@ open MathNet.Numerics
 open MathNet
 open System
 open PeterO.Numbers
-
-let pow10ToString = function
-    | 21 -> " sextillion"
-    | 18 -> " quintillion"
-    | 15 -> " quadrillion"
-    | 12 -> " trillion"
-    | 9 -> " billion"
-    | 6 -> " million"
-    | 3 -> " thousand"
+ 
+let pow10ToString = function 
     | x when x < 3 -> ""
-    | x -> string x
+    | 6 -> " million"
+    | 9 -> " billion"
+    | 12 -> " trillion"
+    | 15 -> " quadrillion"
+    | 18 -> " quintillion"
+    | 21 -> " sextillion"
+    | 24 -> " septillion"
+    | 27 -> " octillion"
+    | 30 -> " nonillion"
+    | 33 -> " decillion"
+    | 36 -> " undecillion"
+    | 39 -> " duodecillion"
+    | 42 -> " tredecillion"
+    | 45 -> " quattuordecillion" 
+    | x -> $"10^{x}" 
 
+let pow10ToSIPrefix = function 
+    | x when x < 3 -> ""
+    | 6 -> " mega"
+    | 9 -> " giga"
+    | 12 -> " tera"
+    | 15 -> " peta"
+    | 18 -> " exa"
+    | 21 -> " zetta"
+    | 24 -> " yotta" 
+    | x -> $"×10^{x} " 
+     
 let numberToEnglish n (x:float) =
     if x = 0. then "zero"
+    elif x < 1_000_000. then 
+        if n > 6 then string (log10bucket n x)
+        else (log10bucket n x).ToString("N" + string n)
     else
-        let p = floor(log10f (abs x))
-        let r = bucketRange 0 3. (floor p) 
+        let p = floorf(log10f (absf x))
+        let r = bucketRange 0 3. p
         sprintf "%g%s" (round n (x / 10. ** r)) (pow10ToString (int r))
 
 let (|RealConstant|_|) =
@@ -41,7 +62,7 @@ let (|RealApproximation|_|) =
 let (|AsInteger|_|) = function
     | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
- 
+
 type Numerics.BigInteger with
     static member FromString(str : string) =
         let nsign =
@@ -58,11 +79,11 @@ type Numerics.BigInteger with
         let i, _ =
             charnums
             |> Seq.fold (fun (n, p) d ->
-                n + bigint (int (string d)) * 10I ** p, p - 1) (0I, p) 
+                n + bigint (int (string d)) * 10I ** p, p - 1) (0I, p)
 
         nsign * i
 
-type ERational with 
+type ERational with
     static member FromBigRational(q:BigRational) =
         let n = EInteger.FromString(string q.Numerator)
         let d = EInteger.FromString (string q.Denominator)
@@ -71,19 +92,19 @@ type ERational with
 
     static member ToBigRational(q:ERational) =
         let n = BigInteger.FromString(string q.Numerator)
-        let d = BigInteger.FromString (string q.Denominator) 
-        BigRational.FromBigIntFraction(n,d) 
-       
+        let d = BigInteger.FromString (string q.Denominator)
+        BigRational.FromBigIntFraction(n,d)
+
 
 module BigRational =
     let approximatelyInt x =
         if abs(floor x - x) < 0.000001 then true
-        else 
+        else
             let ratio = (floor x) / x
-            ratio > 0.999999 && ratio < 1.000001 
-    
+            ratio > 0.999999 && ratio < 1.000001
+
     ///limited by range of decimal (which is used as a less noisy alternative to floats)
-    let fromRepeatingDecimal (df : Decimal) = 
+    let fromRepeatingDecimal (df : Decimal) =
         let len = float ((string (df - floor df)).Length - 2)
         let pow10 = decimal (10. ** len)
         if abs df < 1M then
@@ -92,7 +113,7 @@ module BigRational =
         else
             BigRational.FromIntFraction
                 (int (df * pow10 - floor df), int (pow10 - 1M))
-                  
+
     let floor (q : BigRational) = q.Numerator / q.Denominator
 
     let ceil (q : BigRational) =
@@ -106,25 +127,25 @@ module BigRational =
 
     let log (q : BigRational) =
         BigInteger.Log(q.Numerator) - BigInteger.Log(q.Denominator)
-        |> decimal |> BigRational.FromDecimal 
-    
-    let fromFloat64 (f : float) = 
-        f |> ERational.FromDouble |> ERational.ToBigRational  
-    
-     
+        |> decimal |> BigRational.FromDecimal
+
+    let fromFloat64 (f : float) =
+        f |> ERational.FromDouble |> ERational.ToBigRational
+
+
     ///first index is sign of the number
     let decimalExpansion (q : BigRational) =
         let n, r, leadingZeros, numsign =
             let qnum, qden, nsign = BigInteger.Abs q.Numerator, BigInteger.Abs q.Denominator, q.Sign
             if qnum < qden && q <> 0N then
                 let p10 =
-                    ceilf (BigInteger.Log10(qden) - BigInteger.Log10(qnum)) 
+                    ceilf (BigInteger.Log10(qden) - BigInteger.Log10(qnum))
                     |> int
                 let num = qnum * 10I ** p10
                 num / qden, BigInteger.Remainder(num, qden), p10, nsign
             else
                 qnum / qden, BigInteger.Remainder(qnum, qden), 0, nsign
-    
+
         let rec remloop p =
             seq {
                 let d = p / q.Denominator
@@ -133,13 +154,13 @@ module BigRational =
                 if p - m = 0I then ()
                 else yield! (remloop ((p - m) * 10I))
             }
-    
+
         seq {
             yield numsign
             yield! (List.replicate leadingZeros 0)
             yield (int n)
             yield! (remloop (r * 10I))
-        } 
+        }
 
     (*13/6 =
              2.1 (d)
@@ -286,13 +307,25 @@ module Expression =
             | None -> false
         else false
 
-    let rec isPositiveExpression = function
+    let rec isPositive = function
         | Function(Abs,_) -> true
         | Power(_,Number n) when (int n)%2 = 0 -> true
         | Sum l
-        | Product l -> List.forall isPositiveExpression l
+        | Product l -> List.forall isPositive l
         | x -> isPositiveNumber x
 
+module Approximations =
+    let round n = function
+        | Approximation(Real r) -> Approximation(Real (round n r))
+        | IntervalF i ->
+            let struct(l,r) = i.Pair
+            IntervalF(IntSharp.Types.Interval.FromInfSup(round n l, round n r))
+        | x -> x
+        
+    let toRational = function
+        | Approximation (Approximation.Real r) -> Expression.FromRational (BigRational.fromFloat64 r)
+        | x -> x
+        
 module Structure =
     let productToConstantsAndVarsAux test =
         function
@@ -307,6 +340,37 @@ module Structure =
     let productToIntConstantsAndVars =
         productToConstantsAndVarsAux Expression.isInteger
 
+module Interval =
+    let mapFloat f (i : IntSharp.Types.Interval) =
+        let struct(l,r) = i.Pair
+        IntSharp.Types.Interval.FromInfSup(f l, f r)
+
+    let mapF f = function
+        | IntervalF i -> 
+            let i' = mapFloat f i
+            if i'.Infimum = i'.Supremum then
+                Expression.fromFloat64 i'.Infimum
+            else IntervalF i'
+        | x -> x
+
+    let map f = function
+        | Interval(l, r) -> Interval(f l, f r)
+        | x -> x 
+    
+    let realLine = IntervalF IntSharp.Types.Interval.Entire
+
+    let from a b = Interval(a,b)
+
+    let upper = function
+        | IntervalF i -> Expression.fromFloat64 i.Supremum
+        | Interval(_,u) -> u
+        | x -> x
+
+    let lower = function
+        | IntervalF i -> Expression.fromFloat64 i.Infimum
+        | Interval(l,_) -> l
+        | x -> x
+    
 ///////////////////////////////////////////////
 
 let (|ProductHasNumber|_|) =
@@ -405,6 +469,26 @@ let rec gcd c d =
     | (a, n) when n = 0N -> a
     | (a,b) -> gcd b (rem a b)
 
+let primeSeive n =
+    let currentList = Hashset [2..n]
+
+    let generateMarkeds p = [
+        let mutable c = 2
+        while c * p <= n do
+            yield (c * p)
+            c <- c + 1
+    ]
+
+    let rec gen p =
+        let markeds = generateMarkeds p
+        let clen = currentList.Count
+        currentList.ExceptWith markeds
+        if clen = currentList.Count then currentList
+        else
+            let prime = currentList |> Seq.find (fun i -> i > p)
+            gen prime
+    gen 2
+
 let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ]
 
 let inline primefactors factor x =
@@ -458,7 +542,8 @@ let evalBigIntLog = function
     | Function(Ln, AsInteger x) -> ofFloat (BigInteger.Log x)
     | Function(Log, AsInteger x) -> ofFloat (BigInteger.Log10 x)
     | FunctionN(Log, [Number n; AsInteger x]) when n = 10N -> ofFloat (BigInteger.Log10 x)
-    | x -> x
+    | x -> x 
+
 
 let tryNumber =
     function
@@ -467,8 +552,7 @@ let tryNumber =
     | PositiveInfinity -> Some(Double.PositiveInfinity)
     | NegativeInfinity -> Some(Double.NegativeInfinity)
     | x -> Expression.toFloat x
-    | _ -> None
-     
+
 module Combinatorics =
     let permutations n k = List.fold (*) 1I [ (n - k + 1I)..n ]
 
@@ -477,23 +561,37 @@ module Combinatorics =
         |> Expression.FromInteger
 
     let expandChooseBinomial = function
-        | Binomial(n,k) -> fac n /(fac k * fac(n - k))
+        | Binomial(n,k) -> fac n / (fac k * fac(n - k))
         | x -> x
 
-    let expandChooseBinomialAsGammaLn = function
-        | Binomial(n,k) -> facln n /(facln k * facln(n - k))
+    let factorialAsGamma = function 
+        | Function(Fac, n) -> gamma(n + 1)
         | x -> x
-
+        
     let stirlingsApproximation = function
         | Function(Fac, x) ->
             sqrt(2Q * Operators.pi * x) * (x/Constants.e)**x
         | x -> x
 
-    let stirlingsGammaApproximation = function
-        | Function(Gamma, x) ->
-            sqrt(2Q * Operators.pi / x) * (x/Constants.e)**x
+    let ramanujanFacApproximation = function
+        | Function (Fac, x) -> 
+            sqrt(Operators.pi) * (x/Constants.e)**x * (8 * x **3Q + 4 * x ** 2Q + x + 1/30Q) ** (1/6Q)
+        | x -> x 
+
+    ///approximate gamma function using Ramanujan's factorial approximation
+    let gammaApproximationRamanujan = function
+        | Function (Gamma, x) -> 
+            ramanujanFacApproximation (fac (x - 1Q))
+        | x -> x
+
+    let gammaApproximationStirling = function
+        | Function (Gamma, x) -> stirlingsApproximation (fac (x - 1Q)) 
         | x -> x
 
     let approximateFactorial = function Function(Fac,x) -> (x/(Constants.e))**x | x -> x
 
+    let approximateGamma = function
+        | Function (Gamma, x) -> approximateFactorial (fac (x - 1Q))
+        | x -> x
+        
     let evalFactorial = function Function(Fac,AsInteger m) -> ofBigInteger(factorial m) | x -> x

@@ -143,7 +143,7 @@ let binomialTheorem =
 let rewriteAsExpectation = function
     | FunctionN(SumOver,x::_) as f ->
         maybe {
-            let! p = Structure.first isProb x
+            let! p = Structure.first Prob.isProb x
             let! x' = Structure.recursiveFilter ((<>) p) x
             return (expectation p x')
         } |> Option.defaultValue f
@@ -151,7 +151,7 @@ let rewriteAsExpectation = function
 
 let rewriteExpectationAsSum = function
     | IsExpectation(expr, distr) ->
-        match Structure.first Expression.isVariable (innerProb distr) with
+        match Structure.first Expression.isVariable (Prob.innerProb distr) with
         | Some dx -> FunctionN(SumOver, [(distr * expr);dx])
         | None -> FunctionN(SumOver, [(distr * expr)])
     | f -> f

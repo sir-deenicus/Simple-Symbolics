@@ -67,7 +67,7 @@ module Logarithm =
             | _ -> ln (Product logs') + Sum rest
         | f -> f
 
-    let internal powerRuleSingle =
+    let private powerRuleSingle =
         function
         | Function(Ln, Power(x, n)) -> n * Function(Ln, x)
         | FunctionN(Log, [b; Power(x, n)]) -> n * FunctionN(Log, [b;x])
@@ -99,9 +99,18 @@ module Logarithm =
         | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
         | FunctionN(Log, [a;Power(b,x)]) when a = b ->  x 
         | FunctionN(Log, [a;b]) when a = b -> 1Q
+        | FunctionN(Log, [Approximation (Real b); Number a]) 
+        | FunctionN(Log, [Number a;Approximation (Real b)]) as z ->  
+            if a = BigRational.fromFloat64 b then 1Q 
+            else z  
         | Power(Constant Constant.E, Function(Ln,x))
         | Function(Exp, Function(Ln, x)) -> x
-        | x -> x
+        | x -> x 
+    
+    let eval = function 
+        | Function(Ln, Number n) -> Number (BigRational.log n)
+        | FunctionN(Log, [Number b; Number n]) -> Number (BigRational.log n / BigRational.log b)
+        | x -> x    
 
 module Exponents =
     let shiftPowerLeftRaw (n:Expression) =
@@ -147,7 +156,7 @@ module Exponents =
             if dohold then (hold res)**y else res**y
         | x -> x
 
-    let powerRuleRevSwapped dohold = function
+    let powerRuleRevAlt dohold = function
         | Power(a,Product[Number _ as n;x;y]) ->
             let res = a**(n*y)
             if dohold then (hold res)**x else res**x

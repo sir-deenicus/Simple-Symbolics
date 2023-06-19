@@ -6,25 +6,87 @@ open Utils.Constants
 open MathNet.Numerics
 open MathNet.Symbolics.NumberProperties
 
+/// <summary> 
+/// Represents a complex number.
+/// </summary>
+/// <param name="r">The real part of the complex number.</param>
+/// <param name="i">The imaginary part of the complex number.</param>
 type Complex(r : Expression, i : Expression) =  
+    /// <summary>
+    /// Gets the real part of the complex number.
+    /// </summary>
     member __.Real = r
+
+    /// <summary>
+    /// Gets the imaginary part of the complex number.
+    /// </summary>
     member __.Imaginary = i
+
+    /// <summary>
+    /// Gets the complex conjugate of the complex number.
+    /// </summary>
     member __.Conjugate = Complex(r, -i)
+
+    /// <summary>
+    /// Gets the magnitude of the complex number.
+    /// </summary>
     member __.Magnitude = Expression.Simplify (sqrt (r ** 2 + i ** 2))
+
+    /// <summary>
+    /// Converts the complex number to a System.Numerics.Complex value.
+    /// </summary>
     member __.ToComplex() = 
         match (r, i) with 
         | IsFloatingPoint x, IsFloatingPoint y ->
             Some(System.Numerics.Complex(x, y))
         | _ -> None
-    member __.Phase = Trigonometry.simplifyWithTable (Operators.arctan2 i r)
-    static member Abs(c:Complex) = Complex c.Magnitude
-    static member Zero = Complex(0Q, 0Q)
-    static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
-    static member magnitude (c:Complex) = c.Magnitude
 
+    /// <summary>
+    /// Gets the phase of the complex number.
+    /// </summary>
+    member __.Phase = Trigonometry.simplifyWithTable (Operators.arctan2 i r)
+
+    /// <summary>
+    /// Gets the absolute value of the complex number.
+    /// </summary>
+    static member Abs(c:Complex) = Complex c.Magnitude
+
+    /// <summary>
+    /// Gets the zero complex number.
+    /// </summary>
+    static member Zero = Complex(0Q, 0Q)
+
+    /// <summary>
+    /// Negates the complex number.
+    /// </summary>
+    static member (~-) (a : Complex) = Complex(-a.Real, -a.Imaginary)
+
+    /// <summary>
+    /// Gets the magnitude of the complex number.
+    /// </summary>
+    static member magnitude (c:Complex) = c.Magnitude
+ 
+    /// <summary>
+    /// Returns the natural logarithm of the complex number.
+    /// </summary>
+    /// <param name="c">The complex number to take the logarithm of.</param>
+    /// <returns>The natural logarithm of the complex number.</returns>
     static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * V"n_{integer}")
+
+    /// <summary>
+    /// Raises the complex number to the specified integer power.
+    /// </summary>
+    /// <param name="c">The complex number to raise to a power.</param>
+    /// <param name="n">The integer power to raise the complex number to.</param>
+    /// <returns>The complex number raised to the specified integer power.</returns>
     static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
 
+    /// <summary>
+    /// Raises the complex number to the specified expression power.
+    /// </summary>
+    /// <param name="c">The complex number to raise to a power.</param>
+    /// <param name="n">The expression power to raise the complex number to.</param>
+    /// <returns>The complex number raised to the specified expression power.</returns>
     static member Pow(c : Complex, n : Expression) = 
         let imaginaryPower n = 
             let effectiveN = n % 4
@@ -42,47 +104,140 @@ type Complex(r : Expression, i : Expression) =
             let r = Expression.Simplify c.Magnitude
             let angle = c.Phase
             r ** n * Complex(cos (n * angle)
-                        |> Expression.simplify false 
+                        |> Expression.simplifyaux false 
                         |> Trigonometric.simplify
                         |> Trigonometry.simplifyWithTable,
                         sin (n * angle)
-                        |> Expression.simplify false 
+                        |> Expression.simplifyaux false 
                         |> Trigonometric.simplify
                         |> Trigonometry.simplifyWithTable)
 
+    /// <summary>
+    /// Adds the complex number and the expression.
+    /// </summary>
+    /// <param name="a">The complex number to add.</param>
+    /// <param name="b">The expression to add.</param>
+    /// <returns>The sum of the complex number and the expression.</returns>
     static member (+) (a : Complex, b : Expression) =
         Complex(a.Real + b, a.Imaginary)
+
+    /// <summary>
+    /// Adds the expression and the complex number.
+    /// </summary>
+    /// <param name="a">The expression to add.</param>
+    /// <param name="b">The complex number to add.</param>
+    /// <returns>The sum of the expression and the complex number.</returns>
     static member (+) (a : Expression, b : Complex) =
         Complex(a + b.Real, b.Imaginary)
+
+    /// <summary>
+    /// Adds two complex numbers.
+    /// </summary>
+    /// <param name="a">The first complex number to add.</param>
+    /// <param name="b">The second complex number to add.</param>
+    /// <returns>The sum of the two complex numbers.</returns>
     static member (+) (a : Complex, b : Complex) =
         Complex(a.Real + b.Real, a.Imaginary + b.Imaginary) 
+
+    /// <summary>
+    /// Subtracts the expression from the complex number.
+    /// </summary>
+    /// <param name="a">The complex number to subtract from.</param>
+    /// <param name="b">The expression to subtract.</param>
+    /// <returns>The difference between the complex number and the expression.</returns>
     static member (-) (a : Complex, b : Expression) =
         Complex(a.Real - b, a.Imaginary)
+
+    /// <summary>
+    /// Subtracts the complex number from the expression.
+    /// </summary>
+    /// <param name="a">The expression to subtract from.</param>
+    /// <param name="b">The complex number to subtract.</param>
+    /// <returns>The difference between the expression and the complex number.</returns>
     static member (-) (a : Expression, b : Complex) =
         Complex(a - b.Real, b.Imaginary)
+
+    /// <summary>
+    /// Subtracts two complex numbers.
+    /// </summary>
+    /// <param name="a">The first complex number to subtract.</param>
+    /// <param name="b">The second complex number to subtract.</param>
+    /// <returns>The difference between the two complex numbers.</returns>
     static member (-) (a : Complex, b : Complex) =
         Complex(a.Real - b.Real, a.Imaginary - b.Imaginary)
+
+    /// <summary>
+    /// Multiplies two complex numbers.
+    /// </summary>
+    /// <param name="a">The first complex number to multiply.</param>
+    /// <param name="b">The second complex number to multiply.</param>
+    /// <returns>The product of the two complex numbers.</returns>
     static member (*) (a : Complex, b : Complex) =
         Complex
             (a.Real * b.Real - a.Imaginary * b.Imaginary,
-             a.Imaginary * b.Real + a.Real * b.Imaginary)
+                a.Imaginary * b.Real + a.Real * b.Imaginary)
+
+    /// <summary>
+    /// Multiplies the complex number and the expression.
+    /// </summary>
+    /// <param name="a">The complex number to multiply.</param>
+    /// <param name="b">The expression to multiply.</param>
+    /// <returns>The product of the complex number and the expression.</returns>
     static member (*) (a : Complex, b : Expression) =
         Complex(a.Real * b, a.Imaginary * b)
+
+    /// <summary>
+    /// Multiplies the expression and the complex number.
+    /// </summary>
+    /// <param name="a">The expression to multiply.</param>
+    /// <param name="b">The complex number to multiply.</param>
+    /// <returns>The product of the expression and the complex number.</returns>
     static member (*) (a : Expression, b : Complex) =
         Complex(a * b.Real, a * b.Imaginary)
+
+    /// <summary>
+    /// Divides the complex number by the expression.
+    /// </summary>
+    /// <param name="a">The complex number to divide.</param>
+    /// <param name="b">The expression to divide by.</param>
+    /// <returns>The quotient of the complex number and the expression.</returns>
     static member (/) (a : Complex, b : Expression) =
         Complex(a.Real / b, a.Imaginary / b)
 
+    /// <summary>
+    /// Divides two complex numbers.
+    /// </summary>
+    /// <param name="a">The numerator complex number.</param>
+    /// <param name="b">The denominator complex number.</param>
+    /// <returns>The quotient of the two complex numbers.</returns>
     static member (/) (a : Complex, b : Complex) =
         let conj = b.Conjugate
         (a * conj) / (b * conj).Real
 
+    /// <summary>
+    /// Divides the expression by the complex number.
+    /// </summary>
+    /// <param name="a">The expression to divide.</param>
+    /// <param name="b">The complex number to divide by.</param>
+    /// <returns>The quotient of the expression and the complex number.</returns>
     static member (/) (a : Expression, b : Complex) = (Complex a) / b
 
-    member c.Simplify() = Complex(Expression.FullerSimplify r, Expression.FullerSimplify i)
+    /// <summary>
+    /// Simplifies the complex number.
+    /// </summary>
+    /// <returns>The simplified complex number.</returns>
+    member c.Simplify() = Complex(Expression.fullerSimplify r, Expression.fullerSimplify i)
     
+    /// <summary>
+    /// Creates a new complex number with the specified real part and zero imaginary part.
+    /// </summary>
+    /// <param name="r">The real part of the complex number.</param>
     new(r) = Complex(r, 0Q)
 
+    /// <summary>
+    /// Returns a string that represents the complex number.
+    /// </summary>
+    /// <returns>A string representation of the complex number.</returns>
     override t.ToString() = 
         let i, useparens = if Utils.expressionFormat = "Infix" then "ⅈ", ("(", ")") else "i", ("\\left(", "\\right)")
         match t.Real, t.Imaginary with
@@ -98,22 +253,46 @@ type Complex(r : Expression, i : Expression) =
             let lparens, rparens = if t.Imaginary = 0Q then "", "" else useparens
             sprintf "%s + %s%s%s%s" (t.Real.ToFormattedString()) i lparens (t.Imaginary.ToFormattedString()) rparens
     
+    /// <summary>
+    /// Returns a hash code for the complex number.
+    /// </summary>
+    /// <returns>A hash code for the complex number.</returns>
     override t.GetHashCode () = hash (t.Real, t.Imaginary)
 
+    /// <summary>
+    /// Determines whether the specified object is equal to the complex number.
+    /// </summary>
+    /// <param name="b">The object to compare to the complex number.</param>
+    /// <returns>True if the object is equal to the complex number, false otherwise.</returns>
     override x.Equals(b) =
         match b with
         | :? Complex as y -> (x.Real, x.Imaginary) = (y.Real, y.Imaginary)
         | _ -> false
 
+/// <summary>
+/// Contains utility functions for working with complex numbers.
+/// </summary>
 module Complex =  
     open Utils
 
+    /// <summary>
+    /// Imaginary unit.
+    /// </summary> 
     let i = Complex(0Q, 1Q)  
 
+    /// <summary>
+    /// Given a complex number, returns the expression that represents it.
+    /// </summary>
+    /// <param name="c">The complex number to convert to an expression.</param>
+    /// <returns>The expression that represents the complex number.</returns>
     let toExpression (c:Complex) =
         c.Real + (c.Imaginary * Constants.i)
 
-    //powers of i have a simple pattern with a cycle of 4.  
+    /// <summary>
+    /// Returns the imaginary power of i. It uses the rules of powers of i (powers of i have a simple pattern with a cycle of 4) to simplify the expression.
+    /// </summary>
+    /// <param name="n">The power of i.</param>
+    /// <returns>The simplified imaginary power of i.</returns>
     let imaginaryPowerExpression n = 
         let effectiveN = (abs n) % 4
         let i =
@@ -125,7 +304,13 @@ module Complex =
             | _ -> 1Q
         if n < 0 then 1/i else i
 
-    //Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.   
+    
+    /// <summary>
+    /// Simplifies the given expression with the assumption that it is a complex number.
+    /// Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.   
+    /// </summary>
+    /// <param name="x"></param>
+    /// <returns>The simplified expression.</returns>
     let simplifyExpression x =
         x
         |> recmap (function  
@@ -138,12 +323,17 @@ module Complex =
                | (Power(Constant Constant.I, Number n)) ->
                     imaginaryPowerExpression (int n)        
                | x -> x)
-        |> Expression.FullSimplify
+        |> Expression.fullSimplify
         |> Algebraic.groupInSumWith Constants.i
         |> Expression.Simplify
 
+    /// <summary>
+    /// Converts the expression to a complex number.
+    /// </summary>
+    /// <param name="zx">The expression to convert.</param>
+    /// <returns>The complex number.</returns>
     let ofExpression zx =
-        Structure.partition (Expression.containsExpression Constants.i) zx
+        Structure.partition (Expression.contains Constants.i) zx
         |> function
         | (Some b, a) -> Complex(a, b / Constants.i)
         | (_, a) -> Complex(a, 0Q)

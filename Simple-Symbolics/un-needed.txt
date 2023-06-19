@@ -1,4 +1,61 @@
-﻿An over elaborated way to check if negative
+﻿
+    
+    let rec mapSumOrProductRec fx =
+        function
+        | Sum l -> Sum (List.map (mapSumOrProductRec fx) l)
+        | Product l -> Product (List.map (mapSumOrProductRec fx) l)
+        | Function(fn, f) -> fx (Function(fn, (mapSumOrProductRec fx f)))
+        | Power(x,n) -> fx (Power(mapSumOrProductRec fx x, n))
+        | FunctionN(fn, parameters) ->
+            fx (FunctionN(fn, List.map (mapSumOrProductRec fx) parameters))
+        | x -> fx x
+        
+    ///Map the first N while also applying a filter
+    let mapfirstNF n filter map expr =
+        let mutable count = 0
+        recursiveMapFilter (fun x -> count < n && filter x) (function
+            | f when count < n ->
+                let f' = map f
+                if f' <> f then count <- count + 1
+                f'
+            | f -> f) expr
+
+    let mapfirstN n map expr = mapfirstNF n (konst true) map expr
+
+    let mapJustFirstF filter map expr = mapfirstNF 1 filter map expr
+
+    let mapJustFirst map expr = mapfirstN 1 map expr
+
+    let skipfirstNThenMapF n filter map expr =
+        let mutable skipCount = 0
+        recursiveMapFilter (fun x ->
+            let t = filter x
+            if t then skipCount <- skipCount + 1
+            skipCount > n && t) map expr
+
+    let skipfirstNThenMap n map expr = skipfirstNThenMapF n (konst true) map expr
+
+    let skipfirstNThenMapMF n m filter map expr =
+        let mutable count = 0
+        let mutable skipCount = 0
+        recursiveMapFilter
+            (fun x ->
+                let t = filter x
+                if t then skipCount <- skipCount + 1
+                skipCount > n && t && count < n)
+            (function
+            | f when count < m ->
+                let f' = map f
+                if f' <> f then count <- count + 1
+                f'
+            | f -> f)
+            expr
+
+
+==========================================
+
+
+An over elaborated way to check if negative
     let isNegative =
         function
         | Number n -> n < 0N
@@ -295,3 +352,116 @@ let rec replaceWithIntervals (defs : seq<Expression * IntervalF>) e =
             | _ -> None
         | _ -> None
     replace e
+
+
+
+ type InEquation(leq : Expression, req : Expression) =
+     member __.Definition = leq, req
+     member __.Left = leq
+     member __.Right = req 
+      
+     static member (-) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left - expr, eq.Right - expr)
+     static member (+) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left + expr, eq.Right + expr)
+     static member (*) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left * expr, eq.Right * expr)
+     static member (/) (eq : InEquation, expr : Expression) =
+         InEquation(eq.Left / expr, eq.Right / expr)
+     static member Pow(e:InEquation, n : Expression) = 
+         InEquation (e.Left ** n, e.Right ** n)
+     static member Pow(e:InEquation, n : int) = 
+         InEquation (e.Left ** n, e.Right ** n)
+     override __.ToString() =
+         let symbol = if expressionFormat = LatexFormat then " \\neq " else " ≠ "
+         fmt leq + symbol + fmt req 
+let (=/=) a b = InEquation(a,b)   
+
+let equals a b = Equation(a, b)
+
+
+
+
+let substitution substarget expr = 
+    let usub = symbol "u_{sub}"
+    let inner dx innerExpr =
+        let du = D dx substarget
+        let innerExprTemp = Expression.replaceExpressionWith usub substarget innerExpr
+        if innerExprTemp <> innerExpr then
+            let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
+            let innerExpr' = Expression.replaceExpressionWith solvefor dx innerExprTemp 
+            if innerExpr' <> innerExprTemp then 
+                match integratePartialRes usub (du * innerExpr') with
+                | res, true -> replaceSymbol substarget usub res
+                | _, false -> expr  
+            else expr
+        else expr
+    match expr with
+    | IsIntegral(IsIntegral _, _) -> expr
+    | IsIntegral(f,_) when substarget = f -> expr
+    | IsIntegral(f, dx) -> inner dx f 
+    | f -> f
+
+let substitutionSteps substarget expr = 
+    let usub = symbol "u_{sub}"
+    let trace = StepTrace(sprintf "$%s$" (Expression.toFormattedString expr))
+    let inner dx innerExpr =
+        let du = D dx substarget
+        let innerExprTemp = Expression.replaceExpressionWith usub substarget innerExpr  
+        if innerExprTemp <> innerExpr then
+            let _, solvefor = Solving.reArrangeExprEquation false dx (substarget,usub) 
+            let innerExpr' = Expression.replaceExpressionWith solvefor dx innerExprTemp 
+            if innerExpr' <> innerExprTemp then 
+                trace.Add (dx <=> solvefor)
+                trace.Add
+                    ("${0}$. Therefore ${1}$, so $d{2} = {3}d{4}$",
+                    [|  usub <=> substarget |> string;
+                        diff dx usub <=> du |> string;
+                        fmt (usub) ;
+                        fmt du
+                        fmt dx|])    
+                let integrand = (du * innerExpr')
+                trace.Add(integral usub innerExpr' <=> integral usub integrand)
+                match integratePartialRes usub integrand with
+                | res, true ->  
+                    trace.Add res
+                    replaceSymbol substarget usub res, trace
+                | _, false -> trace.Add("failed"); expr, trace   
+            else trace.Add("Substitution not possible"); expr, trace 
+        else trace.Add("Substitution not possible"); expr, trace
+    match expr with
+    | IsIntegral(IsIntegral _, _) -> trace.Add("Nested, skipping"); expr, trace
+    | IsIntegral(f,_) when substarget = f -> 
+        trace.Add ("not a valid substitution")
+        expr, trace
+    | IsIntegral(f, dx) -> inner dx f 
+    | f -> f, trace
+
+    
+    let mapAtDepth v f expr =
+        let rec walk cv =  
+            function 
+            | x when cv = v ->  f x
+            | Function(f, x) -> Function (f, walk (cv + 1) x)
+            | Power(x, y) -> Power (walk (cv + 1) x, walk (cv + 2) y)
+            | Product l -> Product (List.map (walk (cv + 1)) l)
+            | Sum l -> Sum (List.map (walk (cv + 1)) l)
+            | FunctionN(f, l) -> FunctionN (f, List.map (walk (cv + 1)) l)
+            | Id x -> Id (walk (cv + 1) x)
+            | x ->  x
+        walk 0 expr
+
+    let mapAtLoc h v f expr =
+        let rec walk cv ch = function
+        | x when ch = h && cv = v -> f x
+        | Function(f, x) -> Function (f, walk (cv + 1) ch x)
+        | Power(x, y) -> Power (walk (cv + 1) ch x, walk (cv + 2) ch y)
+        | Product l -> Product (List.mapi (walk (cv + 1)) l)
+        | Sum l -> Sum (List.mapi (walk (cv + 1)) l)
+        | FunctionN(f, l) -> FunctionN (f, List.mapi (walk (cv + 1)) l)
+        | Id x -> Id (walk (cv + 1) ch x)
+        | x -> x
+        walk 0 0 expr
+
+
+

@@ -14,8 +14,8 @@ let quadraticSolve x p =
     if Polynomial.isPolynomial x p && Polynomial.degree x p = 2Q then
         let coeffs = Polynomial.coefficients x p
         let a, b, c = coeffs.[2], coeffs.[1], coeffs.[0]
-        Expression.simplify true ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
-        Expression.simplify true ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
+        Expression.simplify ((-b + sqrt (b ** 2 - 4 * a * c)) / (2 * a)),
+        Expression.simplify ((-b - sqrt (b ** 2 - 4 * a * c)) / (2 * a))
     else failwith "Not quadratic"
 
 let completeSquare x p =
@@ -67,7 +67,7 @@ module Polynomial =
                         [ for f in numfactors do
                             yield!
                                 [for fval in [f;-f] do
-                                    let eval = replaceSymbol fval x fx |> Expression.FullSimplify
+                                    let eval = replaceSymbolWith fval x fx |> Expression.fullSimplify
                                     if eval = 0Q then yield x - fval, fval ]]
                     match pfactors with 
                     | [] -> zeros
@@ -97,7 +97,7 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
             if not silent then printfn "divide"
             let matched, novar = List.partition (containsVar focusVar) l 
             match novar with 
-            | [v] when Expression.isNumber v -> 
+            | [v] when Expression.isNumber v || Expression.isPositive v -> 
                 let doflip = Expression.isNegativeNumber v
                 let ops' =
                     match novar with
@@ -137,7 +137,7 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
     ops
     |> List.rev
     |> List.fold (fun e f -> f e) right
-    |> Expression.simplify true
+    |> Expression.simplify 
 
 let internal reArrangeExprEquation silent focusVar (left, right) =
     let rec iter fx ops =
@@ -207,7 +207,7 @@ let internal reArrangeExprEquation silent focusVar (left, right) =
     ops
     |> List.rev
     |> List.fold (fun e f -> f e) right
-    |> Expression.simplify true
+    |> Expression.simplify 
       
 let reArrangeEquation focusVar (e : Equation) =
     reArrangeExprEquation true focusVar e.Definition |> Equation

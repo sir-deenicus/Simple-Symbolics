@@ -5,9 +5,13 @@ open Core
 open MathNet.Numerics
 
 module Rational =
+    /// <summary>Computes the reciprocal of an expression.</summary>
+    /// <param name="e">The expression.</param> 
     let reciprocal e = 
         Rational.denominator e / Rational.numerator e 
 
+    /// <summary>Cancels out common factors in a division expression.</summary>
+    /// <param name="e">The expression to simplify.</param>
     let cancelDivision =
         let getNegProducts =
             function
@@ -55,27 +59,26 @@ module Rational =
 module Algebraic =
     open Core
     open NumberProperties
-    let groupInSumWith var = function
+    
+    /// <summary>
+    /// Groups together expressions in a sum that contain a given variable.
+    /// </summary>
+    /// <param name="var">The variable to group by.</param>
+    /// <param name="expr">The expression to group.</param>
+    /// <returns>The grouped expression.</returns>
+    let groupInSumWith var expr =
+        match expr with
         | Sum l -> 
-            let haves, nots = List.partition (Expression.containsExpression var) l
+            let haves, nots = List.partition (Expression.contains var) l
             Product[var; haves |> List.sumBy (fun x -> x/var)] + Sum nots
-        | f -> f 
-    let multiplyAsUnityBy m = function
-        | Product (Power(x,n)::rest) ->
-            Product (m::Power(Algebraic.expand (x*m),n)::rest)
-        | Power(x, n) ->
-            Product[m;Power(Algebraic.expand (x*m),n)]        
-        | Product l as p -> 
-            let parted =
-                List.partition (function | Power(_,_) -> true | _ -> false) l
-            match parted with
-            | [Power(x,n)], rest -> 
-                Product (m::Power(Algebraic.expand (x*m),n)::rest)
-            | _ -> p
         | f -> f
  
-    let dividesHeuristic a b = Structure.width (a / b) < Structure.width a
-
+    /// <summary>
+    /// Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+    /// </summary>
+    /// <param name="chooser">A function that chooses the common factor to divide out.</param>
+    /// <param name="expr">The expression to consolidate.</param>
+    /// <returns>The consolidated expression.</returns>
     let consolidateSumsBy chooser = function
         | Sum l as s ->
             let exprlist = List.toArray l
@@ -109,10 +112,19 @@ module Algebraic =
                     |> Sum
                 let nondivisibles = if undivisible.Length = 0 then 0Q else Sum (List.ofArray (snd undivisible.[0])) 
                 divisor * divided + nondivisibles            
-        | x -> x 
+        | x -> x
 
+    /// <summary>
+    /// Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+    /// </summary>  
+    /// <returns>The consolidated expression.</returns>
     let consolidateSums = consolidateSumsBy (Array.maxBy Structure.width)
 
+    /// <summary>
+    /// Intersects all products in a sum and returns the list of intersected products or common factors and also attempts to compute a rational representing gcd of expression coeffecients.
+    /// </summary>
+    /// <param name="l">The list of products to intersect.</param>
+    /// <returns>A tuple containing the list of intersected products and the common factor.</returns>
     let intersectAll l =
         let getNumber =
             function
@@ -149,6 +161,10 @@ module Algebraic =
             | [] -> Seq.toList curset, cnum
         loop (getNumber (List.head l)) (List.tail l)
 
+    /// <summary>
+    /// Alternate Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+    /// </summary>  
+    /// <returns>The consolidated expression.</returns>
     let consolidateSums2 =
         function
         | Sum l as s ->
@@ -180,17 +196,22 @@ module Algebraic =
                 Product [ p ; s / p |> Algebraic.expand ]
         | f -> f
 
+    /// <summary>
+    /// Intersects all products in a sum and returns the list of intersected products.
+    /// </summary>
+    /// <param name="l">The list of products to intersect.</param>
+    /// <returns>A list containing the intersected products.</returns>
     let intersectAllSimple l =
-        let curset = Hashset(List.head l |> Structure.listOfProduct) 
-        let rec loop = function
-             | Product ps::rest ->
-                curset.IntersectWith ps
-                if curset.Count = 0 then [] else loop rest
-             | f::rest -> 
-                curset.IntersectWith [f]
-                if curset.Count = 0 then [] else loop rest
-             | [] -> Seq.toList curset
-        loop (List.tail l)
+         let curset = Hashset(List.head l |> Structure.listOfProduct) 
+         let rec loop = function
+                | Product ps::rest ->
+                    curset.IntersectWith ps
+                    if curset.Count = 0 then [] else loop rest
+                | f::rest -> 
+                    curset.IntersectWith [f]
+                    if curset.Count = 0 then [] else loop rest
+                | [] -> Seq.toList curset
+         loop (List.tail l)
 
     let internal consolidateSumsSimpleGen f = 
         function
@@ -206,6 +227,7 @@ module Algebraic =
     
     let consolidateSumsSimple =
         consolidateSumsSimpleGen (fun p s -> Algebraic.expand (s / p))
+
 
     //let consolidateSumsSimple2 = consolidateSumsSimpleGen Expression.groupInSumWith
      

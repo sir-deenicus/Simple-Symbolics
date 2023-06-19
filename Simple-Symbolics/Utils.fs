@@ -57,13 +57,15 @@ let max2 (a,b) = max a b
 let ignoreFirst f _ = f
 let signstr x = if x < 0. then "-" else ""
 
+
+let mergeTwoListOfLists (l1:List<List<_>>) (l2:List<List<_>>) = List.map2 (fun a b -> a @ b) l1 l2
+
+let mergeTwoArrayOfArrays (l1:_[][]) (l2:_[][]) = Array.map2 (fun a b -> Array.append a b) l1 l2
+
 let xor a b = (a && not b) || (not a && b)
 
 let inline pairwiseDiff sequence = sequence |> Seq.pairwise |> Seq.map (fun (a,b) -> b - a)
 
-///repeated application of f n times
-let rec rapply n f x =
-    if n = 0 then x else rapply (n-1) f (f x)
 
 let [<Literal>] InfixFormat = "Infix"
 let [<Literal>] LatexFormat = "Latex"
@@ -75,14 +77,14 @@ let space() = if expressionFormat = InfixFormat then " " else " \\; "
 let newline() = if expressionFormat = InfixFormat then "\n" else "\n \\\\ "
 let notequalStr() = if expressionFormat = InfixFormat then "<>" else " \\neq; "
 
-let leftBrackets s = if expressionFormat = InfixFormat then "[" else "\\left" + s
-let rightBrackets s = if expressionFormat = InfixFormat then "]" else "\\right" + s
+let leftBrackets si s = if expressionFormat = InfixFormat then si else "\\left" + s
+let rightBrackets si s = if expressionFormat = InfixFormat then si else "\\right" + s
 
-let leftBrace () = leftBrackets "\\{"
-let rightBrace () = rightBrackets "\\}"
+let leftBrace () = leftBrackets "{" "\\{"
+let rightBrace () = rightBrackets "}" "\\}"
 
-let leftBracket () = leftBrackets "\\["
-let rightBracket () = rightBrackets "\\]"
+let leftBracket () = leftBrackets "[" "\\["
+let rightBracket () = rightBrackets "]" "\\]"
 
 let fmt e = expressionFormater e
 
@@ -102,8 +104,8 @@ type StepTrace(s) =
     let trace = Hashset()
     do trace.Add s |> ignore
     member __.Add e =
-        trace.Add(sprintf "$%s$" (expressionFormater e)) |> ignore
-    member __.Add e = trace.Add(sprintf "$%s$" (e.ToString())) |> ignore
+        trace.Add(sprintf "$$%s$$" (expressionFormater e)) |> ignore
+    member __.Add e = trace.Add(sprintf "$$%s$$" (e.ToString())) |> ignore
     member __.Add s = trace.Add(s) |> ignore
     member __.Add (s, asText, parameters) =
         String.Format(s, Seq.toArray parameters
@@ -147,10 +149,26 @@ let stepTracer isverbose iseq fmt current instructions =
             loop (cnt + 1) next rest
     loop 1 current instructions
 
-let expressionTrace = stepTracer true false fmt
+let expressionTrace = stepTracer false false fmt
 
-let expressionTracer expr instrs = stepTracer true false fmt expr (List.map Op instrs)
+let expressionTracer expr instrs = stepTracer false false fmt expr (List.map Op instrs)
 
+//let expressionTracer expr instrs = stepTracer false false fmt expr (List.map Op instrs)
+let expressionInstrTracer expr instrs = stepTracer false false fmt expr (List.map Instr instrs)
+
+type Expression with
+    static member Trace(instrs : _ list, expr:Expression) =
+        stepTracer false false fmt expr (List.map Instr instrs)
+
+    static member Trace(instrs : _ list, expr:Expression) =
+        stepTracer false false fmt expr (List.map Op instrs)
+         
+    member expr.Trace(instrs : _ list) =
+        stepTracer false false fmt expr (List.map Op instrs)
+
+    member expr.Trace(instrs : _ list) =
+        stepTracer false false fmt expr (List.map Instr instrs)
+        
 //========================
 
 let inline absf x = Core.Operators.abs x
@@ -179,27 +197,23 @@ let smartround2 r x =
 
 let smartround n = smartroundEx n >> fst
 
+
 //========================
 let ofRational r = Expression.FromRational r
 let ofInteger i = Expression.FromInt32 i
 let ofBigInteger i = Expression.FromInteger i
-
+let inline ofDecimal d = ofRational (BigRational.FromDecimal (decimal d))
 let ofFloat x = Approximation (Real x)
+
 let todecimal = function | Number n -> ofFloat(float n) | f -> f
 let todecimalr roundto = function | Number n -> ofFloat(float n |> Prelude.Common.round roundto) | f -> f
-let interval a b = Interval (IntSharp.Types.Interval.FromInfSup(a,b))
-let intervalF(a,b) = IntSharp.Types.Interval.FromInfSup(a,b)
-
-let realLine = Interval IntSharp.Types.Interval.Entire
+let intervalF a b = IntervalF (IntSharp.Types.Interval.FromInfSup(a,b))
+let intervalFloat(a,b) = IntSharp.Types.Interval.FromInfSup(a,b)
+let interval a b = Interval (a,b)
 
 let degreeToRadians deg = 1/180Q * Operators.pi * deg
 let radiansToDegree rad = (180Q * rad)/Operators.pi
-
-module Approximations =
-    let round n = function
-        | Approximation(Real r) -> Approximation(Real (round n r))
-        | x -> x
-
+ 
 //========================
 
 let functionFirstTermOnly = function
@@ -238,14 +252,19 @@ module FunctionHelpers =
     ///Create a function with parameter, body and name : fxn "g" x x^2 = `x |-> x^2`
     let fxn name x expr = FunctionN(Function.Func, [Operators.symbol name;x; expr])
 
-let grad x = FunctionN(Gradient, [x])
-let gradn var x = FunctionN(Gradient, [x;var] )
+let grad0 x = FunctionN(Gradient, [x])
+
+let grad var x = FunctionN(Gradient, [x;var] )
 
 ///wrap input expression in Leibniz notation for differentiation.
 let diff dx x = FunctionN(Derivative, [x;dx])
 
+let diffn n dx x = FunctionN(Derivative, [x;dx;n])
+
 ///use partial differentiation Leibniz notation
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx])
+
+let pdiffn n dx x = FunctionN(PartialDerivative, [x;dx;n])
 
 let gamma x = Function(Gamma,x)
 
@@ -259,7 +278,8 @@ let regularizedBeta a b x = FunctionN(RegularizedBeta, [a;b; x])
 
 let gammaln x = Function(Ln, (gamma x))
 
-let facln x = exp (gammaln (x+1Q))
+let facGamma x = gamma (x+1Q)
+let facln x = gammaln (x+1Q)
 let fac x = Function(Fac, x)
 let choose n k = FunctionN(Choose, [n;k])
 let binomial n k = FunctionN(Choose, [n;k])
@@ -320,10 +340,7 @@ let seal x = Id x
 let ceil x = Function(Ceil, x)
 
 let floor x = Function(Floor,x)
-
-let customFunction s x = Function(CustomFunction s, x)
-
-let customFunctionN s xs = FunctionN(CustomFunction s, xs)
+ 
 
 module Hold =
     let extractLeadingNegative = function
@@ -339,13 +356,16 @@ let (|IsFunctionExpr|_|) = function
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
     | _ -> None
 
+/// This active pattern matches a function expression with only the function name and its argument.
+/// It returns a tuple with the function name and its argument.
+/// If the input does not match this pattern, it returns None.
 let (|IsFunctionExprNameOnly|_|) = function
     | FunctionN(Func, [ f;x ]) -> Some(f,x)
     | _ -> None
-
+    
 let (|IsFunctionExprAny|_|) = function
-    | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,Some fx)
-    | FunctionN(Func, [ f;x ]) -> Some(f,x,None)
+    | FunctionN(Func, [ f; x; fx ]) -> Some(f,x,Some fx)
+    | FunctionN(Func, [ f; x ]) -> Some(f,x,None)
     | _ -> None
 
 let (|AsFunction|_|) input =
@@ -377,10 +397,19 @@ let (|IsDefiniteIntegral|_|) = function
      | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
      | _ -> None
 
+/// This active pattern matches a function expression with a derivative operator and its argument.
+/// It returns a tuple with the derivative operator, the variable with respect to which the derivative is taken, and the differential.
+/// If the input does not match this pattern, it returns None.
 let (|IsDerivative|_|) = function
-     | FunctionN(PartialDerivative as f, [ x; dx ])
-     | FunctionN(Derivative as f, [ x; dx ]) -> Some(f, x,dx)
-     | _ -> None
+    | FunctionN(PartialDerivative as f, [ x; dx ])
+    | FunctionN(Gradient as f, [x; dx])
+    | FunctionN(Derivative as f, [ x; dx ]) -> Some(f, x,dx)
+    | _ -> None
+
+let (|IsNthDerivative|_|) = function
+    | FunctionN(Derivative as f, [ x; dx; n ]) -> Some(f, x,dx,n)
+    | FunctionN(PartialDerivative as f, [ x; dx; n ]) -> Some(f, x,dx,n)
+    | _ -> None
 
 let (|IsTotalDerivative|_|) = function
     | FunctionN(Derivative, [ x; dx ]) -> Some(x,dx)
@@ -388,6 +417,10 @@ let (|IsTotalDerivative|_|) = function
 
 let (|IsPartialDerivative|_|) = function
     | FunctionN(PartialDerivative, [ x; dx ]) -> Some(x,dx)
+    | _ -> None
+
+let (|IsGradient|_|) = function
+    | FunctionN(Gradient, [ x; dx ]) -> Some(x,dx)
     | _ -> None
 
 let (|IsLimit|_|) = function
@@ -398,33 +431,103 @@ let (|IsLimit|_|) = function
 let (|Summation|_|) input =
      match input with
      | FunctionN(SumOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
-     | FunctionN(SumOver, [fx]) -> Some(fx, symbol "", NegativeInfinity, PositiveInfinity)
-     | FunctionN(SumOver, [fx; var]) -> Some(fx, var, NegativeInfinity, PositiveInfinity)
+     | _ -> None
+
+///(fx, var)
+let (|SummationVar|_|) input =
+     match input with
+     | FunctionN(SumOver, [fx;var]) -> Some(fx,var)
+     | _ -> None
+
+///(fx)
+let (|SummationTerm|_|) input =
+     match input with
+     | FunctionN(SumOver, [fx]) -> Some(fx)
      | _ -> None
 
 ///(fx,var,start, stop)
 let (|Products|_|) input =
     match input with
-    | FunctionN(ProductOver, [fx;var;start; stop]) -> Some(fx,var,start, stop)
-    | FunctionN(ProductOver, [fx]) -> Some(fx, symbol "", NegativeInfinity, PositiveInfinity)
-    | FunctionN(ProductOver, [fx; var]) -> Some(fx, var, NegativeInfinity, PositiveInfinity)
+    | FunctionN(ProductOver, [fx;var;start; stop]) -> Some(fx,var,start, stop) 
+    | _ -> None
+
+///(fx, var)
+let (|ProductsVar|_|) input =
+    match input with
+    | FunctionN(ProductOver, [fx;var]) -> Some(fx,var) 
+    | _ -> None
+
+///(fx)
+let (|ProductsTerm|_|) input =
+    match input with
+    | FunctionN(ProductOver, [fx]) -> Some(fx) 
+    | _ -> None
+
+let (|IsIndexed|_|) input =
+    match input with 
+    | FunctionN(Indexed, w::_) -> Some w 
+    | _ -> None
+
+//active pattern for superposition principle
+let (|IsLinearFn|_|) input =
+    match input with
+    | IsTotalDerivative(e, dx) -> Some(e, diff dx)
+    | IsPartialDerivative(e, dx) -> Some(e, pdiff dx) 
+    | IsIntegral(e, dx) -> Some(e, integral dx)
+    | Summation(fx, var, start, stop) -> Some(fx, fun x -> summation x var start stop)
+    | Sum l as sums -> Some(sums, id)
     | _ -> None
 //========================
 
-let expectationsDistribution = function
-    | IsExpectation (_, px) -> px
-    | _ -> Undefined
+module Prob =
+    let expectationsDistribution = function
+        | IsExpectation (_, px) -> px
+        | _ -> Undefined
 
-let expectationsWithInnerProb = function
-    | IsExpectation (_, IsProb x) -> x
-    | _ -> Undefined
+    let expectationsWithInnerProb = function
+        | IsExpectation (_, IsProb x) -> x
+        | _ -> Undefined
 
-let innerProb = function
-    | IsProb x -> x
-    | _ -> Undefined
+    let innerProb = function
+        | IsProb x -> x
+        | _ -> Undefined
 
-let isProb = function | IsProb _ -> true | _ -> false
+    let isProb = function | IsProb _ -> true | _ -> false
 
-let isExpectation = function IsExpectation _ -> true | _ -> false
+    let isExpectation = function IsExpectation _ -> true | _ -> false
+
 
 //////////
+
+let toLatexTableString colheaders (t: string[][]) =
+    let colhtext =
+        colheaders
+        |> List.map (fun s -> "\\text{ " + s + " }")
+        |> String.concat " & "
+
+    let colformat = Array.replicate (t[0].Length) "c"
+
+    let header =
+        $"""\begin{{array}}{{|{String.concat "|" colformat}}}"""
+        + "\n"
+
+    let format =
+        t
+        |> Array.map (String.concat " & ")
+        |> String.concat "\\\\\n"
+
+    let footer = "\n\\end{array}"
+
+    header
+    + colhtext
+    + "\\\\\n\hline\n"
+    + format
+    + footer
+
+
+let fmttext (s: string) = 
+    if expressionFormat = LatexFormat then $"\\text{{{s}}}"
+    else s
+
+
+

@@ -12,7 +12,7 @@ type Equation(leq : Expression, req : Expression) =
     member __.Equalities =
         [ leq, req
           req, leq ]
-    
+    member __.Reciprocal = Equation(1 / leq, 1 / req)
     static member ApplyToRight f (eq:Equation) = 
         let leq, req = eq.Definition
         Equation(leq, f req)
@@ -24,12 +24,30 @@ type Equation(leq : Expression, req : Expression) =
         Equation(f leq, f req)
     static member (-) (eq : Equation, expr : Expression) =
         Equation(eq.Left - expr, eq.Right - expr)
+
+    static member (-) (expr : Expression, eq : Equation) =
+        Equation(expr - eq.Left, expr - eq.Right)
+
     static member (+) (eq : Equation, expr : Expression) =
         Equation(eq.Left + expr, eq.Right + expr)
+
+    static member (+) (expr : Expression, eq : Equation) =
+        Equation(expr + eq.Left, expr + eq.Right)
+
     static member (*) (eq : Equation, expr : Expression) =
         Equation(eq.Left * expr, eq.Right * expr)
+    static member (*) (expr : Expression, eq : Equation) =
+        Equation(expr * eq.Left, expr * eq.Right)
     static member (/) (eq : Equation, expr : Expression) =
         Equation(eq.Left / expr, eq.Right / expr)
+
+    static member (/) (expr : Expression, eq : Equation) =
+        Equation(expr / eq.Left, expr / eq.Right)
+    
+    //sqrt 
+    static member Sqrt(e:Equation) = 
+        Equation (sqrt e.Left,  sqrt e.Right)
+
     static member Pow(e:Equation, n : Expression) = 
         Equation (e.Left ** n, e.Right ** n)
     static member Pow(e:Equation, n : int) = 
@@ -45,29 +63,7 @@ type Equation(leq : Expression, req : Expression) =
 
     interface System.IEquatable<Equation> with
         member this.Equals(that : Equation) = this.Definition = that.Definition
- 
- type InEquation(leq : Expression, req : Expression) =
-     member __.Definition = leq, req
-     member __.Left = leq
-     member __.Right = req 
-      
-     static member (-) (eq : InEquation, expr : Expression) =
-         InEquation(eq.Left - expr, eq.Right - expr)
-     static member (+) (eq : InEquation, expr : Expression) =
-         InEquation(eq.Left + expr, eq.Right + expr)
-     static member (*) (eq : InEquation, expr : Expression) =
-         InEquation(eq.Left * expr, eq.Right * expr)
-     static member (/) (eq : InEquation, expr : Expression) =
-         InEquation(eq.Left / expr, eq.Right / expr)
-     static member Pow(e:InEquation, n : Expression) = 
-         InEquation (e.Left ** n, e.Right ** n)
-     static member Pow(e:InEquation, n : int) = 
-         InEquation (e.Left ** n, e.Right ** n)
-     override __.ToString() =
-         let symbol = if expressionFormat = LatexFormat then " \\neq " else " ≠ "
-         fmt leq + symbol + fmt req 
- 
-     
+  
 module Equation =
     let swap (eq:Equation) = Equation(swap eq.Definition) 
     let right (eq:Equation) = eq.Right
@@ -80,19 +76,14 @@ module Equation =
 
     let subtractRHS (e:Equation) = e - e.Right 
 
+    let TraceOp = Equation.Apply >> Op
 
-let (<=>) a b = Equation(a, b)
-
-let (=/=) a b = InEquation(a,b)   
-
-let equals a b = Equation(a, b)
-
-let oEqapply = Equation.Apply >> Op
-
-let iEqapply (s,f) = Instr(Equation.Apply f, s)
+    let Instr (s,f) = Instr(Equation.Apply f, s)
   
 let equationTrace (current:Equation) (instructions : _ list) = 
     stepTracer false true string current instructions
+
+let (<=>) a b = Equation(a, b)
 
 let eqApp = Equation.Apply
  
@@ -128,18 +119,29 @@ module InEquality =
         | Positive
         | Negative
         | Nil
+        override t.ToString() =
+            match t with
+            | Positive -> 
+                match expressionFormat with
+                | InfixFormat -> "≥ 0"
+                | _ -> " \\geq 0"
+            | Negative -> 
+                match expressionFormat with
+                | InfixFormat -> "< 0"
+                | _ -> " < 0"
+            | Nil -> failwith "Unexpected Nil sign"
 
 
 type InEquality(comparer: InEquality.Comparer,
                 leq: Expression,
                 req: Expression,
-                ?existingConditions: InEquality seq,
+              //  ?existingConditions: InEquality seq,
                 ?existingSigns) =
 
-    let conditions =
-        defaultArg
-            (Option.map (fun (h : seq<InEquality>) -> Hashset(h))
-                 existingConditions) (Hashset<InEquality>())
+    //let conditions =
+    //    defaultArg
+    //        (Option.map (fun (h : seq<InEquality>) -> Hashset(h))
+    //             existingConditions) (Hashset<InEquality>())
 
     let varsigns =
         defaultArg existingSigns (Dict<Expression, InEquality.NumSign>())
@@ -149,11 +151,19 @@ type InEquality(comparer: InEquality.Comparer,
     member __.Right = req
     member __.Comparer = comparer
     member __.VarSigns = varsigns
-    member __.Conditions = Seq.toArray conditions
+  //  member __.Conditions = Seq.toArray conditions
+
+    member __.Reciprocal =
+        InEquality(InEquality.flipComparer comparer, 1 / leq, 1 / req, varsigns)
 
     member __.GetSign =
         match req with //is positive
         | Function (Abs, _) ->
+            match comparer with
+            | InEquality.Geq
+            | InEquality.Greater -> Some(InEquality.Positive)
+            | _ -> None
+        | x when Expression.isPositive x ->
             match comparer with
             | InEquality.Geq
             | InEquality.Greater -> Some(InEquality.Positive)
@@ -182,7 +192,7 @@ type InEquality(comparer: InEquality.Comparer,
         + string comparer
         + req.ToFormattedString()
         + newline ()
-        + (Seq.map string conditions
+        + (([for (KeyValue(k,v)) in varsigns -> k.ToFormattedString() + space() + v.ToString() ])
            |> String.concat (newline ()))
 
     member i.Flip() =
@@ -207,8 +217,7 @@ type InEquality(comparer: InEquality.Comparer,
             | None -> ()
             | Some s -> varsigns.Add(x, s)
         | _ -> ()
-
-        conditions.Add c |> ignore
+       // conditions.Add c |> ignore
         i
 
     static member decideComparison(eq: InEquality, expr: Expression) =
@@ -230,10 +239,10 @@ type InEquality(comparer: InEquality.Comparer,
         c, cond
 
     member eq.OfExpr(l, r) =
-        InEquality(eq.Comparer, l, r, eq.Conditions, eq.VarSigns)
+        InEquality(eq.Comparer, l, r, eq.VarSigns)
 
     member eq.OfExpr(comparer, l, r) =
-        InEquality(comparer, l, r, eq.Conditions, eq.VarSigns)
+        InEquality(comparer, l, r, eq.VarSigns)
 
     static member (*)(eq: InEquality, expr: Expression) =
         let comparer, cond = InEquality.decideComparison (eq, expr)
@@ -262,10 +271,28 @@ type InEquality(comparer: InEquality.Comparer,
         | Some c -> ineq.AddCondition c 
 
 let leq a b = InEquality(InEquality.Comparer.Leq,a,b)
+///p stands for number polarity, eg positive or negative
+let leqp s a b = InEquality(InEquality.Comparer.Leq,a,b, existingSigns = Dict.ofSeq s)
+
 let geq a b = InEquality(InEquality.Comparer.Geq,a,b)
+///p stands for number polarity, eg positive or negative
+let geqp s a b = InEquality(InEquality.Comparer.Geq,a,b, existingSigns = Dict.ofSeq s)
+
 let lt a b = InEquality(InEquality.Comparer.Lesser,a,b)
+///p stands for number polarity, eg positive or negative
+let ltp s a b = InEquality(InEquality.Comparer.Lesser,a,b, existingSigns = Dict.ofSeq s)
+
 let gt a b = InEquality(InEquality.Comparer.Greater,a,b) 
- 
+///p stands for number polarity, eg positive or negative
+///Creates a > b with the given variable signs
+let gtp s a b = InEquality(InEquality.Comparer.Greater,a,b, existingSigns = Dict.ofSeq s)
+
+let leqs xs y = [for x in xs -> leq x y]
+let geqs xs y = [for x in xs -> geq x y]
+let lts xs y = [for x in xs -> lt x y]
+let gts xs y = [for x in xs -> gt x y]
+
+let varsigns (sign:InEquality.NumSign) (xs:Expression seq) = Dict.ofSeq [for x in xs -> x, sign]
 
 let inEqualityTrace (current:InEquality) (instructions : _ list) = 
     stepTracer false true string current instructions

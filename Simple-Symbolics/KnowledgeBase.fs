@@ -5,6 +5,7 @@ open MathNet.Symbolics.Core
 open MathNet.Symbolics.Utils
 open MathNet.Symbolics.Core.Vars
 open System.Text 
+open Prelude.StringMetrics
 
 type Factoid =
     { Equation: Expression * Expression
@@ -36,35 +37,24 @@ let Equations =
       Factoid.ofTuple ((incompleteBeta a b x, defintegral t 0Q x (t **(a-1) * (1-t)**(b-1))), [], "incomplete beta integral")
       Factoid.ofTuple ((incompleteBeta a b x, regularizedBeta a b x / beta a b), [], "incomplete beta and regularized beta")]
 
-let printFactoids (facts: Factoid seq) =
-    let sb = StringBuilder()
 
-    for fact in facts do
-        sprintf
-            "%s = %s | Requirements %A | Description: %s\n"
-            (fmt (fst fact.Equation))
-            (fmt (snd fact.Equation))
-            fact.Requirements
-            fact.Description
-        |> sb.AppendLine
-        |> ignore
-
-    sb.ToString()
-
-open Prelude.StringMetrics
-
+let factoidsToTable (factoids: (Factoid * float) seq) =
+    [| for (f, w) in factoids ->
+           [| $"{fmt f.Left} = {fmt f.Right}"
+              fmttext f.Description
+              sprintf ""
+              $"Weight: {w}" |] |]
+                    
 let searchFactoidsByFormula thresh (e: Expression) =
-    let strf = Infix.format e
+    let strf = string e
     [| for eq in Equations do
         let lstr, rstr =
-            Infix.format eq.Left, Infix.format eq.Right
+            string eq.Left, string eq.Right
 
-        let score = stringSimilarityDice strf lstr
-        if score >= thresh then
-            yield eq, score
-        else
-            let score2 = stringSimilarityDice strf rstr
-            if score2 >= thresh then yield eq, score2 |]
+        let lscore = Prelude.StringMetrics.stringSimilarityDice strf lstr
+        let rscore = Prelude.StringMetrics.stringSimilarityDice strf rstr
+        if lscore >= thresh || rscore >= thresh  then
+            yield eq, max lscore rscore |]
 
 let searchFactoids (str:string) = 
     [|for e in Equations do if e.Description.Contains (str.ToLower()) then yield e|]

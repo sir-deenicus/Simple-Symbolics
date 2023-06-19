@@ -14,7 +14,7 @@ let deriveTrivialEqualities eqs =
           for var in Expression.findVariables right do
               match reArrangeExprEquation true var (right, left) with
               | Identifier _ as var, req ->
-                  yield Equation(var, Expression.simplify true req)
+                  yield Equation(var, Expression.simplify req)
               | _ -> () ]
 
     let removeRepeats (eqlist : _ list) =

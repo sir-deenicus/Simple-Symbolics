@@ -3,7 +3,7 @@
 open MathNet.Symbolics.Utils
 open System
 open Prelude.Common 
- open FSharp.Data  
+open FSharp.Data  
 
 let currencycacheloc = "currencycache.json"
 
@@ -17,7 +17,7 @@ let downloadCurrencyRates(useDir) =
     try
         let data =
             wc.DownloadData "https://www.mycurrency.net/US.json"
-            |> Strings.DecodeFromUtf8Bytes
+            |> String.decodeFromUtf8Bytes
         IO.File.WriteAllText(currencycachepath, data)
         data
         |> CurrencyProvider.Parse
@@ -67,9 +67,7 @@ let getGDPperCapitaPP (c:WorldBankData.ServiceTypes.Country) =
 module Units =
     open Units
     open MathNet.Symbolics.Core
-
-    let usd = Units("USD")
-
+     
     let setCurrency eps curr = 
         (checkCurrency eps curr) * usd |> setAlt curr
     

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.5</Version>
+    <Version>0.52</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
@@ -58,17 +58,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EvolutionaryBayes" Version="0.2.6" />
-    <PackageReference Include="FSharp.Data" Version="3.3.2" />
-    <PackageReference Include="Hansei" Version="0.3.2.3" />
+    <PackageReference Include="FSharp.Data" Version="5.0.2" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="4.15.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.33.0" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.1" />
     <PackageReference Include="PeterO.Numbers" Version="1.8.2" />
-    <PackageReference Include="Prelude" Version="1.7.3" />
+    <PackageReference Include="Prelude" Version="1.8.7" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="5.0.0" />
+    <PackageReference Update="FSharp.Core" Version="6.0.4" />
   </ItemGroup> 
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|netstandard2.0|AnyCPU'">

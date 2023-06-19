@@ -38,9 +38,10 @@ let (!) s = Symb s
 
 let (=>) a b = ifthen a b
 
+let (<=>) a b = IffThen (a,b)
 let (==>) a b = ifthen (Symb a) (Symb b)
+let (<==>) a b = IffThen(Symb a, Symb b)
 
-let (<==>) a b = Symb a <=> Symb b
 
 let deMorgansLaw = function 
     | Not(Or l) -> And (List.map Not l)
@@ -70,6 +71,9 @@ let rec simplify =
     | And l -> And(List.map simplify (collectNestedSumOrProduct LogicExpr.isAnd l))
     | f -> f
 
+
+(!"a" * !"b") * !"c"
+
 Constant True => Constant False
 
 let [a;b;c;d;e;f;g;h] =  List.map (string >> Symb) ['a'..'h']
@@ -95,6 +99,12 @@ a <=> b
 !""
 
 (*if vampire then consumes blood; if person bitten by vampire then person vampire ; beth bitten by vampire *)
+
+!"vampire" => !"consumes blood"
+!"bitten by vampire" => !"vampire"
+!"beth" => !"bitten by vampire"
+
+
 (!"c" * !"d") + Symb "a" + Symb "b" |> simplify
 (* 
 time slowed why?
@@ -103,3 +113,10 @@ things that can cause time to slow down are:
 
 if time slowed then gravitational field increase or traveled near speed of light and accelerated to return if traveled near speed of light and accelerated to return then went on a journey if gravitational field disturbed then orbits affected if gravitational field disturbed then gravitational field increase or gravitational field decrease*)
 c * d
+
+
+!"cut in Q" <=> (["pair of subsets A, B of Q"; "A ∪ B = Q"; "A = ∅, B = ∅"; "A ∩ B = ∅" ; "If a ∈ A and b ∈ B then a<b." ; "A contains no largest element"] |> List.map (Symb)  |> And)
+
+And kkk 
+
+"real number" <==> "cut in Q"

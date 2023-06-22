@@ -5,6 +5,7 @@ open MathNet.Symbolics
 open Utils
 open NumberProperties
 open Prelude.Common
+open MathNet.Symbolics.Core.Func
 
 [<RequireQualifiedAccess>]
 type EvalMethod = 
@@ -16,7 +17,7 @@ type EvalMethod =
 let evalDerivative =
     function
     | IsDerivative(_, f, dx) -> Calculus.differentiate2 dx f
-    | IsNthDerivative(_, f, dx, AsInteger n) -> repeat (int n) (Calculus.differentiate2 dx) f
+    | IsNthDerivative(_, f, dx, AsBigInteger n) -> repeat (int n) (Calculus.differentiate2 dx) f
     | f -> f
 
 ///Recursively evaluates all derivative notation expressions in expression. see also Dx shorthand.
@@ -46,8 +47,8 @@ let newtonsMethodAux evalMethod symbol iters f x0 =
         | EvalMethod.Simplify -> Expression.fullSimplify
         | EvalMethod.Numeric -> Expression.toFloat >> Option.get >> ofFloat
          
-    let fx = toFunc f 
-    let fx' = toFunc (D symbol f) 
+    let fx = toFn f 
+    let fx' = toFn (D symbol f) 
 
     let rec loop n x =
         if n = 0 then x

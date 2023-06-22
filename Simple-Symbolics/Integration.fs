@@ -153,28 +153,29 @@ let integrateSimplePartial x f =
             (*printfn "Can't integrate this %s" (f.ToFormattedString());*) 
     iter f
       
-let internal freshConstant e =
+let internal freshConstant varname e =
     let vs = Expression.findVariables e
-
+    let varname = defaultArg varname "C"
+    let var = symbol varname
     let cvs =
         vs
         |> Seq.filter (function
-            | ExpressionPatterns.IsSymbolVar s -> s.Contains "constant"
+            | ExpressionPatterns.IsSymbolVar s -> s.Contains varname
             | _ -> false)
 
     let i = Seq.length cvs
-    symbol "constant_" + (i + 1)
+    var[(i + 1)]
 
      
-let integratePartialResAux trackConstants x e =
+let integratePartialResAux varname trackConstants x e =
     match (integrateSimplePartial x e) with 
     | Partial(s, def, true) -> s + def, false
     | Partial(s, def, false) -> s * (integral x def), false
-    | Succeeded e -> (if not trackConstants then e else e + freshConstant e), true
+    | Succeeded e -> (if not trackConstants then e else e + freshConstant varname e), true
     | Deferred (e,true) -> e, false
     | Deferred (e,false) -> integral x e, false
 
-let integratePartialRes x e = integratePartialResAux false x e
+let integratePartialRes x e = integratePartialResAux None false x e
 
 let integratePartial x e = fst(integratePartialRes x e)
  
@@ -183,28 +184,27 @@ let evalIntegral =
     | IsIntegral(f, dx) -> integratePartial dx f
     | f -> f  
     
-let evalIntegralC =
+let evalIntegralC_vname varname =
     function
-    | IsIntegral(f, dx) -> fst(integratePartialResAux true dx f)
+    | IsIntegral(f, dx) -> fst(integratePartialResAux varname true dx f)
     | f -> f 
+
+let evalIntegralC = evalIntegralC_vname None
 
 let evalDefiniteIntegral =
     function
     | IsDefiniteIntegral(f, dx,a,b) as fn -> 
         match integratePartialRes dx f with
         | (_, false) -> fn
-        | (e, true) -> replaceSymbolWith b dx e - replaceSymbolWith a dx e
+        | (e, true) -> Expression.replaceWith b dx e - Expression.replaceWith a dx e
     | f -> f 
  
 let evalDefiniteIntegralUsing integrator = function
     | IsDefiniteIntegral(f, dx,a,b) as fn ->
         match integrator f with
             | IsIntegral _ -> fn
-            | e -> replaceSymbolWith b dx e - replaceSymbolWith a dx e
+            | e -> Expression.replaceWith b dx e - Expression.replaceWith a dx e
     | f -> f
- 
-let evalAsDefiniteIntegralAt dx a b e = 
-    replaceSymbolWith b dx e - replaceSymbolWith a dx e
     
 let rec integrateByParts2 order expr = 
     let doIntegrateByParts dx a b =
@@ -357,10 +357,10 @@ module Integral =
             |> Option.defaultValue f
         | f -> f
      
-    let rewriteAsIntegral = function
+    let ofExpectation = function
         | FunctionN(Function.Expectation, [ expr; distr ]) ->
             let dx =
-                match Structure.first Expression.isVariable (Prob.innerProb distr) with
+                match Structure.first Expression.isVariable (Prob.inner distr) with
                 | Some e -> [ e ] | None -> []
             FunctionN(Function.Integral, (distr * expr) :: dx)
         | f -> f    
@@ -373,6 +373,19 @@ module Integral =
         | Function(Gamma, z) ->  
             defintegral t 0 Symbolics.Operators.infinity ((t**(z-1.)) * exp(-t))
         | x -> x
+
+    let cancelDerivative = function
+    | IsIntegral(IsDerivative(_, f, dx), dx') when dx = dx' -> f
+    | x -> x
+
+    let makeDefinite a b = function
+        | IsIntegral(f, dx) -> defintegral dx a b f
+        | f -> f
+
+module DefiniteIntegral = 
+    let makeInDefinite = function
+        | IsDefiniteIntegral(f, dx, _, _) -> integral dx f
+        | f -> f
 
 module Riemann =
     let ofIntegral = function 

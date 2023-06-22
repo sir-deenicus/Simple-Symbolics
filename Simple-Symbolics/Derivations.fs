@@ -44,7 +44,7 @@ let equalitiesToPairs (eqs : Equation list) =
 
 let deriveAndGenerateEqualities = deriveTrivialEqualities >> equalitiesToPairs
 
-let solveProductForm e =
+let internal solveProductForm e =
     function
     | (Product l) as p ->
         l
@@ -62,7 +62,7 @@ let deriveEqualitiesFromProduct (eqs:Equation list) =
            |> List.map Equation
            |> equalitiesToPairs)
 
-let transformNegativeEq =
+let internal transformNegativeEq =
     function
     | (ProductHasNumber n as l, r) -> l / n, Algebraic.expand (r / n)
     | l,r -> l, Algebraic.expand r

@@ -480,8 +480,13 @@ module Vector =
 
     let map2 f (v : Vector<_>) (v2 : Vector<_>) = Vector(List.map2 f v.AsList v2.AsList)
 
-    let inline lpNorm (p : Expression) (v : Vector<_>) =
-        (v.AsList |> List.sumBy (fun x -> (abs x) ** p)) ** (1 / p)
+    let linspace (start : Expression) (stop : Expression) (n : int) =
+        let step = (stop - start) / (n - 1)
+        Vector [for i in 0..n-1 -> start + step * i]
+
+    let inline lpNorm (p : Expression) (v : Vector<Expression>) =
+        (v.AsArray |> Array.sumBy (fun x -> (abs x) ** p)) ** (1 / p) 
+        |> Expression.simplify
 
     let cosineSimilarity (v:Vector<Expression>) (v2 : Vector<Expression>) =
         (v * v2) / ((sqrt (v * v)) * (sqrt (v2 * v2)))
@@ -562,6 +567,8 @@ module Matrix =
     let inline transpose (m:Matrix<_>) = Matrix(Array.transpose m.AsArray)
 
     let map f (m : Matrix<_>) = Matrix(Array.map (Array.map f) m.AsArray)
+
+    let mapi f (m : Matrix<_>) = Matrix(Array.mapi (fun i v -> Array.mapi (fun j v' -> f i j v') v) m.AsArray)
 
     let mapiRows f (m : Matrix<_>) = 
         let r' : 'b Vector [] = m.[..m.RowsLen - 1, *].AsArray |> Array.mapi (fun i v -> f i (Vector v)) 

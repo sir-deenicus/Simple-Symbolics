@@ -48,20 +48,6 @@ let numberToEnglish n (x:float) =
         let r = bucketRange 0 3. p
         sprintf "%g%s" (round n (x / 10. ** r)) (pow10ToString (int r))
 
-let (|RealConstant|_|) =
-    function
-    | Constant Constant.I -> None
-    | Constant c -> Some c
-    | _ -> None
-
-let (|RealApproximation|_|) =
-    function
-    | Approximation (Approximation.Real r) -> Some r
-    | _ -> None
-
-let (|AsInteger|_|) = function
-    | Number n when n.IsInteger -> Some n.Numerator
-    | _ -> None
 
 type Numerics.BigInteger with
     static member FromString(str : string) =
@@ -192,7 +178,7 @@ type Expression with
     member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
     member t.ToBigInt() =
         match t with
-        | AsInteger n -> n
+        | Number n when n.IsInteger -> n
         | _ -> failwith "not an integer"
 
     member t.ToInt() =
@@ -205,6 +191,17 @@ type Expression with
         | Number n -> Some n
         | _ -> None
 
+let (|RealConstant|_|) =
+    function
+    | Constant Constant.I -> None
+    | Constant c -> Some c
+    | _ -> None
+
+let (|RealApproximation|_|) =
+    function
+    | Approximation (Approximation.Real r) -> Some r
+    | _ -> None
+      
 module Expression =
     open MathNet.Symbolics
     open System
@@ -314,7 +311,12 @@ module Expression =
         | Product l -> List.forall isPositive l
         | x -> isPositiveNumber x
 
-module Approximations =
+//module Approximation =
+//    let round n =
+//        function
+//        | Approximation(Approximation.Real r) -> Approximation(round n r)
+//        | x -> x
+module Approximation =
     let round n = function
         | Approximation(Real r) -> Approximation(Real (round n r))
         | IntervalF i ->
@@ -393,8 +395,20 @@ let (|IntegerLiteral|_|) m = function
     | Number n as q when n.IsInteger && int n = m -> Some q
     | _ -> None
 
-let (|IntegerNumber|_|) = function
+let (|BigIntegerEqualsRes|_|) m = function
+    | Number n when n.IsInteger && int n = m -> Some (n.Numerator)
+    | _ -> None
+
+let (|IsIntegerLiteral|_|) m = function
+    | Number n when n.IsInteger && int n = m -> Some()
+    | _ -> None
+      
+let (|IsInteger|_|) = function
     | Number n as q when n.IsInteger -> Some q
+    | _ -> None
+
+let (|AsBigInteger|_|) = function
+    | Number n when n.IsInteger -> Some n.Numerator
     | _ -> None
 
 let (|IsNumber|_|) = function
@@ -427,6 +441,10 @@ let (|Minus|_|) = function
       | Sum [a; Product [Number n; b]] when n = -1N -> Some (a,b)
       | Sum [Number n; a] when n < 0N -> Some(a, Number n)
       | _ -> None
+
+let (|Plus|_|) = function 
+    | Sum [a; b] -> Some(a,b)
+    | _ -> None
 
 let (|Divide|_|) e =
     let den = Rational.denominator e
@@ -539,9 +557,9 @@ let primeFactorsPartialExpr =
                    >> Product)
 
 let evalBigIntLog = function
-    | Function(Ln, AsInteger x) -> ofFloat (BigInteger.Log x)
-    | Function(Log, AsInteger x) -> ofFloat (BigInteger.Log10 x)
-    | FunctionN(Log, [Number n; AsInteger x]) when n = 10N -> ofFloat (BigInteger.Log10 x)
+    | Function(Ln, AsBigInteger x) -> ofFloat (BigInteger.Log x)
+    | Function(Log, AsBigInteger x) -> ofFloat (BigInteger.Log10 x)
+    | FunctionN(Log, [Number n; AsBigInteger x]) when n = 10N -> ofFloat (BigInteger.Log10 x)
     | x -> x 
 
 
@@ -594,4 +612,4 @@ module Combinatorics =
         | Function (Gamma, x) -> approximateFactorial (fac (x - 1Q))
         | x -> x
         
-    let evalFactorial = function Function(Fac,AsInteger m) -> ofBigInteger(factorial m) | x -> x
+    let evalFactorial = function Function(Fac,AsBigInteger m) -> ofBigInteger(factorial m) | x -> x

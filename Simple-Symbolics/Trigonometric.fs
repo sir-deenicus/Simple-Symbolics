@@ -137,6 +137,8 @@ and simplifyWithTable =
         | _ -> atanx
     | x -> x 
 
+let simplify x = simplifyWithTable (Trigonometric.simplify x)
+
 let x = symbol "x"
 let a = symbol "a"
 let b = symbol "b"
@@ -155,3 +157,24 @@ let TrigEqualities =
       sin (a - b) <=> sin a * cos b - cos a * sin b
       cos (a + b) <=> cos a * cos b - sin a * sin b
       cos (a - b) <=> cos a * cos b + sin a * sin b ]
+
+let applyTrigEquality = function 
+    | Function(Tan, x) -> sin x / cos x
+    | Divide(Function(Sin, x), Function(Cos, y)) -> tan x
+    | Function(Cot, x) -> 1 / tan x
+    | Divide(Number n, Function(Tan, x)) when n = 1N -> cot x
+    | Function(Sec, x) -> 1 / cos x
+    | Divide(Number n, Function(Cos, x)) when n = 1N -> sec x
+    | Function(Csc, x) -> 1 / sin x
+    | Divide(Number n, Function(Sin, x)) when n = 1N -> csc x
+    | Plus(Power(Function(Sin, x), Number n), Power(Function(Cos, y), Number m)) when n = 2N && m = 2N -> 1Q
+    | Plus(Power(Function(Cos, x), Number n), Power(Function(Sin, y), Number m)) when n = 2N && m = 2N -> 1Q
+    | Function(Cos, x) -> sin (Pi / 2 - x)
+    | Function(Sin, x) -> cos (Pi / 2 - x)
+    | Function(Sin, Product[Number n; x]) when n = 2N -> 2 * sin x * cos x
+    | Function(Cos, Product[Number n; x]) when n = 2N -> (cos x) ** 2 - (sin x) ** 2
+    | Function(Sin, Plus(a, b)) -> sin a * cos b + cos a * sin b
+    | Function(Sin, Minus(a, b)) -> sin a * cos b - cos a * sin b
+    | Function(Cos, Plus(a, b)) -> cos a * cos b - sin a * sin b
+    | Function(Cos, Minus(a, b)) -> cos a * cos b + sin a * sin b
+    | x -> x

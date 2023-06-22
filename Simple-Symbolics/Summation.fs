@@ -151,7 +151,7 @@ let rewriteAsExpectation = function
 
 let rewriteExpectationAsSum = function
     | IsExpectation(expr, distr) ->
-        match Structure.first Expression.isVariable (Prob.innerProb distr) with
+        match Structure.first Expression.isVariable (Prob.inner distr) with
         | Some dx -> FunctionN(SumOver, [(distr * expr);dx])
         | None -> FunctionN(SumOver, [(distr * expr)])
     | f -> f

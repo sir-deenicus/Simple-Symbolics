@@ -176,6 +176,9 @@ let inline logf x = Core.Operators.log x
 let inline expf x = Core.Operators.exp x
 let inline log10f x = Core.Operators.log10 x
 let inline sqrtf x = Core.Operators.sqrt x
+let inline sinf x = Core.Operators.sin x
+let inline cosf x = Core.Operators.cos x
+let inline tanf x = Core.Operators.tan x
 let ceilf x = FSharp.Core.Operators.ceil x
 let floorf x = FSharp.Core.Operators.floor x
 
@@ -205,8 +208,8 @@ let ofBigInteger i = Expression.FromInteger i
 let inline ofDecimal d = ofRational (BigRational.FromDecimal (decimal d))
 let ofFloat x = Approximation (Real x)
 
-let todecimal = function | Number n -> ofFloat(float n) | f -> f
-let todecimalr roundto = function | Number n -> ofFloat(float n |> Prelude.Common.round roundto) | f -> f
+let numToDecimal = function | Number n -> ofFloat(float n) | f -> f
+let numToDecimalr roundto = function | Number n -> ofFloat(float n |> Prelude.Common.round roundto) | f -> f
 let intervalF a b = IntervalF (IntSharp.Types.Interval.FromInfSup(a,b))
 let intervalFloat(a,b) = IntSharp.Types.Interval.FromInfSup(a,b)
 let interval a b = Interval (a,b)
@@ -242,7 +245,7 @@ type FuncType =
         | Function f -> string f
         | Identity -> "id"
 
-module FunctionHelpers =
+module Func =
     ///Create a function symbol with name and parameter symbol `x`: fn "g" y = `g(y)`
     let fn name x = FunctionN(Function.Func, [Operators.symbol name;x])
     ///Create a function symbol with default name "f": fx y = `f(y)`
@@ -437,12 +440,15 @@ let (|Summation|_|) input =
 let (|SummationVar|_|) input =
      match input with
      | FunctionN(SumOver, [fx;var]) -> Some(fx,var)
+     | FunctionN(SumOver, [fx;var;_; _]) -> Some(fx,var)
      | _ -> None
 
 ///(fx)
 let (|SummationTerm|_|) input =
      match input with
      | FunctionN(SumOver, [fx]) -> Some(fx)
+     | FunctionN(SumOver, [fx;_;_;_]) -> Some(fx)
+     | FunctionN(SumOver, [fx;_]) -> Some(fx)
      | _ -> None
 
 ///(fx,var,start, stop)
@@ -455,12 +461,15 @@ let (|Products|_|) input =
 let (|ProductsVar|_|) input =
     match input with
     | FunctionN(ProductOver, [fx;var]) -> Some(fx,var) 
+    | FunctionN(ProductOver, [fx;var;_; _]) -> Some(fx,var)
     | _ -> None
 
 ///(fx)
 let (|ProductsTerm|_|) input =
     match input with
     | FunctionN(ProductOver, [fx]) -> Some(fx) 
+    | FunctionN(ProductOver, [fx;_;_;_]) -> Some(fx)
+    | FunctionN(ProductOver, [fx;_]) -> Some(fx)
     | _ -> None
 
 let (|IsIndexed|_|) input =
@@ -484,11 +493,11 @@ module Prob =
         | IsExpectation (_, px) -> px
         | _ -> Undefined
 
-    let expectationsWithInnerProb = function
+    let expectationsInnerProb = function
         | IsExpectation (_, IsProb x) -> x
         | _ -> Undefined
 
-    let innerProb = function
+    let inner = function
         | IsProb x -> x
         | _ -> Undefined
 

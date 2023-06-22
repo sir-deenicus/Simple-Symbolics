@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net5</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.52</Version>
+    <Version>0.6</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
   </PropertyGroup>
@@ -50,6 +50,7 @@
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
     <Compile Include="Integration.fs" />
+    <Compile Include="DifferentialEquations.fs" />
     <Compile Include="Requirements.fs" />
     <Compile Include="ProbabilityDistributions.fs" />
     <Compile Include="Agents.fs" />
@@ -59,21 +60,21 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Data" Version="5.0.2" />
-    <PackageReference Include="MathNet.Numerics.FSharp" Version="4.15.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.1" />
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.4" />
     <PackageReference Include="PeterO.Numbers" Version="1.8.2" />
     <PackageReference Include="Prelude" Version="1.8.7" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="6.0.4" />
+    <PackageReference Update="FSharp.Core" Version="7.0.300" />
   </ItemGroup> 
 
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|netstandard2.0|AnyCPU'">
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net5|AnyCPU'">
     <DocumentationFile>Simple-Symbolics.xml</DocumentationFile>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netstandard2.0|AnyCPU'">
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net5|AnyCPU'">
     <DocumentationFile>Simple-Symbolics.xml</DocumentationFile>
   </PropertyGroup>
   

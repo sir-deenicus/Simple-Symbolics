@@ -71,7 +71,7 @@ type Complex(r : Expression, i : Expression) =
     /// </summary>
     /// <param name="c">The complex number to take the logarithm of.</param>
     /// <returns>The natural logarithm of the complex number.</returns>
-    static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * V"n_{integer}")
+    static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * V"n_{int}")
 
     /// <summary>
     /// Raises the complex number to the specified integer power.
@@ -80,6 +80,8 @@ type Complex(r : Expression, i : Expression) =
     /// <param name="n">The integer power to raise the complex number to.</param>
     /// <returns>The complex number raised to the specified integer power.</returns>
     static member Pow(c : Complex, n : int) = c ** (Expression.FromInt32 n)
+        
+    static member Sqrt(c:Complex) = c ** (1Q/2Q)
 
     /// <summary>
     /// Raises the complex number to the specified expression power.
@@ -97,8 +99,8 @@ type Complex(r : Expression, i : Expression) =
             | 3 -> Complex(0Q, -1Q) 
             | _ -> Complex(1Q, 0Q) 
 
-        if c.Imaginary = 0Q then Complex (c.Real ** n)
-        elif c.Real = 0Q && Expression.isInteger n then  
+        if c.Imaginary = 0Q && (Expression.isInteger n || Expression.isCertainlyEven (Rational.numerator n) || Expression.isPositive c.Real) then Complex (c.Real ** n)
+        elif c.Real = 0Q && Expression.isInteger n || Expression.isCertainlyEven (Rational.numerator n) then  
             c.Imaginary ** n * imaginaryPower (Expression.toInt n)
         else
             let r = Expression.Simplify c.Magnitude
@@ -226,7 +228,9 @@ type Complex(r : Expression, i : Expression) =
     /// Simplifies the complex number.
     /// </summary>
     /// <returns>The simplified complex number.</returns>
-    member c.Simplify() = Complex(Expression.fullerSimplify r, Expression.fullerSimplify i)
+    member c.FullSimplify() = Complex(Expression.fullerSimplify r, Expression.fullerSimplify i)
+
+    member c.Simplify() = Complex(Expression.simplify (Trigonometry.simplify r), Expression.simplify (Trigonometry.simplify i))
     
     /// <summary>
     /// Creates a new complex number with the specified real part and zero imaginary part.
@@ -274,11 +278,23 @@ type Complex(r : Expression, i : Expression) =
 /// </summary>
 module Complex =  
     open Utils
+    open System
 
     /// <summary>
     /// Imaginary unit.
     /// </summary> 
     let i = Complex(0Q, 1Q)  
+
+    let apply f (c: Complex) = Complex(f c.Real, f c.Imaginary)
+    
+    let magnitude (c: Complex) = c.Magnitude 
+
+    let ofNumericsComplex (c: Numerics.Complex) = Complex(c.Real, c.Imaginary)
+
+    let ofPolar r theta =
+        Complex(r * cos theta, r * sin theta)
+
+    let simplify (c:Complex) = c.Simplify()
 
     /// <summary>
     /// Given a complex number, returns the expression that represents it.
@@ -287,6 +303,35 @@ module Complex =
     /// <returns>The expression that represents the complex number.</returns>
     let toExpression (c:Complex) =
         c.Real + (c.Imaginary * Constants.i)
+         
+    /// <summary>
+    /// Splits an `Expression` that represents a complex number into two expressions, one representing the real part and the other representing the imaginary part.
+    /// This is done by partitioning according to how the imaginary constant `i` occurs in a sum and if there is no sum, whether it is present in the expression or not.
+    /// </summary>
+    /// <param name="e">The `Expression` to split.</param>
+    /// <returns>A tuple containing the real and imaginary parts of the expression.</returns>
+    let splitToRealImaginary (e:Expression) =
+        match e with
+        | Sum l ->
+            let l', cl' = List.partition (Expression.contains Constants.i >> not) l
+            Sum l', Sum cl'
+        //handle case of just an imaginary number
+        | e when Expression.contains Constants.i e -> 0Q, e
+        | _ -> e, 0Q 
+         
+    /// <summary>
+    /// Given an expression that represents a complex number, returns the real part of the expression.
+    /// </summary>
+    /// <param name="e">The expression to get the real part of.</param>
+    /// <returns>The real part of the expression.</returns>
+    let getRealFromExpression (e:Expression) = splitToRealImaginary e |> fst
+
+    /// <summary>
+    /// Given an expression that represents a complex number, returns the imaginary part of the expression.
+    /// </summary>
+    /// <param name="e">The expression to get the imaginary part of.</param>
+    /// <returns>The imaginary part of the expression.</returns>
+    let getImaginaryFromExpression (e:Expression) = splitToRealImaginary e |> snd
 
     /// <summary>
     /// Returns the imaginary power of i. It uses the rules of powers of i (powers of i have a simple pattern with a cycle of 4) to simplify the expression.
@@ -315,7 +360,7 @@ module Complex =
         x
         |> recmap (function  
             | SquareRoot(IsRealNumber (IsNegativeNumber e)) -> Constants.i * sqrt(-e) //negative square roots are imaginary.
-            | Power(IsRealNumber  (IsNegativeNumber e), Number n) when n.Denominator = 2I -> 
+            | Power(IsRealNumber (IsNegativeNumber e), Number n) when n.Denominator = 2I -> 
                 (Constants.i * sqrt(-e)) ** Operators.fromInteger n.Numerator 
             | x -> x )
         |> Algebraic.expand

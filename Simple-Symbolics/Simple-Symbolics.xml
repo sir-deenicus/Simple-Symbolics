@@ -2,9 +2,255 @@
 <doc>
 <assembly><name>Simple-Symbolics</name></assembly>
 <members>
+<member name="M:MathNet.Symbolics.Complex.op_UnaryNegation(MathNet.Symbolics.Complex)">
+ <summary>
+ Negates the complex number.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Subtraction(MathNet.Symbolics.Complex,MathNet.Symbolics.Complex)">
+ <summary>
+ Subtracts two complex numbers.
+ </summary>
+ <param name="a">The first complex number to subtract.</param>
+ <param name="b">The second complex number to subtract.</param>
+ <returns>The difference between the two complex numbers.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Subtraction(MathNet.Symbolics.Expression,MathNet.Symbolics.Complex)">
+ <summary>
+ Subtracts the complex number from the expression.
+ </summary>
+ <param name="a">The expression to subtract from.</param>
+ <param name="b">The complex number to subtract.</param>
+ <returns>The difference between the expression and the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Subtraction(MathNet.Symbolics.Complex,MathNet.Symbolics.Expression)">
+ <summary>
+ Subtracts the expression from the complex number.
+ </summary>
+ <param name="a">The complex number to subtract from.</param>
+ <param name="b">The expression to subtract.</param>
+ <returns>The difference between the complex number and the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Multiply(MathNet.Symbolics.Expression,MathNet.Symbolics.Complex)">
+ <summary>
+ Multiplies the expression and the complex number.
+ </summary>
+ <param name="a">The expression to multiply.</param>
+ <param name="b">The complex number to multiply.</param>
+ <returns>The product of the expression and the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Multiply(MathNet.Symbolics.Complex,MathNet.Symbolics.Expression)">
+ <summary>
+ Multiplies the complex number and the expression.
+ </summary>
+ <param name="a">The complex number to multiply.</param>
+ <param name="b">The expression to multiply.</param>
+ <returns>The product of the complex number and the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Multiply(MathNet.Symbolics.Complex,MathNet.Symbolics.Complex)">
+ <summary>
+ Multiplies two complex numbers.
+ </summary>
+ <param name="a">The first complex number to multiply.</param>
+ <param name="b">The second complex number to multiply.</param>
+ <returns>The product of the two complex numbers.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Division(MathNet.Symbolics.Expression,MathNet.Symbolics.Complex)">
+ <summary>
+ Divides the expression by the complex number.
+ </summary>
+ <param name="a">The expression to divide.</param>
+ <param name="b">The complex number to divide by.</param>
+ <returns>The quotient of the expression and the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Division(MathNet.Symbolics.Complex,MathNet.Symbolics.Complex)">
+ <summary>
+ Divides two complex numbers.
+ </summary>
+ <param name="a">The numerator complex number.</param>
+ <param name="b">The denominator complex number.</param>
+ <returns>The quotient of the two complex numbers.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Division(MathNet.Symbolics.Complex,MathNet.Symbolics.Expression)">
+ <summary>
+ Divides the complex number by the expression.
+ </summary>
+ <param name="a">The complex number to divide.</param>
+ <param name="b">The expression to divide by.</param>
+ <returns>The quotient of the complex number and the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Addition(MathNet.Symbolics.Complex,MathNet.Symbolics.Complex)">
+ <summary>
+ Adds two complex numbers.
+ </summary>
+ <param name="a">The first complex number to add.</param>
+ <param name="b">The second complex number to add.</param>
+ <returns>The sum of the two complex numbers.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Addition(MathNet.Symbolics.Expression,MathNet.Symbolics.Complex)">
+ <summary>
+ Adds the expression and the complex number.
+ </summary>
+ <param name="a">The expression to add.</param>
+ <param name="b">The complex number to add.</param>
+ <returns>The sum of the expression and the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.op_Addition(MathNet.Symbolics.Complex,MathNet.Symbolics.Expression)">
+ <summary>
+ Adds the complex number and the expression.
+ </summary>
+ <param name="a">The complex number to add.</param>
+ <param name="b">The expression to add.</param>
+ <returns>The sum of the complex number and the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.magnitude(MathNet.Symbolics.Complex)">
+ <summary>
+ Gets the magnitude of the complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Zero">
+ <summary>
+ Gets the zero complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Real">
+ <summary>
+ Gets the real part of the complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Phase">
+ <summary>
+ Gets the phase of the complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Magnitude">
+ <summary>
+ Gets the magnitude of the complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Imaginary">
+ <summary>
+ Gets the imaginary part of the complex number.
+ </summary>
+</member>
+<member name="P:MathNet.Symbolics.Complex.Conjugate">
+ <summary>
+ Gets the complex conjugate of the complex number.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Complex.ToString">
+ <summary>
+ Returns a string that represents the complex number.
+ </summary>
+ <returns>A string representation of the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.ToComplex">
+ <summary>
+ Converts the complex number to a System.Numerics.Complex value.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Complex.Pow(MathNet.Symbolics.Complex,MathNet.Symbolics.Expression)">
+ <summary>
+ Raises the complex number to the specified expression power.
+ </summary>
+ <param name="c">The complex number to raise to a power.</param>
+ <param name="n">The expression power to raise the complex number to.</param>
+ <returns>The complex number raised to the specified expression power.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.Pow(MathNet.Symbolics.Complex,System.Int32)">
+ <summary>
+ Raises the complex number to the specified integer power.
+ </summary>
+ <param name="c">The complex number to raise to a power.</param>
+ <param name="n">The integer power to raise the complex number to.</param>
+ <returns>The complex number raised to the specified integer power.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.Log(MathNet.Symbolics.Complex)">
+ <summary>
+ Returns the natural logarithm of the complex number.
+ </summary>
+ <param name="c">The complex number to take the logarithm of.</param>
+ <returns>The natural logarithm of the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.GetHashCode">
+ <summary>
+ Returns a hash code for the complex number.
+ </summary>
+ <returns>A hash code for the complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.FullSimplify">
+ <summary>
+ Simplifies the complex number.
+ </summary>
+ <returns>The simplified complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.Equals(System.Object)">
+ <summary>
+ Determines whether the specified object is equal to the complex number.
+ </summary>
+ <param name="b">The object to compare to the complex number.</param>
+ <returns>True if the object is equal to the complex number, false otherwise.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Complex.Abs(MathNet.Symbolics.Complex)">
+ <summary>
+ Gets the absolute value of the complex number.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Complex.#ctor(MathNet.Symbolics.Expression)">
+ <summary>
+ Creates a new complex number with the specified real part and zero imaginary part.
+ </summary>
+ <param name="r">The real part of the complex number.</param>
+</member>
+<member name="T:MathNet.Symbolics.Complex">
+ <summary> 
+ Represents a complex number.
+ </summary>
+ <param name="r">The real part of the complex number.</param>
+ <param name="i">The imaginary part of the complex number.</param>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|ProductsTerm|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|ProductsVar|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx, var)
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.|Products|_|(MathNet.Symbolics.Expression)">
 <summary>
 (fx,var,start, stop)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|SummationTerm|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|SummationVar|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx, var)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|Summation|_|(MathNet.Symbolics.Expression)">
+<summary>
+(fx,var,start, stop)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|IsDerivative|_|(MathNet.Symbolics.Expression)">
+<summary>
+ This active pattern matches a function expression with a derivative operator and its argument.
+ It returns a tuple with the derivative operator, the variable with respect to which the derivative is taken, and the differential.
+ If the input does not match this pattern, it returns None.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|IsFunctionExprNameOnly|_|(MathNet.Symbolics.Expression)">
+<summary>
+ This active pattern matches a function expression with only the function name and its argument.
+ It returns a tuple with the function name and its argument.
+ If the input does not match this pattern, it returns None.
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Utils.defineStr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,System.String)">
@@ -22,22 +268,22 @@ use partial differentiation Leibniz notation
 wrap input expression in Leibniz notation for differentiation.
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fxn(System.String,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.Func.fxn(System.String,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Create a function with parameter, body and name : fxn &quot;g&quot; x x^2 = `x |-&gt; x^2`
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fx2(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.Func.fx2(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Create a function with parameter, body and default name &quot;f&quot;: fx2 x x^2 = `x |-&gt; x^2`
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fx(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.Func.fx(MathNet.Symbolics.Expression)">
 <summary>
 Create a function symbol with default name &quot;f&quot;: fx y = `f(y)`
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Utils.FunctionHelpers.fn(System.String,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Utils.Func.fn(System.String,MathNet.Symbolics.Expression)">
 <summary>
 Create a function symbol with name and parameter symbol `x`: fn &quot;g&quot; y = `g(y)`
 </summary>
@@ -53,9 +299,40 @@ Create a function symbol with name and parameter symbol `x`: fn &quot;g&quot; y 
    <remarks>Simple Symbolics is a library built atop MathNet Symbolics. It is not meant to be a replacement for computer algebra systems. Such systems are largely automatic and quite heavyweight. This project intends to diverge a bit from typical CAS to look at what happens when you simply automate tedium and slightly augment a human? The manipulations are meant as much as possible to mirror what a human would do. The code can thus serve as a description of how humans typically approach these problems. Otherwise, it also provide tools that can be combined to do so. An example is indefinite integration. CAS systems can in instances give very unintuitive answers or otherwise fail to complete where a human could. Another difference is the intention to combine with basic logic programming and serve as a note taking tool when reading mathematical papers. This system will then augment the working memory for the reader but also (end goal) allow manipulation of some of the claims.</remarks>
  </namespacedoc>
 </member>
-<member name="M:MathNet.Symbolics.NumberProperties.BigRational.fromFloat(System.Double)">
+<member name="M:MathNet.Symbolics.NumberProperties.Combinatorics.gammaApproximationRamanujan(MathNet.Symbolics.Expression)">
+<summary>
+approximate gamma function using Ramanujan&apos;s factorial approximation
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.NumberProperties.BigRational.decimalExpansion(MathNet.Numerics.BigRational)">
+<summary>
+first index is sign of the number
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.NumberProperties.BigRational.fromRepeatingDecimal(System.Decimal)">
 <summary>
 limited by range of decimal (which is used as a less noisy alternative to floats)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Equations.gtp(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Equations.InEqualityModule.NumSign}},MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+p stands for number polarity, eg positive or negative
+Creates a &gt; b with the given variable signs
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Equations.ltp(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Equations.InEqualityModule.NumSign}},MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+p stands for number polarity, eg positive or negative
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Equations.geqp(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Equations.InEqualityModule.NumSign}},MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+p stands for number polarity, eg positive or negative
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Equations.leqp(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Equations.InEqualityModule.NumSign}},MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+p stands for number polarity, eg positive or negative
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Equations.EquationModule.multiplyDenominatorsAndSubtract(MathNet.Symbolics.Equations.Equation)">
@@ -63,40 +340,81 @@ limited by range of decimal (which is used as a less noisy alternative to floats
 convenience function that multiplies by denominator of right and left sides of equation and then subtracts right side ex : a/b = c /d -&gt; a * d = b * c -&gt; a * d - b * c = 0
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.applyfn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="T:MathNet.Symbolics.Core.FreshVar">
+<summary>
+FreshVar is a class that manages the generation of fresh variables which are strings of the form x_1, x_2, x_3, etc.
+ Letter is the prefix of the variable name, e.g. x_1, x_2, x_3, etc.
+ StartIndex is the number to start counting from, e.g. 0, 1, 2, etc.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Indices.applySymbolLookUp(System.Int32,System.Collections.Generic.IEnumerable{MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+<summary>
+ Creates a function that given an expression, replaces the indexed variables with the given values.
+ &lt;/summary&gt;
+ &lt;param name=&quot;startIndex&quot;&gt;The starting index for the symbol lookup.&lt;/param&gt;
+ &lt;param name=&quot;vals&quot;&gt;A sequence of values.&lt;/param&gt;
+ &lt;param name=&quot;var&quot;&gt;A variable expression.&lt;/param
+ &lt;returns&gt;A function that given an expression, replaces the indexed variables with the given values.&lt;/returns&gt;
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Indices.createSymbolLookUp(System.Int32,System.Collections.Generic.IEnumerable{MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+<summary>
+ Creates a symbol lookup for the given values starting from the given startIndex.
+ &lt;/summary&gt;
+ &lt;param name=&quot;startIndex&quot;&gt;The start index for the variables.&lt;/param&gt;
+ &lt;param name=&quot;vals&quot;&gt;An enumerable collection of expressions.&lt;/param&gt;
+ &lt;param name=&quot;var&quot;&gt;The variable for which symbol lookup needs to be created.&lt;/param&gt;
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Indices.createLookUp(System.Int32,System.Collections.Generic.IEnumerable{MathNet.Symbolics.Expression},System.String)">
+<summary>
+Given a symbol name, say s, creates a lookup table with each index s_i assigned to a correpsonding index in table
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Indices.eraseIndexing``1(System.Int32,System.Int32,``0,MathNet.Symbolics.Expression)">
+<summary>
+Given variables such as $c_1, c_2, c_3$ etc, replaces them with `replacement`.
+</summary>
+</member>
+<member name="T:MathNet.Symbolics.Core.Indices">
+ <summary>
+ Module containing functions for symbol indexing on provided expressions and variables.
+ The module includes several functions such as `createSymbolLookUp`, `eraseIndexing`, 
+ `applySymbolLookUp`, and `createLookUp` that work together to replace indexed variables with 
+ a given replacement, create look up tables with each index assigned to a corresponding index 
+ in a table, apply symbol lookup to an expression, and create a symbol lookup for the given 
+ values starting from the given start index respectively.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Func.applyfn(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Given a function expression, creates a function and then applies parameter. Best for single use.
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.funcOfExpr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.Func.fnOfExprMV(Microsoft.FSharp.Collections.FSharpList{MathNet.Symbolics.Expression},MathNet.Symbolics.Expression,Microsoft.FSharp.Collections.FSharpList{MathNet.Symbolics.Expression})">
+<summary>
+Returns an F# function pf type Expression list -&gt; Expression given a formula expression
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Func.fnOfExpr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 Returns an F# function given a formula expression
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.toFunc(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.Func.toFnMV(MathNet.Symbolics.Expression)">
+<summary>
+Given a function expression with a body and that also takes a tuple as input, returns an F# function with type: Expression list -&gt; Expression.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Func.toFn(MathNet.Symbolics.Expression)">
 <summary>
 Given a function expression with a body, returns an F# function. See also
 toFuncMV &lt;see cref=&quot;M:MathNet.Symbolics.Core.toFuncMV&quot;/&gt;
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Core.evalToDecimalFn(Microsoft.FSharp.Core.FSharpFunc{System.Double,System.Double},MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Core.Rational.splitQuotientOfProducts(MathNet.Symbolics.Expression)">
 <summary>
-If the expression is a number converts to a float expression with f applied
-</summary>
-</member>
-<member name="M:MathNet.Symbolics.Core.evalToDecimal(MathNet.Symbolics.Expression)">
-<summary>
-If the expression is a number converts to a float expression instead of its symbolic form
-</summary>
-</member>
-<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrNamedVars.Static(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
-<summary>
-eval with numbers or vars with the phrase &quot;Var&quot; in the symbol name are acceptable
-</summary>
-</member>
-<member name="M:MathNet.Symbolics.Core.Expression.evalExprToNumericOrVars.Static(Microsoft.FSharp.Core.FSharpFunc{System.String,System.Boolean},System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
-<summary>
-eval with numbers or vars (optionally) are acceptable
+given (a*b)/(c*d) return a/c * b/d
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Core.Rational.partitionSumInNumerator(Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,System.Boolean},MathNet.Symbolics.Expression)">
@@ -114,6 +432,26 @@ given (a+b)/x, returns a/x + b/x
 Apply a function to the numerator of any rational whose denominator &lt;&gt; 1
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalToNumeric(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
+<summary>
+eval with numbers or vars with special physics concepts (see Core.Desc) in the symbol name are acceptable
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalToNumericOrVars(Microsoft.FSharp.Core.FSharpFunc{System.String,System.Boolean},System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
+<summary>
+eval with numbers or vars (optionally) are acceptable
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalToDecimalFn(Microsoft.FSharp.Core.FSharpFunc{System.Double,System.Double},MathNet.Symbolics.Expression)">
+<summary>
+If the expression is a number converts to a float expression with f applied
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Expression.evalToDecimal(MathNet.Symbolics.Expression)">
+<summary>
+If the expression is a number converts to a float expression instead of its symbolic form
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Core.Expression.extractNegativeOne(MathNet.Symbolics.Expression)">
 <summary>
 This rewrites the expression in terms of its negation, but multiplies it with -1 so as to keep it equal, effectively pulling out a -1. Useful for cancelling sometimes.
@@ -123,11 +461,6 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
 <member name="M:MathNet.Symbolics.Core.Expression.cancelAbs(MathNet.Symbolics.Expression)">
 <summary>
  condition: x &gt; 0
-</summary>
-</member>
-<member name="M:MathNet.Symbolics.Core.Structure.mapfirstNF(System.Int32,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,System.Boolean},Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
-<summary>
-Map the first N while also applying a filter
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">
@@ -150,12 +483,104 @@ log a + log b + ... -&gt; log (a*b...)
 log (a * b) -&gt; log a + log b
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Summation.binomialTheorem(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Algebraic.intersectAllSimple(Microsoft.FSharp.Collections.FSharpList{MathNet.Symbolics.Expression})">
+ <summary>
+ Intersects all products in a sum and returns the list of intersected products.
+ </summary>
+ <param name="l">The list of products to intersect.</param>
+ <returns>A list containing the intersected products.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Algebraic.consolidateSums2(MathNet.Symbolics.Expression)">
+ <summary>
+ Alternate Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+ </summary>  
+ <returns>The consolidated expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Algebraic.intersectAll(Microsoft.FSharp.Collections.FSharpList{MathNet.Symbolics.Expression})">
+ <summary>
+ Intersects all products in a sum and returns the list of intersected products or common factors and also attempts to compute a rational representing gcd of expression coeffecients.
+ </summary>
+ <param name="l">The list of products to intersect.</param>
+ <returns>A tuple containing the list of intersected products and the common factor.</returns>
+</member>
+<member name="P:MathNet.Symbolics.Algebraic.consolidateSums">
+ <summary>
+ Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+ </summary>  
+ <returns>The consolidated expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Algebraic.consolidateSumsBy(Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression[],MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+ <summary>
+ Consolidates sums eg a * b + a * c = a * (b + c) in an expression by extracting the common factor.
+ </summary>
+ <param name="chooser">A function that chooses the common factor to divide out.</param>
+ <param name="expr">The expression to consolidate.</param>
+ <returns>The consolidated expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Algebraic.groupInSumWith(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+ <summary>
+ Groups together expressions in a sum that contain a given variable.
+ </summary>
+ <param name="var">The variable to group by.</param>
+ <param name="expr">The expression to group.</param>
+ <returns>The grouped expression.</returns>
+</member>
+<member name="P:MathNet.Symbolics.Rational.cancelDivision">
+ <summary>Cancels out common factors in a division expression.</summary>
+ <param name="e">The expression to simplify.</param>
+</member>
+<member name="M:MathNet.Symbolics.Rational.reciprocal(MathNet.Symbolics.Expression)">
+ <summary>Computes the reciprocal of an expression.</summary>
+ <param name="e">The expression.</param> 
+</member>
+<member name="M:MathNet.Symbolics.Units.Physics.bremermannsLimit(MathNet.Symbolics.Units.Units)">
+<summary>
+Bremermann&apos;s limit is a limit on the maximum rate of computation that can be achieved in a self-contained system in the material universe
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Units.Physics.bekensteinBound(MathNet.Symbolics.Units.Units,MathNet.Symbolics.Units.Units)">
+ <summary>
+ The Bekenstein bound is an upper limit on the entropy S, or information I, that can be contained within a given finite region of space which has a finite amount of energy—or conversely, the maximum amount of information required to perfectly describe a given physical system down to the quantum level.
+ </summary>
+ <param name="radius"></param>
+ <param name="energy"></param> 
+</member>
+<member name="M:MathNet.Symbolics.Units.Physics.margolusLevitinLimit(MathNet.Symbolics.Units.Units)">
+<summary>
+A quantum system of energy E needs at least a time of h/4E to go from one state to an orthogonal state
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Units.Physics.sun_2019EU5_max_distance">
+<summary>
+2019EU5 is an extreme trans-Neptunian object. It has an orbit that acheives the furthest object in the solar system as of 2023.
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Units.Physics.sun_sedna_max_distance">
+<summary>
+ The sun sedna distance is the distance from the sun to the furthest object in the solar system. Sedna is found in the Oort cloud, a cloud of icy objects that surrounds the solar system.
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Units.Physics.sun_heliosphere_distance">
+<summary>
+ The heliosphere is the region of space where the solar wind is present. It is a bubble of charged particles that surrounds the solar system. The sun heliosphere distance is the distance from the sun to the edge of the heliosphere.
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Units.Physics.boltzman_constant">
+<summary>
+ The Boltzmann constant is a physical constant relating energy at the individual particle level with temperature. It is the gas constant R divided by the Avogadro constant and has the same units as entropy.   
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Units.Physics.stefan_boltzman">
+<summary>
+ The stefan boltzman constant is a physical constant relating the temperature of a black body to the energy radiated per unit surface area per unit time. It is the Stefan-Boltzmann constant σ = 2π^5k^4/(15c^2h^3) = 5.670367e-8 W m^-2 K^-4.
+</summary>
+</member>
+<member name="P:MathNet.Symbolics.Summation.binomialTheorem">
 <summary>
  condition: n &gt;= 0
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.Summation.simplifyInfiniteGeometricSum(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.Summation.simplifyGeometricSum(MathNet.Symbolics.Expression)">
 <summary>
  condition: r &lt;= 1, r &gt; 0
 </summary>
@@ -169,6 +594,101 @@ merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x
 <summary>
 Adjusts summation to have a start, stop or var if it does not already
 </summary>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.ofExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Converts the expression to a complex number.
+ </summary>
+ <param name="zx">The expression to convert.</param>
+ <returns>The complex number.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.simplifyExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Simplifies the given expression with the assumption that it is a complex number.
+ Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.   
+ </summary>
+ <param name="x"></param>
+ <returns>The simplified expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.imaginaryPowerExpression(System.Int32)">
+ <summary>
+ Returns the imaginary power of i. It uses the rules of powers of i (powers of i have a simple pattern with a cycle of 4) to simplify the expression.
+ </summary>
+ <param name="n">The power of i.</param>
+ <returns>The simplified imaginary power of i.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.getImaginaryFromExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Given an expression that represents a complex number, returns the imaginary part of the expression.
+ </summary>
+ <param name="e">The expression to get the imaginary part of.</param>
+ <returns>The imaginary part of the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.getRealFromExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Given an expression that represents a complex number, returns the real part of the expression.
+ </summary>
+ <param name="e">The expression to get the real part of.</param>
+ <returns>The real part of the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.splitToRealImaginary(MathNet.Symbolics.Expression)">
+ <summary>
+ Splits an `Expression` that represents a complex number into two expressions, one representing the real part and the other representing the imaginary part.
+ This is done by partitioning according to how the imaginary constant `i` occurs in a sum and if there is no sum, whether it is present in the expression or not.
+ </summary>
+ <param name="e">The `Expression` to split.</param>
+ <returns>A tuple containing the real and imaginary parts of the expression.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.toExpression(MathNet.Symbolics.Complex)">
+ <summary>
+ Given a complex number, returns the expression that represents it.
+ </summary>
+ <param name="c">The complex number to convert to an expression.</param>
+ <returns>The expression that represents the complex number.</returns>
+</member>
+<member name="P:MathNet.Symbolics.ComplexModule.i">
+ <summary>
+ Imaginary unit.
+ </summary> 
+</member>
+<member name="T:MathNet.Symbolics.ComplexModule">
+ <summary>
+ Contains utility functions for working with complex numbers.
+ </summary>
+</member>
+<member name="M:MathNet.Symbolics.Differentiation.chainrule``1(MathNet.Symbolics.Expression,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},Microsoft.FSharp.Core.FSharpFunc{``0,MathNet.Symbolics.Expression})">
+ <summary>
+ Computes the derivative of a composition of two functions using the chain rule.
+ </summary>
+ <param name="dx">The variable with respect to which the derivative is taken.</param>
+ <param name="f">The outer function.</param>
+ <param name="g">The inner function.</param>
+ <returns>A function that represents the derivative of the composition of f and g.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Differentiation.newtonsMethod(MathNet.Symbolics.Expression,System.Int32,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+ <summary>
+ Newton's method is an iterative method for finding the roots of a differentiable function f, which are the values of x such that f(x) = 0. 
+ The method starts with a guess x0 for a root of f, and repeatedly improves the guess by Newton's method formula: x_{n+1} = x_n - f(x_n)/f'(x_n), 
+ where f' is the derivative of f. The function newtonsMethod implements Newton's method for finding the roots of a function f in numeric (and not symbolic) mode. 
+ </summary>
+ <param name="symbol">The symbol with respect to which the derivative is taken.</param>
+ <param name="iters">The number of iterations to perform.</param>
+ <param name="f">The function to find the roots of.</param>
+ <param name="x0">The initial guess for the root.</param>
+ <returns>The root of the function f.</returns>
+</member>
+<member name="M:MathNet.Symbolics.Differentiation.newtonsMethodAux(MathNet.Symbolics.Differentiation.EvalMethod,MathNet.Symbolics.Expression,System.Int32,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+ <summary>
+ Newton's method is an iterative method for finding the roots of a differentiable function f, which are the values of x such that f(x) = 0. 
+ The method starts with a guess x0 for a root of f, and repeatedly improves the guess by Newton's method formula: x_{n+1} = x_n - f(x_n)/f'(x_n), 
+ where f' is the derivative of f. The function newtonsMethodAux implements Newton's method for finding the roots of a function f. 
+ </summary>
+ <param name="evalMethod">The method used to evaluate the function. None means no evaluation, Simplify means full simplification, Numeric means numeric evaluation.</param>
+ <param name="symbol">The symbol with respect to which the derivative is taken.</param>
+ <param name="iters">The number of iterations to perform.</param>
+ <param name="f">The function to find the roots of.</param>
+ <param name="x0">The initial guess for the root.</param>
+ <returns>The root of the function f.</returns>
 </member>
 <member name="P:MathNet.Symbolics.Differentiation.Dx">
 <summary>
@@ -188,6 +708,37 @@ Recursively evaluates all derivative notation expressions in expression. see als
 <member name="M:MathNet.Symbolics.Differentiation.evalDerivative(MathNet.Symbolics.Expression)">
 <summary>
 Given an input expression that&apos;s a Leibniz notation expression of the derivative of a function, calculates its derivative.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.LinearAlgebra.MatrixExtensions.TrackedSymbolicMatrix.Next(System.Int32,System.Int32)">
+ <summary>
+ Generates a new matrix of variables based on the current state of the tracked symbolic matrix then advances the currently selected variable.
+ </summary>
+ <param name="r">The number of rows in the generated matrix.</param>
+ <param name="cols">The number of columns in the generated matrix.</param>
+ <returns>A new matrix of variables.</returns>
+</member>
+<member name="T:MathNet.Symbolics.LinearAlgebra.MatrixExtensions.TrackedSymbolicMatrix">
+ <summary>
+ A matrix type that tracks the variables used to construct it. 
+ The TrackedSymbolicMatrix class is designed to generate a matrix of variables, with each entry being an indexed subscript of the current variable.
+ </summary>
+ <param name="chars">The list of characters used to generate the matrix. If None, list of variables starts from 'a' to 'z'.</param>
+ <param name="startchar">The character to start with for the next variable, If None, variable starts from 'a'. chars` argument overrides this.</param>
+</member>
+<member name="M:MathNet.Symbolics.LinearAlgebra.Matrix.extractHadamardFromKronecker(System.Int32,System.Int32,MathNet.Symbolics.LinearAlgebra.Matrix{MathNet.Symbolics.Expression})">
+<summary>
+extract hadamard product matrix from kronecker product matrix
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.LinearAlgebra.Vector.zeroVector``1(``0,System.Int32)">
+<summary>
+zero vector of dim n
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.LinearAlgebra.Vector.random(System.Int32)">
+<summary>
+generate random vector 
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Solving.Polynomial.factor(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">

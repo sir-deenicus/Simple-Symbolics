@@ -141,10 +141,16 @@ module Exponents =
     let replaceEtoExp = function
         | Power(Constant (Constant.E),x) -> 
             Function(Exp, x)
-        | f -> f
+        | f -> f 
 
     let powerRule = function
         | Power(Power(x, a), b) -> Power(x, (a * b))
+        | Power(Product l, b) ->   
+            let rec loop acc = function
+                | [] -> Product acc
+                | (Power(x, a))::xs -> loop (Power(x, (a * b))::acc) xs
+                | x::xs -> loop (x**b::acc) xs
+            loop [] l 
         | x -> x 
 
     let powerRuleRev dohold = function

@@ -209,8 +209,8 @@ let yard = 3 * ft |> setAlt "yards"
 let inches = 1Q/12Q * ft |> setAlt "inches"
 let au =  150Q * mega * km |> setAlt "AU"
 let parsec =  206265 * au |> setAlt "parsec"
+let ly = 9.4607 * peta * meter |> setAlt "light year"
 let mm = milli * meter |> setAlt "mm"
-
 
 let liter = 1000 * cm ** 3 |> setAlt "L"
 let cups = 236.588 * milli * liter |> setAlt "cups"
@@ -527,9 +527,11 @@ module Physics =
     let speed_of_light = 299_792_458 * meter / sec
     let G = Expression.fromFloat64 6.674e-11 * meter ** 3 * kg ** -1 * sec ** -2
      
+    /// The stefan boltzman constant is a physical constant relating the temperature of a black body to the energy radiated per unit surface area per unit time. It is the Stefan-Boltzmann constant σ = 2π^5k^4/(15c^2h^3) = 5.670367e-8 W m^-2 K^-4.
     let stefan_boltzman =
         Expression.fromFloat64 5.670367e-8 * W * meter ** -2 * K ** -4
  
+    /// The Boltzmann constant is a physical constant relating energy at the individual particle level with temperature. It is the gas constant R divided by the Avogadro constant and has the same units as entropy.   
     let boltzman_constant = Expression.fromFloat64 1.38064852e-23 * J / K
  
     let lightyear = speed_of_light * year
@@ -539,8 +541,14 @@ module Physics =
     let mass_of_sun = 1.989 * 10Q**30 * kg
     let solar_system_mass = 1.0014 * mass_of_sun
 
+    /// The heliosphere is the region of space where the solar wind is present. It is a bubble of charged particles that surrounds the solar system. The sun heliosphere distance is the distance from the sun to the edge of the heliosphere.
     let sun_heliosphere_distance = 90 * au 
-    let sun_sedna_distance = 960.78 * au
+
+    /// The sun sedna distance is the distance from the sun to the furthest object in the solar system. Sedna is found in the Oort cloud, a cloud of icy objects that surrounds the solar system.
+    let sun_sedna_max_distance = 937 * au
+
+    ///2019EU5 is an extreme trans-Neptunian object. It has an orbit that acheives the furthest object in the solar system as of 2023.
+    let sun_2019EU5_max_distance = 2395 * au
  
     let density_water = 1 * gram / cm**3
     
@@ -551,6 +559,11 @@ module Physics =
         if e.Unit <> J.Unit then failwith "Not an energy unit"
         else planck / (4 * e):Time
 
+    /// <summary>
+    /// The Bekenstein bound is an upper limit on the entropy S, or information I, that can be contained within a given finite region of space which has a finite amount of energy—or conversely, the maximum amount of information required to perfectly describe a given physical system down to the quantum level.
+    /// </summary>
+    /// <param name="radius"></param>
+    /// <param name="energy"></param> 
     let bekensteinBound (radius:Length) (energy:Energy) =  
         if radius.Unit <> meter.Unit then failwith "radius is not a unit of distance"
         if energy.Unit <> J.Unit then failwith "E is not a unit of energy"

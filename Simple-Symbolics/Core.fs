@@ -6,7 +6,7 @@ open System
 open MathNet.Symbolics.Utils
 open Prelude.Common
 open MathNet.Symbolics.NumberProperties
-open Utils.FunctionHelpers
+open Utils.Func
 
 let ln = Operators.ln
 let arctan = Operators.arctan
@@ -137,12 +137,22 @@ type Vars() =
     static member Gamma = Vars.letter "Γ" "\\Gamma" |> V
     static member delta = Vars.letter "δ" "\\delta" |> V
     static member Delta = Vars.letter "Δ" "\\Delta"  |> V
-    static member epsilon = Vars.letter "ε" "\\epsilon" |> V
+    static member epsilon = Vars.letter "ϵ" "\\epsilon" |> V
+    static member vepsilon = Vars.letter "ε" "\\varepsilon" |> V
+    static member zeta = Vars.letter "ζ" "\\zeta" |> V 
     static member eta = Vars.letter "η" "\\eta" |> V
+    static member phi = Vars.letter "ϕ" "\\phi" |> V
+    //curly phi
+    static member vphi = Vars.letter "φ" "\\varphi" |> V
+    static member Phi = Vars.letter "Φ" "\\Phi" |> V
+    static member iota = Vars.letter "ι" "\\iota" |> V
     static member Lambda = Vars.letter "Λ" "\\Lambda" |> V
     static member lambda = Vars.letter "λ" "\\lambda" |> V
     static member mu = Vars.letter "μ" "\\mu" |> V
     static member nu = Vars.letter "v" "\\nu" |> V
+    static member xi = Vars.letter "ξ" "\\xi" |> V
+    static member Xi = Vars.letter "Ξ" "\\Xi" |> V
+    static member psi = Vars.letter "ψ" "\\psi" |> V
     static member Theta = Vars.letter "Θ" "\\Theta" |> V
     static member theta = Vars.letter "θ" "\\theta" |> V
     static member rho = Vars.letter "ρ" "\\rho" |> V
@@ -504,28 +514,33 @@ module Structure =
             List.map (fun fx -> f fx) l |> Sum
         | f -> f
     
-    let getAtLoc h v expr = 
+    let getAtLocFilter filter h v expr = 
         let rec walk ch cv = function 
-        | x when ch = h && cv = v -> Some x 
-        | Function(f, x) -> printfn "%A" (f, ch, cv); walk 0 (cv + 1) x   
+        | x when ch = h && cv = v && filter x -> Some x 
+        | Function(_, x) -> walk 0 (cv + 1) x   
         | Product l -> horizontal 0 (cv+1) l
-        | Sum l -> horizontal 0 (cv+1) l 
+        | Power(x, y) -> walk 0 (cv + 1) x |> Option.orElse (walk (ch + 1) (cv + 1) y)
+        | Sum l -> horizontal 0 (cv+1) l
+        | FunctionN(_,l) -> horizontal 0 (cv + 1) l
+        | Id x -> walk 0 (cv + 1) x
         | _ -> None
         and horizontal ch cv = function
             | [] -> None
             | x :: xs -> 
-                printfn "%A" (Infix.format x, ch,cv)
+                //printfn "%A" (Infix.format x, ch,cv)
                 match walk ch cv x with 
                 | Some x -> Some x
                 | None -> horizontal (ch + 1) cv xs
         walk 0 0 expr
+
+    let getAtLoc h v expr = getAtLocFilter (konst true) h v expr
 
     let getElementsAndLocations expr =
         let rec walk cv ch = function
         | Function(_, x) as fn -> 
             (fn, (ch, cv))::walk (cv + 1) ch x
         | Power(x, y) as pow -> 
-            (pow, (ch, cv))::walk (cv + 1) ch x @ walk (cv + 2) ch y
+            (pow, (ch, cv))::walk (cv + 1) ch x @ walk (cv + 1) (ch + 1) y
         | Product l as prod -> 
             (prod, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
         | Sum l as sum-> 
@@ -537,18 +552,20 @@ module Structure =
         | x -> [ (x, (ch, cv)) ]
         walk 0 0 expr
 
-    let getAtDepth v expr =
+    let getAtDepthFilter filter v expr =
         let rec walk cv =  
             function 
-            | x when cv = v -> Some x
+            | x when cv = v && filter x -> Some x
             | Function(f, x) -> walk (cv + 1) x
-            | Power(x, y) -> walk (cv + 1) x |> Option.orElse (walk (cv + 2) y)
+            | Power(x, y) -> walk (cv + 1) x |> Option.orElse (walk (cv + 1) y)
             | Product l -> List.tryPick (walk (cv + 1)) l
             | Sum l -> List.tryPick (walk (cv + 1)) l
             | FunctionN(f, l) -> List.tryPick (walk (cv + 1)) l
             | Id x -> walk (cv + 1) x
             | _ -> None
         walk 0 expr
+
+    let getAtDepth v expr = getAtDepthFilter (konst true) v expr
 
     let mapAtDepth v f (expr, substs) =
         let rec walk cv = function
@@ -560,7 +577,7 @@ module Structure =
                 (Function (f, x'), r)
             | Power(x, y) ->
                 let (x', rx) = walk (cv + 1) x
-                let (y', ry) = walk (cv + 2) y
+                let (y', ry) = walk (cv + 1) y
                 (Power (x', y'), rx @ ry)
             | Product l ->
                 let (l', r) = List.unzip (List.map (walk (cv + 1)) l)
@@ -587,7 +604,7 @@ module Structure =
                 (Function (f, x'), r)
             | Power(x, y) ->
                 let (x', rx) = walk (cv + 1) ch x
-                let (y', ry) = walk (cv + 2) ch y
+                let (y', ry) = walk (cv + 1) (ch + 1) y
                 (Power (x', y'), rx @ ry)
             | Product l ->
                 let (l', r) = List.unzip (List.mapi (walk (cv + 1)) l)
@@ -605,6 +622,13 @@ module Structure =
         let res, substs' = walk 0 0 expr
         (res, List.removeDuplicates(substs @ substs'))
          
+let sget h v expr = Structure.getAtLoc h v expr 
+
+let sgetf f h v expr = Structure.getAtLocFilter f h v expr
+
+let sgetd v expr = Structure.getAtDepth v expr
+
+let sgetdf filter v expr = Structure.getAtDepthFilter filter v expr
 
 let recmap = Structure.recursiveMap
 
@@ -794,9 +818,9 @@ module Expression =
                     | ProductOver ->
                         FunctionN(f, [simplifyLoop fx; var; a'; b' ])
                     | _ -> expr
-            | FunctionN(Choose,[_ ;AsInteger k]) when k = 0I -> 1Q
-            | FunctionN(Choose,[n; AsInteger k]) when k = 1I -> n
-            | FunctionN(Choose,[AsInteger n;AsInteger k]) -> Combinatorics.chooseN n k
+            | FunctionN(Choose,[_ ;IsInteger k]) when k = 0Q -> 1Q
+            | FunctionN(Choose,[n; IsInteger k]) when k = 1Q -> n
+            | FunctionN(Choose,[AsBigInteger n; AsBigInteger k]) -> Combinatorics.chooseN n k
             | FunctionN(f, l) -> FunctionN(f, List.map simplifyLoop l)
             | Product [] -> 1Q
             | Sum [] -> 0Q
@@ -820,7 +844,7 @@ module Expression =
         |> Algebraic.expand
 
     let fullerSimplify e =
-        Trigonometric.simplify e
+        Trigonometry.simplify e
         |> fullSimplify
         
     let replaceWithAux autosimplify replacement expressionToFind formula =
@@ -1006,7 +1030,7 @@ module Expression =
         | x -> x
     
     let toRational e =
-        let e' = Trigonometric.simplify e |> simplify
+        let e' = Trigonometry.simplify e |> simplify
         match e' with
         | Number(n) -> n
         | _ ->
@@ -1107,13 +1131,6 @@ type Expression with
         | SimplificationLevel.Low -> Expression.simplifyLite e
         | SimplificationLevel.Mid -> Expression.fullSimplify e
         | SimplificationLevel.High -> Expression.fullerSimplify e
-
-
-module Approximation =
-    let round n =
-        function
-        | Approximation(Approximation.Real r) -> Approximation(round n r)
-        | x -> x
 
 module Rational =
     open FSharp.Core.Operators
@@ -1350,34 +1367,37 @@ type PiSigma(expr) =
         | None -> PiSigma.Evaluate(expr)
         | Some par -> PiSigma.Evaluate(expr, par)
 
-///Given a function expression with a body, returns an F# function. See also
-///toFuncMV <see cref="M:MathNet.Symbolics.Core.toFuncMV"/>
-let toFunc f =
-    match f with
-    | IsFunctionExpr (_, xvar, fx) -> fun x -> replaceSymbolWith x xvar fx
-    | IsFunctionExpr (_, Tupled vars, fx) ->
-        function
-        | (Tupled xs) -> replaceSymbols (List.zip vars xs) fx
-        | _ -> failwith "Need tupled input. See also makefuncMV"
-    | _ -> failwith "Not a function, use makefuncOfExpr instead"
+module Func =
+    ///Given a function expression with a body, returns an F# function. See also
+    ///toFuncMV <see cref="M:MathNet.Symbolics.Core.toFuncMV"/>
+    let toFn f =
+        match f with
+        | IsFunctionExpr (_, xvar, fx) -> fun x -> Expression.replaceWith x xvar fx
+        | IsFunctionExpr (_, Tupled vars, fx) ->
+            function
+            | (Tupled xs) -> Expression.replace (List.zip vars xs) fx
+            | _ -> failwith "Need tupled input. See also makefuncMV"
+        | _ -> failwith "Not a function, use makefuncOfExpr instead"
 
-let toFuncMV f =
-    match f with
-    | IsFunctionExpr (_, Tupled vars, fx) ->
-        fun xs -> replaceSymbols (List.zip vars xs) fx
+    ///Given a function expression with a body and that also takes a tuple as input, returns an F# function with type: Expression list -> Expression.
+    let toFnMV f =
+        match f with
+        | IsFunctionExpr (_, Tupled vars, fx) ->
+            fun xs -> Expression.replace (List.zip vars xs) fx
 
-    | _ -> failwith "Not a multivariate function with Tuple input, use makefunc instead"
+        | _ -> failwith "Not a multivariate function with Tuple input, use makefunc instead"
 
-///Returns an F# function given a formula expression
-let funcOfExpr xvar f =
-    fun x -> replaceSymbolWith x xvar f
+    ///Returns an F# function given a formula expression
+    let fnOfExpr xvar f =
+        fun x -> Expression.replaceWith x xvar f
 
-let funcOfExprMV vars f =
-    fun xs -> replaceSymbols (List.zip vars xs) f
+    ///Returns an F# function pf type Expression list -> Expression given a formula expression
+    let fnOfExprMV vars f =
+        fun xs -> Expression.replace (List.zip vars xs) f
 
-///Given a function expression, creates a function and then applies parameter. Best for single use.
-let applyfn f x = toFunc f x
-
+    ///Given a function expression, creates a function and then applies parameter. Best for single use.
+    let applyfn f x = toFn f x
+     
 module Ops =
     let max2 a b =
         match (a,b) with

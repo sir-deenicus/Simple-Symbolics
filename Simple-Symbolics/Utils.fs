@@ -26,6 +26,11 @@ module List =
         [ for x in xs do
             if filter x then yield map x ]
 
+    let product xs ys =
+        [ for x in xs do
+            for y in ys do
+                yield x, y ]
+
     let removeDuplicates (xs:_ list) = List.ofSeq (Hashset(xs))
 
 module Hashset =
@@ -179,6 +184,7 @@ let inline sqrtf x = Core.Operators.sqrt x
 let inline sinf x = Core.Operators.sin x
 let inline cosf x = Core.Operators.cos x
 let inline tanf x = Core.Operators.tan x
+let inline acosf x = Core.Operators.acos x
 let ceilf x = FSharp.Core.Operators.ceil x
 let floorf x = FSharp.Core.Operators.floor x
 
@@ -321,7 +327,9 @@ let sub x subscript = FunctionN(Indexed, [x; subscript])
 
 let subs x subscripts = FunctionN(Indexed, x::subscripts)
 
-let (^^) a b = super a b
+let tuple x = Tupled(x)
+
+let (^) a b = super a b
 
 let define a b = Definition(a,b, "")
 
@@ -353,6 +361,26 @@ module Hold =
     let remove = function
         | Id x -> x
         | x -> x
+  
+module Tuples =
+    let cartesianProduct (a:Expression) (b:Expression) =
+        match a, b with
+        | Tupled l1, Tupled l2 ->
+            List.product l1 l2
+            |> List.map (fun (a,b) -> a * b)
+            |> tuple
+        | _ -> a*b
+
+    let combine (a:Expression) (b:Expression) =
+        match a, b with
+        | Tupled l1, Tupled l2 ->
+            Tupled (l1 @ l2)
+        | Tupled l1, b -> 
+            Tupled (l1 @ [b])
+        | a, Tupled l2 ->
+            Tupled (a::l2)
+        | _ -> Tupled [a;b] 
+        
 
 //========================
 let (|IsFunctionExpr|_|) = function
@@ -377,9 +405,24 @@ let (|AsFunction|_|) input =
      | Power(x,n) -> Some(FuncType.Power n,x)
      | f -> Some(FuncType.Identity, f)
 
+/// This active pattern matches a Probability expression with only the function name and its argument (in that order)
 let (|IsProb|_|) input =
+    let inner = function  
+        | FunctionN(Probability, nm::x::_) -> Some(nm, x) 
+        | Product [FunctionN(Probability, nm::x::_); FunctionN(Probability, nm2::x2::_)] -> 
+            Some (symbol $"{nm} and {nm2}", Tuples.combine x x2)
+        | _ -> None
+            
+    match input with
+     | Definition(px, _, _) -> inner px
+     | px -> inner px
+
+/// This active pattern matches a Conditional Probability expression with only the function name and its argument and the conditioned on variable
+///  (in that order)
+let (|IsCondProb|_|) input =
      match input with
-     | FunctionN(Probability, _::x::_) -> Some(x)
+     | FunctionN(Probability, [Identifier (Symbol nm); x; y]) -> Some(nm,x,y)
+     | Definition(FunctionN(Probability, [Identifier (Symbol nm); x; y]), _, _) -> Some(nm,x,y)
      | _ -> None
 
 let (|IsExpectation|_|) input =
@@ -399,6 +442,14 @@ let (|IsIntegral|_|) = function
 let (|IsDefiniteIntegral|_|) = function
      | FunctionN(Integral, [ x; dx;a;b ]) -> Some(x,dx,a,b)
      | _ -> None
+
+let (|IsMatrix|_|) = function
+     | Generic(x,GenericExpressionType.Matrix) -> Some(x)
+     | _ -> None
+
+let (|IsVector|_|) = function
+    | Generic(x,GenericExpressionType.Vector) -> Some(x)
+    | _ -> None
 
 /// This active pattern matches a function expression with a derivative operator and its argument.
 /// It returns a tuple with the derivative operator, the variable with respect to which the derivative is taken, and the differential.
@@ -488,22 +539,60 @@ let (|IsLinearFn|_|) input =
     | _ -> None
 //========================
 
+type Summations() =
+    //sigma symbol
+    static member Σ(var, start, stop, fx) = summation var start stop fx
+    static member Σ(var, fx) = FunctionN(SumOver, [fx;var])
+
 module Prob =
     let expectationsDistribution = function
         | IsExpectation (_, px) -> px
         | _ -> Undefined
 
     let expectationsInnerProb = function
-        | IsExpectation (_, IsProb x) -> x
+        | IsExpectation (_, IsProb (_, x)) -> x
         | _ -> Undefined
 
     let inner = function
-        | IsProb x -> x
+        | IsProb (_, x) -> x
         | _ -> Undefined
 
     let isProb = function | IsProb _ -> true | _ -> false
 
-    let isExpectation = function IsExpectation _ -> true | _ -> false
+    let isExpectation = function IsExpectation _ -> true | _ -> false  
+
+    let getVariable = 
+        let getinner = function 
+            | IsProb(_, x) -> Some x
+            | IsCondProb(_, x, Tupled l) -> Some (tuple (List.distinct (x :: l)))
+            | IsCondProb(_, Tupled l, x) -> Some (tuple (List.distinct (l @ [x])))
+            | IsCondProb(_, Tupled l, Tupled l') -> Some (tuple (List.distinct (l @ l')))
+            | IsCondProb(_, x, theta) -> Some (tuple (List.distinct [x; theta]))
+            | _ -> None
+        function 
+        | Definition(px, _, _) -> getinner px
+        | px -> getinner px
+
+    let getVariableConditional =  
+        let getinner = function 
+            | IsCondProb(_, x,y) -> Some (x,y)
+            | _ -> None
+        function 
+        | Definition(px, _, _) -> getinner px
+        | px -> getinner px      
+
+
+    //P(A|B) = P(A∩B)/P(B)
+    let condToJoint = function
+        | IsCondProb(n, x, theta) ->
+            probn n (tuple [x; theta]) / probn n theta
+        | IsCondProb(n, Tupled l, theta) ->
+            probn n (tuple (l @ [theta])) / probn n theta
+        | IsCondProb(n, x, Tupled l) ->
+            probn n (tuple (x :: l)) / probn n (tuple l) 
+        | IsCondProb(n, Tupled l, Tupled l') ->
+            probn n (tuple (l @ l')) / probn n (tuple l')
+        | _ -> Undefined
 
 
 //////////

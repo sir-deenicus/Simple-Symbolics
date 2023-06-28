@@ -463,5 +463,68 @@ let substitutionSteps substarget expr =
         | x -> x
         walk 0 0 expr
 
+==================
+
+
+type PiSigma(expr) =
+    member private __.op operator y = function
+        | FunctionN(f, [fx;var;start; stop]) ->
+            FunctionN(f, [operator fx y;var;start; stop])
+        | x -> x
+
+    static member Σ fx = FunctionN(SumOver, [fx])
+    static member Σ (start:BigRational, fx) = FunctionN(SumOver, [fx;Vars.i;Number start; Vars.n])
+    static member Σ (start:string, fx) = FunctionN(SumOver, [fx;Vars.i;symbol start; Vars.n])
+    static member Σ (var, fx) = FunctionN(SumOver, [fx;var])
+    static member Σ (start,stop,fx) = FunctionN(SumOver, [fx;Vars.i;start; stop])
+    static member Σ (var,start,stop,fx) = FunctionN(SumOver, [fx;var;start;stop])
+    static member Π fx = FunctionN(ProductOver, [fx])
+    static member (/) (a:PiSigma, b : Expression) = b * (a.op (/) b a.Expression)
+
+    static member Evaluate(expr, ?parameters) =
+        match expr, parameters with
+        | FunctionN(SumOver, [ fx; var; Number n; Number m ]), _ ->
+            List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+        | FunctionN(ProductOver, [ fx; var; Number n; Number m ]), _ ->
+            List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+        | FunctionN(SumOver as f, [ fx; var; a; b ]), Some p
+        | FunctionN(ProductOver as f, [ fx; var; a; b ]), Some p ->
+            let lookup = dict p
+
+            let runvar e =
+                e
+                |> replaceSymbols [ for (a, b) in p -> a, Operators.fromRational b ]
+                |> Expression.toRational 
+
+            let n, m =
+                match Expression.fullSimplify a, Expression.fullSimplify b with
+                | Number n, Number m -> n, m
+                | Number n, y -> n, runvar y
+                | x, Number m -> lookup.[x], m
+                | _ -> lookup.[a], runvar b
+
+            match f with
+            | SumOver ->
+                List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+            | ProductOver ->
+                List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+            | _ -> expr
+        | FunctionN(f, [ fx; var; a; b ]), None ->
+            match Expression.fullSimplify a, Expression.fullSimplify b with
+            | Number n, Number m ->
+                match f with
+                | SumOver ->
+                    List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+                | ProductOver ->
+                    List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
+                | _ -> expr
+            | _ -> expr
+        | _ -> expr
+    member __.Expression = expr
+    member __.Evaluate( ?parameters ) =
+        match parameters with
+        | None -> PiSigma.Evaluate(expr)
+        | Some par -> PiSigma.Evaluate(expr, par)
+
 
 

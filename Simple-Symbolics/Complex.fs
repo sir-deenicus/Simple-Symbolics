@@ -30,21 +30,38 @@ type Complex(r : Expression, i : Expression) =
     /// <summary>
     /// Gets the magnitude of the complex number.
     /// </summary>
-    member __.Magnitude = Expression.Simplify (sqrt (r ** 2 + i ** 2))
+    member __.Magnitude = Expression.simplify (sqrt (r ** 2 + i ** 2))
 
     /// <summary>
     /// Converts the complex number to a System.Numerics.Complex value.
     /// </summary>
-    member __.ToComplex() = 
+    member __.ToNumericsComplex() = 
         match (r, i) with 
-        | IsFloatingPoint x, IsFloatingPoint y ->
+        | AsFloatingPoint x, AsFloatingPoint y ->
             Some(System.Numerics.Complex(x, y))
         | _ -> None
+
+    member __.ToReal() = if i = 0Q then Some r else None 
 
     /// <summary>
     /// Gets the phase of the complex number.
     /// </summary>
     member __.Phase = Trigonometry.simplifyWithTable (Operators.arctan2 i r)
+
+    member __.TrigForm = 
+        let r = __.Magnitude
+        let theta = __.Phase
+        Complex(r * Operators.cos theta, r * Operators.sin theta)
+          
+    member __.ToEulerFormExpression() =
+        let r = __.Magnitude
+        let theta = __.Phase
+        r * Operators.exp (theta * Constant Constant.I)
+
+    member __.ToTrigFormExpression() =
+        let r = __.Magnitude
+        let theta = __.Phase
+        r * Operators.cos theta + r * Constant Constant.I * Operators.sin theta
 
     /// <summary>
     /// Gets the absolute value of the complex number.
@@ -71,7 +88,7 @@ type Complex(r : Expression, i : Expression) =
     /// </summary>
     /// <param name="c">The complex number to take the logarithm of.</param>
     /// <returns>The natural logarithm of the complex number.</returns>
-    static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * V"n_{int}")
+    static member Log (c:Complex) = Complex(ln c.Magnitude, c.Phase + 2 * pi * n)
 
     /// <summary>
     /// Raises the complex number to the specified integer power.
@@ -101,9 +118,13 @@ type Complex(r : Expression, i : Expression) =
 
         if c.Imaginary = 0Q && (Expression.isInteger n || Expression.isCertainlyEven (Rational.numerator n) || Expression.isPositive c.Real) then Complex (c.Real ** n)
         elif c.Real = 0Q && Expression.isInteger n || Expression.isCertainlyEven (Rational.numerator n) then  
-            c.Imaginary ** n * imaginaryPower (Expression.toInt n)
+            if Expression.isRationalNumber n then 
+                let p, q = Rational.numerator n, Rational.denominator n
+                let r = c.Imaginary ** p * imaginaryPower (Expression.toInt p)
+                r ** (1Q/q) 
+            else c.Imaginary ** n * imaginaryPower (Expression.toInt n)
         else
-            let r = Expression.Simplify c.Magnitude
+            let r = Expression.simplify c.Magnitude
             let angle = c.Phase
             r ** n * Complex(cos (n * angle)
                         |> Expression.simplifyaux false 
@@ -291,6 +312,12 @@ module Complex =
 
     let ofNumericsComplex (c: Numerics.Complex) = Complex(c.Real, c.Imaginary)
 
+    let ToNumericsComplex (c: Complex) =
+        match Expression.toFloat c.Real, Expression.toFloat c.Imaginary with
+        | Some r, Some i -> Some (Numerics.Complex(r, i))
+        | _ -> None
+
+
     let ofPolar r theta =
         Complex(r * cos theta, r * sin theta)
 
@@ -318,7 +345,7 @@ module Complex =
         //handle case of just an imaginary number
         | e when Expression.contains Constants.i e -> 0Q, e
         | _ -> e, 0Q 
-         
+     
     /// <summary>
     /// Given an expression that represents a complex number, returns the real part of the expression.
     /// </summary>
@@ -333,6 +360,16 @@ module Complex =
     /// <returns>The imaginary part of the expression.</returns>
     let getImaginaryFromExpression (e:Expression) = splitToRealImaginary e |> snd
 
+    
+    /// <summary>
+    /// Converts the expression to a complex number.
+    /// </summary>
+    /// <param name="e">The expression to convert.</param>
+    /// <returns>The complex number.</returns>
+    let ofExpression (e:Expression) =
+        let real, imaginary = splitToRealImaginary e
+        Complex(real, imaginary / Constants.i)
+     
     /// <summary>
     /// Returns the imaginary power of i. It uses the rules of powers of i (powers of i have a simple pattern with a cycle of 4) to simplify the expression.
     /// </summary>
@@ -365,21 +402,22 @@ module Complex =
             | x -> x )
         |> Algebraic.expand
         |> recmap (function
-               | (Power(Constant Constant.I, Number n)) ->
-                    imaginaryPowerExpression (int n)        
-               | x -> x)
+            | (Power(Constant Constant.I, Number n)) ->
+                imaginaryPowerExpression (int n)        
+            | x -> x)
         |> Expression.fullSimplify
         |> Algebraic.groupInSumWith Constants.i
-        |> Expression.Simplify
+        |> Expression.simplify
+ 
+    /// <summary>
+    /// Converts the expression into trigonometric or cis form, that is, a complex number in the form r*(cos(theta) + i*sin(theta))
+    /// </summary>
+    /// <param name="e"></param>
+    let toTrigFormExpression (e:Expression) = (ofExpression e).ToTrigFormExpression() 
 
     /// <summary>
-    /// Converts the expression to a complex number.
+    /// Converts the expression into Euler form, that is, a complex number in the form r*e^(i*theta).
     /// </summary>
-    /// <param name="zx">The expression to convert.</param>
-    /// <returns>The complex number.</returns>
-    let ofExpression zx =
-        Structure.partition (Expression.contains Constants.i) zx
-        |> function
-        | (Some b, a) -> Complex(a, b / Constants.i)
-        | (_, a) -> Complex(a, 0Q)
-     
+    /// <param name="e"></param>
+    let toEulerFormExpression (e:Expression) = (ofExpression e).ToEulerFormExpression()
+

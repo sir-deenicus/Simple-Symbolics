@@ -83,8 +83,8 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
 
     static member Sqrt(x:Units) =
         Units
-            (Expression.Simplify((sqrt x.Quantity) |> rm Exponents.expandRationalPower),
-                Expression.Simplify((sqrt x.Unit) |> rm Exponents.expandRationalPower))
+            (Expression.simplify((sqrt x.Quantity) |> rm Exponents.expandRationalPower),
+                Expression.simplify((sqrt x.Unit) |> rm Exponents.expandRationalPower))
 
     static member Pow(a : Units, b : int) =
         Units(a.Quantity ** b, a.Unit ** b, a.AltUnit + "^" + string b)

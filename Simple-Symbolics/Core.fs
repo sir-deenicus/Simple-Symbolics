@@ -16,9 +16,7 @@ let secant = Operators.sec
 let symbol = Operators.symbol
 let V = symbol
 let (!) (str:string) = symbol(str)
-
-let (^) a b = Power(a,b)
-
+  
 module Desc =
     let power = symbol "power"
     let energy = symbol "energy"
@@ -640,6 +638,13 @@ let rmf = recmapf
 
 module Expression =
     let ``rewrite 1 as x*x^-1 (=1)`` x = Product [ hold x; x ** -1]
+
+    /// <summary>
+    /// rewrite x^2 as x*x
+    /// </summary>
+    let expandSquare = function
+        | Power(x, Number n) when n = 2N -> Product [hold x;x]
+        | x -> x
       
     let isProduct =
         function
@@ -972,12 +977,34 @@ module Expression =
         | Power(a, b) -> findVariables a |> Hashset.union (findVariables b)
         | IsFunctionExprAny(_,x,Some b) -> Hashset([x]) |> Hashset.union (findVariables b)
         | IsFunctionExprAny(_,x,_) -> Hashset([x])
-        | Product l | Sum l | FunctionN(_, l) ->
+        | Product l | Sum l | FunctionN(_, l) | Tupled l ->
             Hashset(Seq.collect findVariables l)
         | Generic(x,_)
         | Id x
         | Function(_, x) -> findVariables x
         | _ -> Hashset []
+
+    let countVariables expr = 
+        let counts = Dict.ofSeq []
+        let rec docount = function
+            | Identifier _ as v ->  
+                counts.ExpandElseAdd v ((+) 1) 1
+            | Definition(a,b,_) | Power(a, b) ->
+                docount a  
+                docount b
+            | IsFunctionExprAny(_,x,Some b) ->
+                counts.ExpandElseAdd x ((+) 1) 1
+                docount b
+            | IsFunctionExprAny(_,x,_) ->
+                counts.ExpandElseAdd x ((+) 1) 1
+            | Product l | Sum l | FunctionN(_, l) | Tupled l ->
+                l |> Seq.iter docount
+            | Generic(x,_)  | Id x | Function(_, x) -> 
+                docount x
+            | _ -> ()
+
+        docount expr 
+        counts
 
     let getFirstVariable x = Seq.head (findVariables x)
 
@@ -1124,7 +1151,7 @@ type Expression with
 
     member x.sub(indices) = subs x indices 
     
-    static member Simplify(e,?simplificationLevel) =
+    member e.simplify(?simplificationLevel) =
         let simpllevel = defaultArg simplificationLevel SimplificationLevel.Default 
         match simpllevel with 
         | SimplificationLevel.Default -> Expression.simplify e
@@ -1231,7 +1258,7 @@ module Rational =
     let applyToNumerator f x =
         let num = Rational.numerator x
         let den = Rational.denominator x
-        if den <> 1Q then (f num) / (Expression.Simplify den)
+        if den <> 1Q then (f num) / (Expression.simplify den)
         else x
 
     ///given (a+b)/x, returns a/x + b/x
@@ -1307,65 +1334,6 @@ type Prob () =
         | _ ->
             FunctionN(Probability, [symbol (defaultArg name "P");  x; conditional])
 
-type PiSigma(expr) =
-    member private __.op operator y = function
-        | FunctionN(f, [fx;var;start; stop]) ->
-            FunctionN(f, [operator fx y;var;start; stop])
-        | x -> x
-
-    static member Σ fx = FunctionN(SumOver, [fx])
-    static member Σ (start:BigRational, fx) = FunctionN(SumOver, [fx;Vars.i;Number start; Vars.n])
-    static member Σ (start:string, fx) = FunctionN(SumOver, [fx;Vars.i;symbol start; Vars.n])
-    static member Σ (var, fx) = FunctionN(SumOver, [fx;var])
-    static member Σ (start,stop,fx) = FunctionN(SumOver, [fx;Vars.i;start; stop])
-    static member Σ (var,start,stop,fx) = FunctionN(SumOver, [fx;var;start;stop])
-    static member Π fx = FunctionN(ProductOver, [fx])
-    static member (/) (a:PiSigma, b : Expression) = b * (a.op (/) b a.Expression)
-
-    static member Evaluate(expr, ?parameters) =
-        match expr, parameters with
-        | FunctionN(SumOver, [ fx; var; Number n; Number m ]), _ ->
-            List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-        | FunctionN(ProductOver, [ fx; var; Number n; Number m ]), _ ->
-            List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-        | FunctionN(SumOver as f, [ fx; var; a; b ]), Some p
-        | FunctionN(ProductOver as f, [ fx; var; a; b ]), Some p ->
-            let lookup = dict p
-
-            let runvar e =
-                e
-                |> replaceSymbols [ for (a, b) in p -> a, Operators.fromRational b ]
-                |> Expression.toRational 
-
-            let n, m =
-                match Expression.fullSimplify a, Expression.fullSimplify b with
-                | Number n, Number m -> n, m
-                | Number n, y -> n, runvar y
-                | x, Number m -> lookup.[x], m
-                | _ -> lookup.[a], runvar b
-
-            match f with
-            | SumOver ->
-                List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-            | ProductOver ->
-                List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-            | _ -> expr
-        | FunctionN(f, [ fx; var; a; b ]), None ->
-            match Expression.fullSimplify a, Expression.fullSimplify b with
-            | Number n, Number m ->
-                match f with
-                | SumOver ->
-                    List.sum [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-                | ProductOver ->
-                    List.reduce (*) [ for i in n .. m -> replaceSymbolWith (Number i) var fx ]
-                | _ -> expr
-            | _ -> expr
-        | _ -> expr
-    member __.Expression = expr
-    member __.Evaluate( ?parameters ) =
-        match parameters with
-        | None -> PiSigma.Evaluate(expr)
-        | Some par -> PiSigma.Evaluate(expr, par)
 
 module Func =
     ///Given a function expression with a body, returns an F# function. See also

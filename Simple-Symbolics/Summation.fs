@@ -21,7 +21,7 @@ let isSummation = function | Summation _ -> true | _ -> false
 
 let extractSumConstants = function
   | FunctionN (SumOver,[p; var]) ->
-       Structure.extractNonVariablesAndApplyF var (fun x -> PiSigma.Σ(x, var)) p
+       Structure.extractNonVariablesAndApplyF var (fun x -> Summations.Σ(x, var)) p
   | Summation(p,v,start,stop) ->
        Structure.extractNonVariablesAndApplyF v (summation v start stop) p
   | x -> x

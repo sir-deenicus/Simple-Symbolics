@@ -63,17 +63,17 @@ let cubicSolveSymbolic (coeffs: Expression[]) =
     | None -> [||]
     | Some discf ->
         if discf > 0.0 then
-            let temp = 1Q / 3Q
-            let s = r + sqrt disc
+            let temp = 1Q / 3Q 
 
+            let s = r + sqrt disc
             match Expression.toFloat s with
-            | Some s ->
-                let s' = if s < 0.0 then -(ofFloat (-s) ** temp) else s ** temp
+            | Some sf ->
+                let s' = if sf < 0.0 then -((-s) ** temp) else s ** temp
                 let t = r - sqrt disc
 
                 match Expression.toFloat t with
-                | Some t ->
-                    let t' = if t < 0.0 then -(ofFloat (-t) ** temp) else t ** temp
+                | Some tf  ->
+                    let t' = if tf < 0.0 then -((-t) ** temp) else t ** temp
 
                     [| Complex(-t1 + s' + t', 0Q)
                        Complex(-(t1 + ((s' + t') / 2Q)), sqrt (3Q) * (-t' + s') / 2Q)
@@ -82,17 +82,17 @@ let cubicSolveSymbolic (coeffs: Expression[]) =
             | None -> [||]
         elif discf = 0.0 then
             match Expression.toFloat r with
-            | Some r ->
+            | Some rf ->
                 let rv =
-                    if r < 0.0 then
-                        -(ofFloat (-r) ** (1Q / 3Q))
+                    if rf < 0.0 then
+                        -((-r) ** (1Q / 3Q))
                     else
                         r ** (1Q / 3Q)
 
                 [| Complex(-t1 + 2Q * rv, 0Q); Complex(-(rv + t1), 0Q) |]
             | None -> [||]
         else
-            let d1 = arccos (r / sqrt (-q * -q * -q))
+            let d1 = arccos (r / sqrt ((-q)**3Q))
             let temp = 2Q * sqrt (-q)
 
             [| Complex(-t1 + temp * cos (d1 / 3Q), 0Q)
@@ -286,121 +286,108 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
     let doflip, f, ops = iter false left []
     doflip, f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify
 
-let internal reArrangeExprEquation silent focusVar (left, right) =
-    let rec iter fx ops =
+let internal reArrangeExprEquation previnstr prevops focusVar (left, right) =
+    let rec iter fx instrs ops =
         match fx with
-        | f when f = focusVar -> f, ops
-        | Power(b, x) when containsVar focusVar x -> iter x ((fun x -> log b x) :: ops)
-        | Power(f, p) ->
-            if not silent then
-                printfn "raise to power"
-
-            iter f ((fun (x: Expression) -> x ** (1 / p)) :: ops)
+        | f when f = focusVar -> f, instrs, ops
+        | Power(b, x) when containsVar focusVar x -> iter x ("take log"::instrs) ((fun x -> log b x) :: ops)
+        | Power(f, p) -> 
+            iter f ("take nth root"::instrs) ((fun (x: Expression) -> x ** (1 / p)) :: ops)
         | Sum []
         | Sum [ _ ]
         | Product []
-        | Product [ _ ] -> fx, ops
+        | Product [ _ ] -> fx, instrs, ops
         | Product l ->
-            if not silent then
-                printfn "divide"
 
             let matched, novar = List.partition (containsVar focusVar) l
 
-            let ops' =
+            let ops', instrs' =
                 match novar with
-                | [] -> ops
-                | _ -> (fun x -> x / (Product novar)) :: ops
+                | [] -> ops, instrs 
+                | _ -> (fun x -> x / (Product novar)) :: ops, "divide"::instrs
 
             match matched with
-            | [] -> fx, ops'
-            | [ h ] -> iter h ops'
-            | hs -> Product hs, ops'
-        | Sum l ->
-            if not silent then
-                printfn "subtract"
+            | [] -> fx, instrs', ops'
+            | [ h ] -> iter h instrs' ops'
+            | hs -> Product hs, instrs', ops'
+        | Sum l -> 
 
             let matched, novar = List.partition (containsVar focusVar) l
 
-            let ops' =
+            let ops', instrs' =
                 match novar with
-                | [] -> ops
-                | _ -> (fun x -> x - (Sum novar)) :: ops
+                | [] -> ops, instrs 
+                | _ -> (fun x -> x - (Sum novar)) :: ops, "subtract"::instrs
 
             match matched with
-            | [] -> fx, ops'
-            | [ h ] -> iter h ops'
-            | hs -> Sum hs, ops'
-        | FunctionN(Log, [ b; x ]) ->
-            if not silent then
-                printfn "exponentiate"
+            | [] -> fx, instrs',ops'
+            | [ h ] -> iter h instrs' ops'
+            | hs -> Sum hs, instrs', ops'
+        | FunctionN(Log, [ b; x ]) -> 
+            iter x ("exponentiate"::instrs) ((fun x -> b ** x) :: ops)
 
-            iter x ((fun x -> b ** x) :: ops)
-        | Function(Ln, x) ->
-            if not silent then
-                printfn "exponentiate"
-
-            iter x (exp :: ops)
+        | Function(Ln, x) -> 
+            iter x ("exponentiate"::instrs) (exp :: ops)
         | Function(Tan, x) ->
-            if not silent then
-                printfn "atan"
 
-            iter x ((fun x -> Function(Atan, x)) :: ops)
+            iter x ("apply arctan"::instrs) ((fun x -> Function(Atan, x)) :: ops)
         | Function(Erf, x) ->
-            if not silent then
-                printfn "erf^-1"
 
-            iter x ((fun x -> Function(ErfInv, x)) :: ops)
-        | Function(Cos, x) ->
-            if not silent then
-                printfn "acos"
+            iter x ("apply inverse error function"::instrs) ((fun x -> Function(ErfInv, x)) :: ops)
+        | Function(Cos, x) ->  
 
-            iter x ((fun x -> Function(Acos, x)) :: ops)
+            iter x ("apply arccos"::instrs) ((fun x -> Function(Acos, x)) :: ops)
         | Function(Sin, x) ->
-            if not silent then
-                printfn "asin"
 
-            iter x ((fun x -> Function(Asin, x)) :: ops)
+            iter x ("apply arcsin"::instrs) ((fun x -> Function(Asin, x)) :: ops)
         | IsDerivative(_, f, dx) ->
-            if not silent then
-                printfn "integrate"
 
-            iter f ((fun x -> integral dx x) :: ops)
-        | IsIntegral(f, dx) ->
-            if not silent then
-                printfn "differentiate"
+            iter f ("integrate"::instrs) ((fun x -> integral dx x) :: ops)
+        | IsIntegral(f, dx) -> 
 
-            iter f ((fun x -> diff dx x) :: ops)
-        | Function(Exp, x) ->
-            if not silent then
-                printfn "log"
+            iter f ("differentiate"::instrs) ((fun x -> diff dx x) :: ops)
+        | Function(Exp, x) ->  
 
-            iter x (ln :: ops)
-        | _ -> Undefined, ops //failwith "err"
+            iter x ("apply log"::instrs) (ln :: ops)         
+        | IsMatrix m -> 
 
-    let f, ops = iter left []
-    f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify
+            iter m ("multiply left side by matrix inverse"::instrs) ((fun e -> inverse m * e) :: ops)
+        | _ -> Undefined, instrs, ops //failwith "err"
+
+    let f, instrs, ops = iter left previnstr prevops
+    (f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify), (instrs, ops, right)
 
 let reArrangeEquation focusVar (e: Equation) =
-    reArrangeExprEquation true focusVar e.Definition |> Equation
+    reArrangeExprEquation [] [] focusVar e.Definition |> fst |> Equation
 
-let solveFor targetVar (eq: Equation) =
+
+let processOpsTrace annotate ops =
+    let instrs, ops, startexpr = ops
+
+    if annotate then 
+        let instrs' = List.map2 (fun s e -> TraceExplain.Instr (e, s)) instrs ops  
+        stepTracer true false fmt startexpr instrs'
+    else 
+        stepTracer true false fmt startexpr (List.map TraceExplain.Op ops)
+
+
+
+let solveForWithTrace targetVar (eq: Equation) =
     let adjust (eq: Equation) = //move it left collect as polyonmial
         eq - eq.Right
         |> Equation.Apply Algebraic.expand
         |> Equation.ApplyToLeft(fun f ->
             if Polynomial.isPolynomial targetVar f then
                 Polynomial.collectTerms targetVar f
-            else
-                f)
+            else f)
     //does the rhs have targetVar in it?
     let eq', adjusted =
         if containsVar targetVar eq.Right then
             adjust eq, true
-        else
-            eq, false
-
-    match (reArrangeExprEquation true targetVar eq'.Definition) with
-    | Identifier _, r -> [ targetVar <=> r ]
+        else eq, false
+    let res, instrs = reArrangeExprEquation [] [] targetVar eq'.Definition
+    match res with
+    | Identifier _, r -> [ targetVar <=> r ], instrs
     | e ->
         let peq = if adjusted || eq'.Right = 0Q then eq' else adjust eq'
 
@@ -418,38 +405,36 @@ let solveFor targetVar (eq: Equation) =
                     let res = cubicSolveSymbolic (Polynomial.coefficients targetVar peq.Left)
 
                     [ for r in res do
-                          targetVar <=> Complex.toExpression (r.Simplify()) ]
+                        targetVar <=> Complex.toExpression (r.Simplify()) ], ([], [], undefined)
                 | IsIntegerLiteral 4 ->
                     let res = quarticSolve (Polynomial.coefficients targetVar peq.Left)
 
                     [ for r in res do
-                          targetVar <=> Complex.toExpression (Complex.simplify r) ]
-                | _ -> [ Equation e ] 
-            | es -> es
+                          targetVar <=> Complex.toExpression (Complex.simplify r) ], ([], [], undefined)
+                | _ -> [ Equation e ], instrs
+            | es -> es, instrs
         else
-            [ Equation e ]
+            [ Equation e ], instrs
 
 let reArrangeInEquality focusVar (e: InEquality) =
     let f, l, r = reArrangeExprInequality true focusVar (e.Left, e.Right)
     let c' = if f then InEquality.flipComparer e.Comparer else e.Comparer
     InEquality(c', l, r)
 
-let rec invertFunction x expression =
-    printfn "%s" (expression |> Infix.format)
+let invertFunction x expression = 
+    let rec iter instrs opslist e = 
+        let res, ops = reArrangeExprEquation instrs opslist x (expression, x)
+        match res  with
+        | Identifier(Symbol _) as y, inv when y = x -> inv, ops
+        | _, inv ->
+            let instrs' = $"Is it monomial in {fmt x}?"::"Did not completely reduce. Collecting terms"::[]
+            let monom = Polynomial.collectTerms x expression
 
-    match reArrangeExprEquation false x (expression, x) with
-    | Identifier(Symbol _) as y, inv when y = x -> inv
-    | _, inv ->
-        printfn "Did not completely reduce. Collecting terms"
-        printfn "Is it monomial in x?"
-        let monom = Polynomial.collectTerms x expression
-
-        if Polynomial.isMonomial x monom then
-            printfn "Yes"
-            invertFunction x monom
-        else
-            printfn "no"
-            inv
+            if Polynomial.isMonomial x monom then 
+                iter ("Yes"::instrs') [id; id; id] monom
+            else  
+                inv, ("No"::instrs' @ instrs, id::id::id::opslist, snd res)
+    iter [] [] expression
 
 
 let getCandidates (vset: Hashset<_>) vars knowns =

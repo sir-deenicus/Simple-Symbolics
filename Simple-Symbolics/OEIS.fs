@@ -4,9 +4,10 @@ module MathNet.Symbolics.OEIS
 open System
 open MathNet.Numerics
 open NumberProperties 
-
+open FSharp.Data
+ 
 let [<Literal>] oeisjsonpath = __SOURCE_DIRECTORY__  +  "/oeis-search.json"
-type OEIntegerSequences = FSharp.Data.JsonProvider<oeisjsonpath> //OEISjson.json> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
+type OEIntegerSequences = JsonProvider<oeisjsonpath> //OEISjson.json> //, EmbeddedResource="Simple-Symbolics, oeis-search.json"
 
 type OEIS() =
     static member query (str: string) =

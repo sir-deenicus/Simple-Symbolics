@@ -311,11 +311,7 @@ module Expression =
         | Product l -> List.forall isPositive l
         | x -> isPositiveNumber x
 
-//module Approximation =
-//    let round n =
-//        function
-//        | Approximation(Approximation.Real r) -> Approximation(round n r)
-//        | x -> x
+
 module Approximation =
     let round n = function
         | Approximation(Real r) -> Approximation(Real (round n r))
@@ -374,21 +370,18 @@ module Interval =
         | x -> x
     
 ///////////////////////////////////////////////
+ 
 
-let (|ProductHasNumber|_|) =
-    function
-    | Product l ->
-        match l |> List.filter (Expression.isRationalNumber) with
-        | [ Number n ] -> Some(Expression.FromRational n)
-        | _ -> None
-    | _ -> None
-
-let (|Fraction|_|) = function
+let (|NonIntegerRational|_|) = function
     | Number n when n.Denominator <> 1I -> Some((n.Numerator, n.Denominator))
     | _ -> None
 
 let (|RationalLiteral|_|) r = function
     | Number n as q when n = BigRational.FromIntFraction r -> Some q
+    | _ -> None
+
+let (|IsRationalLiteral|_|) r = function
+    | Number n when n = BigRational.FromIntFraction r -> Some()
     | _ -> None
 
 let (|IntegerLiteral|_|) m = function
@@ -419,7 +412,7 @@ let (|IsRealNumber|_|) = function
       | e when Expression.isRealNumber e -> Some e
       | _ -> None
 
-let (|IsFloatingPoint|_|) = function
+let (|AsFloatingPoint|_|) = function
     | IsRealNumber n -> n.ToFloat()
     | _ -> None
 
@@ -442,39 +435,35 @@ let (|Minus|_|) = function
       | Sum [Number n; a] when n < 0N -> Some(a, Number n)
       | _ -> None
 
-let (|Plus|_|) = function 
-    | Sum [a; b] -> Some(a,b)
-    | _ -> None
-
 let (|Divide|_|) e =
     let den = Rational.denominator e
     if den = 1Q then None
     else Some(Rational.numerator e, den)
 
-let (|NegativeOne|NotNegativeOne|) = function
-    | Number n when n = -1N -> NegativeOne
-    | RealApproximation f when f = -1. -> NegativeOne
-    | _ -> NotNegativeOne
+let (|NegativeOne|_|) = function
+    | Number n when n = -1N -> Some NegativeOne
+    | RealApproximation f when f = -1. -> Some NegativeOne
+    | _ -> None
 
-let (|Zero|NotZero|) = function
-    | Number n when n = 0N -> Zero
-    | RealApproximation f when f = 0. -> Zero
-    | _ -> NotZero
+let (|Zero|_|) = function
+    | Number n when n = 0N -> Some Zero
+    | _ -> None
+ 
 
-let (|One|NotOne|) = function
-    | Number n when n = 1N -> One
-    | RealApproximation f when f = 1. -> One
-    | _ -> NotOne
+let (|One|_|) = function
+    | Number n when n = 1N -> Some One
+    | RealApproximation f when f = 1. -> Some One
+    | _ -> None
 
-let (|Two|NotTwo|) = function
-    | Number n when n = 2N -> Two
-    | RealApproximation f when f = 2. -> Two
-    | _ -> NotTwo
+let (|Two|_|) = function
+    | Number n when n = 2N -> Some Two
+    | RealApproximation f when f = 2. -> Some Two
+    | _ -> None
 
-let (|OneHalf|NotOneHalf|) = function
-    | Number n when n = 1N/2N -> OneHalf
-    | RealApproximation f when f = 0.5 -> OneHalf
-    | _ -> NotOneHalf
+let (|OneHalf|_|) = function
+    | Number n when n = 1N/2N -> Some OneHalf
+    | RealApproximation f when f = 0.5 -> Some OneHalf
+    | _ -> None
 
 let xIsMultipleOfy y x = x % y = 0
 
@@ -533,7 +522,7 @@ let inline factors toint f x =
 
 let factorsExpr = abs >> factors Expression.toInt Expression.FromInt32
 
-let groupPowers singletonLift pl =
+let internal groupPowers singletonLift pl =
     List.groupBy id pl
     |> List.map (fun (x, l) ->
            if l.Length = 1 then singletonLift x

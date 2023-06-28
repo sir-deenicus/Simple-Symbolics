@@ -12,7 +12,7 @@ let deriveTrivialEqualities eqs =
     let deriveTrivialEqualitiesSingle (left, right) =
         [ yield Equation(left, right)
           for var in Expression.findVariables right do
-              match reArrangeExprEquation true var (right, left) with
+              match reArrangeExprEquation [] [] var (right, left) |> fst with
               | Identifier _ as var, req ->
                   yield Equation(var, Expression.simplify req)
               | _ -> () ]
@@ -64,7 +64,7 @@ let deriveEqualitiesFromProduct (eqs:Equation list) =
 
 let internal transformNegativeEq =
     function
-    | (ProductHasNumber n as l, r) -> l / n, Algebraic.expand (r / n)
+    | (Product ((Number _ as n)::_) as l, r) -> l / n, Algebraic.expand (r / n)
     | l,r -> l, Algebraic.expand r
 
 let deriveShallowSums (eqs : Equation list) =

@@ -20,6 +20,7 @@
     <None Include="simpleintegrator.txt" />
     <Compile Include="AssemblyInfo.fs" />
     <None Include="Changes.txt" />
+    <None Include="cubic-quartics.fsx" />
     <None Include="Lab\logic-reckoner.fsx" />
     <None Include="Lab\Obsolete\solving.fsx" />
     <None Include="Lab\Obsolete\integration.fsx" />
@@ -59,11 +60,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharp.Data" Version="5.0.2" />
+    <PackageReference Include="FSharp.Data" Version="6.2.0" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
     <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.4" />
     <PackageReference Include="PeterO.Numbers" Version="1.8.2" />
-    <PackageReference Include="Prelude" Version="1.8.7" />
+    <PackageReference Include="Prelude" Version="1.9.5" />
   </ItemGroup>
 
   <ItemGroup>

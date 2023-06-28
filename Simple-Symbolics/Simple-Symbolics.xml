@@ -144,7 +144,7 @@
  </summary>
  <returns>A string representation of the complex number.</returns>
 </member>
-<member name="M:MathNet.Symbolics.Complex.ToComplex">
+<member name="M:MathNet.Symbolics.Complex.ToNumericsComplex">
  <summary>
  Converts the complex number to a System.Numerics.Complex value.
  </summary>
@@ -244,6 +244,17 @@
  This active pattern matches a function expression with a derivative operator and its argument.
  It returns a tuple with the derivative operator, the variable with respect to which the derivative is taken, and the differential.
  If the input does not match this pattern, it returns None.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|IsCondProb|_|(MathNet.Symbolics.Expression)">
+<summary>
+ This active pattern matches a Conditional Probability expression with only the function name and its argument and the conditioned on variable
+  (in that order)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.|IsProb|_|(MathNet.Symbolics.Expression)">
+<summary>
+ This active pattern matches a Probability expression with only the function name and its argument (in that order)
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Utils.|IsFunctionExprNameOnly|_|(MathNet.Symbolics.Expression)">
@@ -463,6 +474,11 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
  condition: x &gt; 0
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Core.Expression.expandSquare(MathNet.Symbolics.Expression)">
+ <summary>
+ rewrite x^2 as x*x
+ </summary>
+</member>
 <member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">
 <summary>
 a * log x -&gt; log(x^a)
@@ -595,12 +611,17 @@ merge summations in a sum that have the same parameters, eg Σ x + Σ y to Σ (x
 Adjusts summation to have a start, stop or var if it does not already
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.ComplexModule.ofExpression(MathNet.Symbolics.Expression)">
+<member name="M:MathNet.Symbolics.ComplexModule.toEulerFormExpression(MathNet.Symbolics.Expression)">
  <summary>
- Converts the expression to a complex number.
+ Converts the expression into Euler form, that is, a complex number in the form r*e^(i*theta).
  </summary>
- <param name="zx">The expression to convert.</param>
- <returns>The complex number.</returns>
+ <param name="e"></param>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.toTrigFormExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Converts the expression into trigonometric or cis form, that is, a complex number in the form r*(cos(theta) + i*sin(theta))
+ </summary>
+ <param name="e"></param>
 </member>
 <member name="M:MathNet.Symbolics.ComplexModule.simplifyExpression(MathNet.Symbolics.Expression)">
  <summary>
@@ -616,6 +637,13 @@ Adjusts summation to have a start, stop or var if it does not already
  </summary>
  <param name="n">The power of i.</param>
  <returns>The simplified imaginary power of i.</returns>
+</member>
+<member name="M:MathNet.Symbolics.ComplexModule.ofExpression(MathNet.Symbolics.Expression)">
+ <summary>
+ Converts the expression to a complex number.
+ </summary>
+ <param name="e">The expression to convert.</param>
+ <returns>The complex number.</returns>
 </member>
 <member name="M:MathNet.Symbolics.ComplexModule.getImaginaryFromExpression(MathNet.Symbolics.Expression)">
  <summary>
@@ -750,6 +778,63 @@ The rational roots method to factor polynomials with rational roots with degree 
 <summary>
 Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm
 </summary>
+</member>
+<member name="M:MathNet.Symbolics.Integration.Entropy.conditionalEntropy2(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+ An alternate way of computing the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+ </summary>
+ <param name="jpxy">The joint distribution of X and Y</param>
+ <param name="py">The marginal distribution of Y</param>
+ <param name="px">The marginal distribution of X</param>
+ <returns>The conditional entropy of Y given X</returns>
+</member>
+<member name="M:MathNet.Symbolics.Integration.Entropy.conditionalEntropy(MathNet.Symbolics.Expression)">
+<summary>
+ Computes the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+ </summary>
+ <param name="cpyx">The conditional distribution of Y given X</param>
+ <returns>The conditional entropy of Y given X</returns>
+</member>
+<member name="T:MathNet.Symbolics.Integration.Entropy">
+<summary>
+ A module for computing the entropies of distributions. It does not perform nesting of integrals
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Integration.EntropyN.conditionalEntropy(MathNet.Symbolics.Expression)">
+<summary>
+ Computes the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+ </summary>
+ <param name="px">The marginal distribution of X</param>
+ <param name="py">The marginal distribution of Y</param>
+ <returns>The conditional entropy of Y given X</returns>
+</member>
+<member name="M:MathNet.Symbolics.Integration.EntropyN.mutualInformation(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+ Computes the mutual information between X and Y. I(X;Y) = \int \int p(x,y) log(p(x,y)/(p(x)p(y))) dx dy
+ </summary>
+ <param name="px">The marginal distribution of X</param>
+ <param name="py">The marginal distribution of Y</param>
+ <param name="pxy">The joint distribution of X and Y</param>
+ <returns>The mutual information between X and Y</returns>
+</member>
+<member name="M:MathNet.Symbolics.Integration.EntropyN.relativeEntropy(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>Computes the relative entropy or KL divergence between two probability distributions. D(p||q) = \int p(x) log(p(x)/q(x)) dx</summary>
+ <param name="px">The first probability distribution</param>
+ <param name="qx">The second probability distribution</param>
+ <returns>The relative entropy between the two distributions</returns>
+</member>
+<member name="T:MathNet.Symbolics.Integration.EntropyN">
+<summary>
+The module for computing entropy and related quantities, the N stands for Nested as it expands distributions of multiple variables into nested integrals
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Integration.Integral.rewriteAsSum(System.Boolean,MathNet.Symbolics.Expression)">
+ <summary>
+ Given an integral expression, rewrites it as sums.
+ </summary>
+ <param name="usedelta">If true, uses delta notation for the discretized variable of integration.</param>
+ <param name="expr">The integral expression to rewrite.</param>
+ <returns>The rewritten expression.</returns>
 </member>
 <member name="T:MathNet.Symbolics.ProbabilityDistributions.Exponential">
 <summary>

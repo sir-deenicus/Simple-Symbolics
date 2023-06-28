@@ -334,40 +334,63 @@ module Integral =
         | _ -> None
         
     let toDefinite a b = function
-        | IsIntegral (f, dx) ->  defintegral dx a b f
+        | IsIntegral (f, dx) -> defintegral dx a b f
         | f -> f
         
-    let rewriteAsSum = function
-       | IsIntegral(x,(Identifier (Symbol sdx) as dx)) ->
+    /// <summary>
+    /// Given an integral expression, rewrites it as sums.
+    /// </summary>
+    /// <param name="usedelta">If true, uses delta notation for the discretized variable of integration.</param>
+    /// <param name="expr">The integral expression to rewrite.</param>
+    /// <returns>The rewritten expression.</returns>
+    let rewriteAsSum usedelta expr = 
+        let dxtodelta dx = 
             let delta = if Utils.InfixFormat = "Infix" then "Δ" else "\\Delta "
-            PiSigma.Σ(Product[x;V(delta + sdx)] |> Expression.simplifyLite ,dx)
-       | x -> x 
-       
+            V(delta + symbolString dx)
+        let rec inner = function
+            | IsIntegral((IsIntegral _ as innerexpr), dx) -> 
+                let innerexpr' = inner innerexpr   
+                FunctionN(SumOver, [Product[yield innerexpr'; if usedelta then yield dxtodelta dx]; dx])
+
+            | IsIntegral(x, dx) -> 
+                FunctionN(SumOver, [Product[yield x; if usedelta then yield dxtodelta dx] |> Expression.simplifyLite ; dx])
+
+            | IsDefiniteIntegral((IsIntegral _ as innerexpr), dx, a, b) ->
+                let innerexpr' = inner innerexpr   
+                FunctionN(SumOver, [Product[yield innerexpr'; if usedelta then yield dxtodelta dx]; dx; a; b])
+
+            | IsDefiniteIntegral(x, dx, a, b) ->
+                FunctionN(SumOver, [Product[yield x; if usedelta then yield dxtodelta dx] |> Expression.simplifyLite ; dx; a; b])
+
+            | f -> f
+        inner expr          
+                       
     let rewriteAsExpectation =
         function
-        | FunctionN(Function.Integral, Product l :: _) as f ->
+        | FunctionN(Integral, Product l :: _) as f ->
             maybe {
                 let! p =
                     List.tryFind (function
-                        | FunctionN(Probability, _) -> true
-                        | _ -> false) l
+                    | FunctionN(Probability, _) -> true
+                    | _ -> false) l
 
-                return FunctionN(Function.Expectation, [ (Product l) / p; p ])
+                return FunctionN(Expectation, [ (Product l) / p; p ])
             }
             |> Option.defaultValue f
         | f -> f
      
     let ofExpectation = function
-        | FunctionN(Function.Expectation, [ expr; distr ]) ->
-            let dx =
-                match Structure.first Expression.isVariable (Prob.inner distr) with
-                | Some e -> [ e ] | None -> []
-            FunctionN(Function.Integral, (distr * expr) :: dx)
+        | FunctionN(Expectation, [ expr; distr ]) as ex ->
+            //need to handle nesting
+            let dxs = Prob.getVariable distr
+            //dxs is either a tuple or a single variable
+            match dxs with
+            | Some (Tupled (v::vars)) -> 
+                vars 
+                |> List.fold (fun expr dx -> integral dx expr) (integral v (distr * expr))
+            | Some (Identifier _ as dx) -> integral dx (distr * expr)
+            | _ -> ex 
         | f -> f    
-
-    let changeOfVariable dy = function 
-        | IsIntegral(f,_) -> integral dy f
-        | f -> f
          
     let rewriteGammaAsIntegral = function 
         | Function(Gamma, z) ->  
@@ -382,6 +405,158 @@ module Integral =
         | IsIntegral(f, dx) -> defintegral dx a b f
         | f -> f
 
+    let ofDefinite = function
+        | IsDefiniteIntegral(f, dx, _, _) -> integral dx f
+        | f -> f
+ 
+///The module for computing entropy and related quantities, the N stands for Nested as it expands distributions of multiple variables into nested integrals
+module EntropyN = 
+    ///<summary>Computes the relative entropy or KL divergence between two probability distributions. D(p||q) = \int p(x) log(p(x)/q(x)) dx</summary>
+    /// <param name="px">The first probability distribution</param>
+    /// <param name="qx">The second probability distribution</param>
+    /// <returns>The relative entropy between the two distributions</returns>
+    let relativeEntropy px qx =
+        //KL divergace D(p||q) = \int p(x) log(p(x)/q(x)) dx
+        let calc px qx =
+            //we need to integrate over all variables in px
+            match Prob.getVariable px with
+            | Some(Tupled(v :: vs)) -> 
+                //we also need to marginalize over all variables in qx
+                let qxvars =    
+                    match Prob.getVariable qx with 
+                    | Some (Tupled vs) -> vs
+                    | Some v -> [v]
+                    | None -> []
+                //remove all variables in px from qx
+                let qxvars = 
+                    let pxset = Hashset (v::vs)
+                    qxvars |> List.filter (pxset.Contains >> not)
+
+                vs @ qxvars
+                |> List.fold (flip integral) (integral v (px * log (px / qx)))
+            | Some v -> integral v (px * log (px / qx))
+            | None -> undefined
+        match px, qx with
+        | IsProb _ as px, (IsProb _ as qx) -> 
+            calc px qx
+        | px, (Product l as qx) when List.forall Prob.isProb l -> 
+            calc px qx
+        | (Product l as px), qx when List.forall Prob.isProb l -> 
+            calc px qx 
+        | _ -> undefined
+
+    ///<summary>
+    /// Computes the mutual information between X and Y. I(X;Y) = \int \int p(x,y) log(p(x,y)/(p(x)p(y))) dx dy
+    /// </summary>
+    /// <param name="px">The marginal distribution of X</param>
+    /// <param name="py">The marginal distribution of Y</param>
+    /// <param name="pxy">The joint distribution of X and Y</param>
+    /// <returns>The mutual information between X and Y</returns>
+    let mutualInformation px py pxy =
+        //I(X;Y) = \int \int p(x,y) log(p(x,y)/(p(x)p(y))) dx dy
+        //It is also the KL divergence between the joint distribution and the product of the marginals
+        relativeEntropy pxy (px * py)
+
+    ///<summary>
+    /// Computes the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+    /// </summary>
+    /// <param name="px">The marginal distribution of X</param>
+    /// <param name="py">The marginal distribution of Y</param>
+    /// <returns>The conditional entropy of Y given X</returns>
+    let conditionalEntropy cpyx = 
+        //P(X|Y) = P(X,Y)/P(Y)
+        //H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x)) 
+        match cpyx with
+        | IsCondProb _ ->
+            let jpy = Prob.condToJoint p   
+            match Prob.getVariable cpyx with
+            | Some(Tupled(v :: vs)) ->    
+                vs  
+                |> List.fold (fun sums varx -> Summations.Σ(varx, sums)) (Summations.Σ(v, Rational.numerator jpy * log jpy))
+            | Some v -> Summations.Σ(v, Rational.numerator jpy * log jpy)
+            | None -> undefined   
+        | _ -> undefined
+ 
+    let entropy p = 
+        //H(X) = -\sum_x p(x) log(p(x))
+        match p with
+        | IsProb _ as p -> 
+            match Prob.getVariable p with
+            | Some(Tupled(v :: vs)) ->  
+                vs
+                |> List.fold (fun sums varx -> Summations.Σ(varx, sums)) (Summations.Σ(v, p * log p))
+            | Some v -> Summations.Σ(v, p * log p)
+            | None -> undefined   
+        | _ -> undefined
+
+/// A module for computing the entropies of distributions. It does not perform nesting of integrals
+module Entropy =
+    let relativeEntropy px qx = 
+        //KL divergace D(p||q) = \int p(x) log(p(x)/q(x)) dx
+        match px, qx with
+        | (IsProb _) as px, (IsProb _ as qx) -> 
+            match Prob.getVariable px with
+            | Some v -> integral v (px * log (px / qx))
+            | None -> undefined
+        | (Definition(IsProb _ as px, inner, s1), Definition(IsProb _ as qx, inner2, s2)) -> 
+            match Prob.getVariable px with
+            | Some v -> Definition(integral v (px * log (px / qx)), integral v (inner * log (inner / inner2)), $"Relative entropy of {s1} and {s2}")
+            | None -> undefined
+        | _ -> undefined
+            
+    let mutualInformation px py pxy =
+        //I(X;Y) = \int \int p(x,y) log(p(x,y)/(p(x)p(y))) dx dy
+        //It is also the KL divergence between the joint distribution and the product of the marginals
+        relativeEntropy pxy (px * py)
+
+    ///<summary>
+    /// Computes the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+    /// </summary>
+    /// <param name="cpyx">The conditional distribution of Y given X</param>
+    /// <returns>The conditional entropy of Y given X</returns>
+    let conditionalEntropy cpyx =
+        //H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+        match cpyx with
+        | IsCondProb _ ->
+            let jp = Prob.condToJoint cpyx
+            match Prob.getVariable cpyx with
+            | Some v -> Summations.Σ(v, Rational.numerator jp * log jp)
+            | None -> undefined  
+        | _ -> undefined
+
+    ///<summary>
+    /// An alternate way of computing the (discrete) conditional entropy of Y given X. H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+    /// </summary>
+    /// <param name="jpxy">The joint distribution of X and Y</param>
+    /// <param name="py">The marginal distribution of Y</param>
+    /// <param name="px">The marginal distribution of X</param>
+    /// <returns>The conditional entropy of Y given X</returns>
+    let conditionalEntropy2 jpxy py px =
+        //H(Y|X) = \sum_x \sum_y p(x,y) log(p(x,y)/p(x))
+        match jpxy, py, px with
+        | (IsProb _ as jpxy), (IsProb _ as py), (IsProb _ as px) ->
+            match Prob.getVariable jpxy with 
+            | Some v -> Summations.Σ(v, jpxy * log (jpxy / (px * py)))
+            | None -> undefined   
+        | Definition(IsProb _ as jpxy, jpinner, s1), Definition(IsProb _ as py, pyinner, s2), Definition(IsProb _ as px, pxinner, s3) ->
+                match Prob.getVariable jpxy with 
+                | Some v -> Definition(Summations.Σ(v, jpxy * log (jpxy / (px * py))), Summations.Σ(v, jpinner * log (jpinner / (pyinner * pxinner))), $"Conditional entropy of {s1} given {s2} and {s3}")
+                | None -> undefined
+        | _ -> undefined
+
+    let entropy p = 
+        //H(X) = -\sum_x p(x) log(p(x))
+        match p with
+        | IsProb _ as p -> 
+            match Prob.getVariable p with
+            | Some v -> Summations.Σ(v, p * log p)
+            | None -> undefined   
+        | Definition(IsProb _ as p, inner, s) -> 
+            match Prob.getVariable p with
+            | Some v -> Definition(Summations.Σ(v, p * log p), Summations.Σ(v, inner * log inner), $"Entropy of {s}")
+            | None -> undefined   
+        | _ -> undefined
+            
 module DefiniteIntegral = 
     let makeInDefinite = function
         | IsDefiniteIntegral(f, dx, _, _) -> integral dx f

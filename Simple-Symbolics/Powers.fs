@@ -32,8 +32,8 @@ module Logarithm =
         | Function (Ln,Power (x,n)) when n = -1Q -> -ln x
         | FunctionN (Log,[b; Power (x,n)]) when n = -1Q ->
             log b 1Q - log b x
-        | Function (Ln, Fraction (a,b)) -> ln (ofBigInteger a) - ln (ofBigInteger b)
-        | FunctionN(Log, [b; Fraction (n,m)]) -> log b (ofBigInteger n) - log b (ofBigInteger m)
+        | Function (Ln, NonIntegerRational (a,b)) -> ln (ofBigInteger a) - ln (ofBigInteger b)
+        | FunctionN(Log, [b; NonIntegerRational (n,m)]) -> log b (ofBigInteger n) - log b (ofBigInteger m)
         | Function(Ln, Products(fx,var,start, stop)) -> summation var start stop (ln fx)
         | Function(Ln, Product l) ->
             Sum(List.map (function

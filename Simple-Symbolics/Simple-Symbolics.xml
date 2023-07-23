@@ -209,6 +209,11 @@
  <param name="r">The real part of the complex number.</param>
  <param name="i">The imaginary part of the complex number.</param>
 </member>
+<member name="M:MathNet.Symbolics.Utils.gdiffn1(Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression)">
+<summary>
+checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.|ProductsTerm|_|(MathNet.Symbolics.Expression)">
 <summary>
 (fx)
@@ -269,9 +274,19 @@
 Define with left, right and description
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Utils.pdiffnth(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+a partial derivative with respect to the nth variable
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.pdiff(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
 <summary>
 use partial differentiation Leibniz notation
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.diffnth(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+wrap input expression in Leibniz notation for differentiation with respect to the nth variable
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Utils.diff(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">

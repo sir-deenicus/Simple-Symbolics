@@ -268,12 +268,14 @@ let grad var x = FunctionN(Gradient, [x;var] )
 ///wrap input expression in Leibniz notation for differentiation.
 let diff dx x = FunctionN(Derivative, [x;dx])
 
-let diffn n dx x = FunctionN(Derivative, [x;dx;n])
+///wrap input expression in Leibniz notation for differentiation with respect to the nth variable
+let diffnth n dx x = FunctionN(Derivative, [x;dx;n])
 
 ///use partial differentiation Leibniz notation
 let pdiff dx x = FunctionN(PartialDerivative, [x;dx])
 
-let pdiffn n dx x = FunctionN(PartialDerivative, [x;dx;n])
+///a partial derivative with respect to the nth variable
+let pdiffnth n dx x = FunctionN(PartialDerivative, [x;dx;n])
 
 let gamma x = Function(Gamma,x)
 
@@ -295,7 +297,9 @@ let binomial n k = FunctionN(Choose, [n;k])
 let prob x = FunctionN(Probability, [symbol "P"; x ])
 let probn n x = FunctionN(Probability, [symbol n; x ])
 let probc x theta = FunctionN(Probability, [ symbol "P"; x; theta ])
+let probcn n x theta = FunctionN(Probability, [ symbol n; x; theta ])
 let probparam x theta = FunctionN(Probability, [symbol "P";  x; theta; Parameter ";" ])
+let probparamn s x theta = FunctionN(Probability, [symbol s;  x; theta; Parameter ";" ])
 
 let erf x = Function(Erf, x)
 
@@ -380,7 +384,9 @@ module Tuples =
         | a, Tupled l2 ->
             Tupled (a::l2)
         | _ -> Tupled [a;b] 
-        
+    
+
+
 
 //========================
 let (|IsFunctionExpr|_|) = function
@@ -537,7 +543,30 @@ let (|IsLinearFn|_|) input =
     | Summation(fx, var, start, stop) -> Some(fx, fun x -> summation x var start stop)
     | Sum l as sums -> Some(sums, id)
     | _ -> None
+
 //========================
+  
+///checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth
+let gdiffn1 D expr =
+    match D expr with 
+    | IsDerivative(_, _, dxOuter) ->  
+        match expr with
+        | IsDerivative(fn, f, dx) when dx = dxOuter ->
+            match fn with 
+            | Derivative -> diffnth 2 dx f
+            | PartialDerivative -> pdiffnth 2 dx f
+            | _ -> D expr 
+        | IsNthDerivative(fn, f, dx, n) when dx = dxOuter ->
+            match fn with 
+            | Derivative -> diffnth (n+1) dx f
+            | PartialDerivative -> pdiffnth (n+1) dx f
+            | _ -> D expr
+        | _ -> D expr
+    | _ -> D expr
+
+let pdiffn dx x = gdiffn1 (pdiff dx) x
+let diffn dx x = gdiffn1 (diff dx) x
+//==============
 
 type Summations() =
     //sigma symbol

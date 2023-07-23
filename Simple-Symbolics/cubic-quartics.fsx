@@ -19,7 +19,7 @@ let cubicSolve (coeffs: Expression[]) =
     let struct(r1,r2,r3) = MathNet.Numerics.FindRoots.Cubic(d, c, b, a)
     Array.map Complex.ofNumericsComplex [|r1;r2;r3|]
      
-//cubic solver lightly adjusted from https://github.com/BaseMax/CubicEquationCalculator/blob/main/cubic.js which itself heavily derives from undisclosed sources.
+//cubic solver lightly adjusted from https://github.com/BaseMax/CubicEquationCalculator/blob/main/cubic.js which itself derives from undisclosed sources.
 
 let quarticSolve0 (coeffs: Expression[]) =
     let coeffs =

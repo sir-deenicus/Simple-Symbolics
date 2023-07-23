@@ -556,6 +556,19 @@ module Entropy =
             | Some v -> Definition(Summations.Σ(v, p * log p), Summations.Σ(v, inner * log inner), $"Entropy of {s}")
             | None -> undefined   
         | _ -> undefined
+
+    let crossentropy p q = 
+        //H(P,Q) = -\sum_x p(x) log(q(x))
+        match p, q with
+        | (IsProb _ as p), (IsProb _ as q) -> 
+            match Prob.getVariable p with
+            | Some v -> -Summations.Σ(v, p * log q)
+            | None -> undefined
+        | (Definition(IsProb _ as p, inner, s1), Definition(IsProb _ as q, inner2, s2)) ->
+            match Prob.getVariable p with
+            | Some v -> Definition(-Summations.Σ(v, p * log q), -Summations.Σ(v, inner * log inner2), $"Cross entropy of {s1} and {s2}")
+            | None -> undefined
+        | _ -> undefined
             
 module DefiniteIntegral = 
     let makeInDefinite = function

@@ -176,7 +176,7 @@ let rec replaceSymbolAux doall r x f =
         | Function(fn, f) -> Function(fn, loop f)
         | Product l -> Product(List.map loop l)
         | Sum l -> Sum(List.map loop l)
-        | Id v -> Id(loop v)
+        | Id (v,str) -> Id(loop v,str)
         | Definition(a,b, s) -> Definition(loop a, loop b, s)
         | Generic(a, ty) -> Generic(loop a, ty)
         | FunctionN(Probability, h::t) -> FunctionN(Probability, h::(List.map loop t))
@@ -200,7 +200,7 @@ let rec containsVar x =
     | Function(_, fx) -> containsVar x fx
     | Generic (y,_) -> containsVar x y
     | Definition(y,z,_) -> containsVar x y || containsVar x z
-    | Id y -> containsVar x y
+    | Id (y,_) -> containsVar x y
     | Product l | Sum l | FunctionN(_, l) -> List.exists (containsVar x) l
     | _ -> false
 
@@ -208,7 +208,7 @@ let rec containsAnyVar =
     function
     | Identifier _ -> true
     | Power(p, n) -> containsAnyVar n || containsAnyVar p
-    | Id fx
+    | Id (fx, _)
     | Generic(fx, _)
     | Function(_, fx) -> containsAnyVar fx
     | Definition(a,b, _) -> containsAnyVar a || containsAnyVar b
@@ -221,7 +221,7 @@ let replaceSymbols (vars : seq<_>) e =
         | Identifier _ as var when map.ContainsKey var -> map.[var]
         | Power(f, n) -> Power(loop f, loop n)
         | Function(fn, f) -> Function(fn, loop f)
-        | Id x -> Id(loop x)
+        | Id (x,strtag) -> Id(loop x, strtag)
         | Definition(a,b,s) -> Definition(loop a, loop b,s)
         | Generic(x, ty) -> Generic (loop x, ty)
         | Product l -> Product(List.map loop l)
@@ -238,7 +238,7 @@ module Structure =
         | Identifier _ -> 1
         | Generic(x,_)
         | Definition(x,_,_)
-        | Id x -> width x
+        | Id (x, _) -> width x
         | Power(x, n) -> width x + 1 + width n
         | FunctionN(fn, x::_) when functionFirstTermOnly fn -> width x + 1
         | Product l | Sum l | FunctionN(_, l) -> List.sumBy width l
@@ -253,7 +253,7 @@ module Structure =
         | Identifier _ -> 1
         | Generic(x,_)
         | Definition(x,_,_)
-        | Id x -> depth x
+        | Id (x, _) -> depth x
         | Power(x, n) -> (max (depth x) (depth n)) + 1
         | FunctionN(fn, x::_) when functionFirstTermOnly fn -> depth x + 1
         | Product l | Sum l | FunctionN(_, l) -> 1 + (List.map depth l |> List.max)
@@ -313,7 +313,7 @@ module Structure =
         | Identifier _ as i -> func i
         | Number _ as n -> func n
         | Approximation _ as r -> func r
-        | Id x
+        | Id (x, _) as idx -> func idx || existsRecursive func x
         | Generic(x, _) as t -> func t || existsRecursive func x
         | Definition(a, b,_) as def ->
             func def || existsRecursive func a || existsRecursive func b
@@ -505,8 +505,13 @@ module Structure =
             | [] -> c
             | [x] -> c * f x
             | _ -> c * f (Product l)
-        | x -> x
+        | v -> f v
             
+    /// <summary>
+    /// The superposition principle states that the net response at a given point in space caused by two or more stimuli is the sum of the responses that would have been caused by each stimulus individually.
+    /// It can be seen as being about taking linear combinations of functions.
+    /// So, if we have a function f(a + b + c) we can do f(a) + f(b) + f(c). This function checks if the given expression is a known linear function and extracts the function and applies it to each term of the sum.
+    /// </summary>
     let applySuperpositionPrinciple = function 
         | IsLinearFn ((Sum l), f) -> 
             List.map (fun fx -> f fx) l |> Sum
@@ -988,15 +993,15 @@ module Expression =
         let counts = Dict.ofSeq []
         let rec docount = function
             | Identifier _ as v ->  
-                counts.ExpandElseAdd v ((+) 1) 1
+                counts.ExpandElseAdd(v, (+) 1, 1)
             | Definition(a,b,_) | Power(a, b) ->
                 docount a  
                 docount b
             | IsFunctionExprAny(_,x,Some b) ->
-                counts.ExpandElseAdd x ((+) 1) 1
+                counts.ExpandElseAdd (x, (+) 1, 1)
                 docount b
             | IsFunctionExprAny(_,x,_) ->
-                counts.ExpandElseAdd x ((+) 1) 1
+                counts.ExpandElseAdd (x, (+) 1, 1)
             | Product l | Sum l | FunctionN(_, l) | Tupled l ->
                 l |> Seq.iter docount
             | Generic(x,_)  | Id x | Function(_, x) -> 

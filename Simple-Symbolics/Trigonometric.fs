@@ -129,15 +129,15 @@ let rec evalAtan y x =
 
 and simplifyWithTable =
     function
-    | Function(Cos, n) as cosx -> TrigTables.cosineLookUp.tryFind n |> Option.defaultValue cosx
-    | Function(Sin, n) as sinx -> TrigTables.sineLookUp.tryFind n |> Option.defaultValue sinx
-    | Function(Tan, n) as tanx -> TrigTables.tanLookUp.tryFind n |> Option.defaultValue tanx
-    | Function(Atan, x) as atanx -> TrigTables.aTanLookUp.tryFind x |> Option.defaultValue atanx
+    | Function(Cos, n) as cosx -> TrigTables.cosineLookUp.TryFind n |> Option.defaultValue cosx
+    | Function(Sin, n) as sinx -> TrigTables.sineLookUp.TryFind n |> Option.defaultValue sinx
+    | Function(Tan, n) as tanx -> TrigTables.tanLookUp.TryFind n |> Option.defaultValue tanx
+    | Function(Atan, x) as atanx -> TrigTables.aTanLookUp.TryFind x |> Option.defaultValue atanx
     | FunctionN(Atan, [ a; b ]) as atanx ->
         match a, b with
         | Number x, Number y ->
             let atanx' = evalAtan x y
-            atanx' |> TrigTables.aTanLookUp.tryFind |> Option.defaultValue atanx'
+            atanx' |> TrigTables.aTanLookUp.TryFind |> Option.defaultValue atanx'
         | _ -> atanx
     | x -> x
 

@@ -346,7 +346,9 @@ let integral dx x = FunctionN(Integral, [ x; dx ])
 
 let defintegral dx a b x = FunctionN(Integral, [ x; dx; a; b ])
 
-let hold x = Id x
+let hold x = Id (x,"")
+
+let taghold s x = Id(x,s)
 
 let cage x = Id x
 
@@ -359,11 +361,11 @@ let floor x = Function(Floor,x)
 
 module Hold =
     let extractLeadingNegative = function
-        | Id(Product (Number n::_) as p) when n < 0N -> -1 * hold (p / -1)
+        | Id(Product (Number n::_) as p, _) when n < 0N -> -1 * hold (p / -1)
         | x -> x
 
     let remove = function
-        | Id x -> x
+        | Id (x, _) -> x
         | x -> x
   
 module Tuples =

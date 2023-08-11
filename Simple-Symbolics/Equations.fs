@@ -224,7 +224,7 @@ type InEquality(comparer: InEquality.Comparer,
         let isnum = Expression.isNumber expr
 
         let c, safe =
-            match Expression.isNegativeNumber expr, eq.VarSigns.tryFind expr with
+            match Expression.isNegativeNumber expr, eq.VarSigns.TryFind expr with
             | false, Some InEquality.Negative
             | true, _ -> InEquality.flipComparer eq.Comparer, true
             | false, Some InEquality.Positive

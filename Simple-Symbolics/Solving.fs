@@ -285,92 +285,99 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
 
     let doflip, f, ops = iter false left []
     doflip, f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify
-
+     
 let internal reArrangeExprEquation previnstr prevops focusVar (left, right) =
-    let rec iter fx instrs ops =
-        match fx with
-        | f when f = focusVar -> f, instrs, ops
-        | Power(b, x) when containsVar focusVar x -> iter x ("take log"::instrs) ((fun x -> log b x) :: ops)
-        | Power(f, p) -> 
-            iter f ("take nth root"::instrs) ((fun (x: Expression) -> x ** (1 / p)) :: ops)
-        | Sum []
-        | Sum [ _ ]
-        | Product []
-        | Product [ _ ] -> fx, instrs, ops
-        | Product l ->
+     let rec iter fx instrs ops =
+         match fx with
+         | f when f = focusVar -> f, instrs, ops
+         | Power(b, x) when containsVar focusVar x -> iter x ($"take log base {fmt b} of {fmt x}"::instrs) ((fun x -> log b x) :: ops)
+         | Power(f, p) -> 
+             iter f ($"take nth root of {fmt f} with n = {fmt p}" ::instrs) ((fun (x: Expression) -> x ** (1 / p)) :: ops)
+         | Sum []
+         | Sum [ _ ]
+         | Product []
+         | Product [ _ ] -> fx, instrs, ops
+         | Product l ->
 
-            let matched, novar = List.partition (containsVar focusVar) l
+             let matched, novar = List.partition (containsVar focusVar) l
 
-            let ops', instrs' =
-                match novar with
-                | [] -> ops, instrs 
-                | _ -> (fun x -> x / (Product novar)) :: ops, "divide"::instrs
+             let ops', instrs' =
+                 match novar with
+                 | [] -> ops, instrs 
+                 | _ -> (fun x -> x / (Product novar)) :: ops, $"divide {fmt fx} by {fmt (Product novar)}"::instrs
 
-            match matched with
-            | [] -> fx, instrs', ops'
-            | [ h ] -> iter h instrs' ops'
-            | hs -> Product hs, instrs', ops'
-        | Sum l -> 
+             match matched with
+             | [] -> fx, instrs', ops'
+             | [ h ] -> iter h instrs' ops'
+             | hs -> Product hs, instrs', ops'
+         | Sum l -> 
 
-            let matched, novar = List.partition (containsVar focusVar) l
+             let matched, novar = List.partition (containsVar focusVar) l
 
-            let ops', instrs' =
-                match novar with
-                | [] -> ops, instrs 
-                | _ -> (fun x -> x - (Sum novar)) :: ops, "subtract"::instrs
+             let ops', instrs' =
+                 match novar with
+                 | [] -> ops, instrs 
+                 | _ -> (fun x -> x - (Sum novar)) :: ops, $"subtract {fmt fx} by {fmt (Sum novar)}"::instrs
 
-            match matched with
-            | [] -> fx, instrs',ops'
-            | [ h ] -> iter h instrs' ops'
-            | hs -> Sum hs, instrs', ops'
-        | FunctionN(Log, [ b; x ]) -> 
-            iter x ("exponentiate"::instrs) ((fun x -> b ** x) :: ops)
+             match matched with
+             | [] -> fx, instrs',ops'
+             | [ h ] -> iter h instrs' ops'
+             | hs -> Sum hs, instrs', ops'
+         | FunctionN(Log, [ b; x ]) -> 
+             iter x ($"exponentiate {fmt b} to the power of {fmt x}"::instrs) ((fun x -> b ** x) :: ops)
 
-        | Function(Ln, x) -> 
-            iter x ("exponentiate"::instrs) (exp :: ops)
-        | Function(Tan, x) ->
+         | Function(Ln, x) -> 
+             iter x ($"exponentiate e to the power of {fmt x}"::instrs) (exp :: ops)
+         | Function(Exp, x) ->    
+             iter x ($"apply log to {fmt x}"::instrs) (ln :: ops) 
+         | Function(Tan, x) -> 
+             iter x ("apply arctan"::instrs) ((fun x -> Function(Atan, x)) :: ops)
+         | Function(Erf, x) ->
 
-            iter x ("apply arctan"::instrs) ((fun x -> Function(Atan, x)) :: ops)
-        | Function(Erf, x) ->
+             iter x ("apply inverse error function"::instrs) ((fun x -> Function(ErfInv, x)) :: ops)
+         | Function(Cos, x) ->  
 
-            iter x ("apply inverse error function"::instrs) ((fun x -> Function(ErfInv, x)) :: ops)
-        | Function(Cos, x) ->  
+             iter x ("apply arccos"::instrs) ((fun x -> Function(Acos, x)) :: ops)
+         | Function(Sin, x) ->
 
-            iter x ("apply arccos"::instrs) ((fun x -> Function(Acos, x)) :: ops)
-        | Function(Sin, x) ->
+             iter x ("apply arcsin"::instrs) ((fun x -> Function(Asin, x)) :: ops)
+         | IsDerivative(_, f, dx) ->
 
-            iter x ("apply arcsin"::instrs) ((fun x -> Function(Asin, x)) :: ops)
-        | IsDerivative(_, f, dx) ->
+             iter f ("integrate"::instrs) ((fun x -> integral dx x) :: ops)
+         | IsIntegral(f, dx) -> 
 
-            iter f ("integrate"::instrs) ((fun x -> integral dx x) :: ops)
-        | IsIntegral(f, dx) -> 
+             iter f ("differentiate"::instrs) ((fun x -> diff dx x) :: ops)         
+         | IsMatrix m -> 
 
-            iter f ("differentiate"::instrs) ((fun x -> diff dx x) :: ops)
-        | Function(Exp, x) ->  
+             iter m ("multiply left side by matrix inverse"::instrs) ((fun e -> inverse m * e) :: ops)
+         | _ -> Undefined, instrs, ops //failwith "err"
 
-            iter x ("apply log"::instrs) (ln :: ops)         
-        | IsMatrix m -> 
-
-            iter m ("multiply left side by matrix inverse"::instrs) ((fun e -> inverse m * e) :: ops)
-        | _ -> Undefined, instrs, ops //failwith "err"
-
-    let f, instrs, ops = iter left previnstr prevops
-    (f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify), (instrs, ops, right)
+     let f, instrs, ops = iter left previnstr prevops
+     (f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify), (instrs, ops, (left, right))
 
 let reArrangeEquation focusVar (e: Equation) =
-    reArrangeExprEquation [] [] focusVar e.Definition |> fst |> Equation
-
-
+     reArrangeExprEquation [] [] focusVar e.Definition |> fst |> Equation
+      
 let processOpsTrace annotate ops =
-    let instrs, ops, startexpr = ops
+     let instrs, ops, (_, startexpr) = ops
+     let ops' = Expression.simplify :: ops 
 
-    if annotate then 
-        let instrs' = List.map2 (fun s e -> TraceExplain.Instr (e, s)) instrs ops  
-        stepTracer true false fmt startexpr instrs'
-    else 
-        stepTracer true false fmt startexpr (List.map TraceExplain.Op ops)
+     if annotate then  
+         let instrs' = List.map2 (fun s e -> TraceExplain.Instr (e, s)) ("simplify"::instrs) ops'  
+         stepTracer true false fmt startexpr (List.rev instrs')
+     else 
+         stepTracer true false fmt startexpr (List.map TraceExplain.Op (List.rev ops'))
 
+let processOpsTraceAsEquation annotate ops = 
+    let instrs, ops, (left, right) = ops
+    let ops' = (eqApp Expression.simplify) :: List.map eqApp ops
 
+    if annotate then  
+        let instrs' = List.map2 (fun s e -> TraceExplain.Instr (e, s)) ("simplify"::instrs) ops'  
+        stepTracer true true string (left <=> right) (List.rev instrs')
+    else
+        stepTracer true true string (left <=> right) (List.map TraceExplain.Op (List.rev ops'))
+  
 
 let solveForWithTrace targetVar (eq: Equation) =
     let adjust (eq: Equation) = //move it left collect as polyonmial
@@ -405,16 +412,19 @@ let solveForWithTrace targetVar (eq: Equation) =
                     let res = cubicSolveSymbolic (Polynomial.coefficients targetVar peq.Left)
 
                     [ for r in res do
-                        targetVar <=> Complex.toExpression (r.Simplify()) ], ([], [], undefined)
+                        targetVar <=> Complex.toExpression (r.Simplify()) ], ([], [], (undefined, undefined))
                 | IsIntegerLiteral 4 ->
                     let res = quarticSolve (Polynomial.coefficients targetVar peq.Left)
 
                     [ for r in res do
-                          targetVar <=> Complex.toExpression (Complex.simplify r) ], ([], [], undefined)
+                          targetVar <=> Complex.toExpression (Complex.simplify r) ], ([], [], (undefined, undefined))  
                 | _ -> [ Equation e ], instrs
             | es -> es, instrs
         else
             [ Equation e ], instrs
+
+
+let solveFor targetVar (eq:Equation) = solveForWithTrace targetVar eq |> fst
 
 let reArrangeInEquality focusVar (e: InEquality) =
     let f, l, r = reArrangeExprInequality true focusVar (e.Left, e.Right)
@@ -423,17 +433,17 @@ let reArrangeInEquality focusVar (e: InEquality) =
 
 let invertFunction x expression = 
     let rec iter instrs opslist e = 
-        let res, ops = reArrangeExprEquation instrs opslist x (expression, x)
-        match res  with
+        let res, ops = reArrangeExprEquation instrs opslist x (e, x)
+        match res with
         | Identifier(Symbol _) as y, inv when y = x -> inv, ops
         | _, inv ->
             let instrs' = $"Is it monomial in {fmt x}?"::"Did not completely reduce. Collecting terms"::[]
-            let monom = Polynomial.collectTerms x expression
+            let monom = Polynomial.collectTerms x e
 
             if Polynomial.isMonomial x monom then 
                 iter ("Yes"::instrs') [id; id; id] monom
             else  
-                inv, ("No"::instrs' @ instrs, id::id::id::opslist, snd res)
+                inv, ("No"::instrs' @ instrs, id::id::id::opslist, (undefined, snd res))
     iter [] [] expression
 
 
@@ -478,7 +488,7 @@ module Units =
         tx
         |> List.map (fun (x: Expression, u: Units) ->
             let asunit =
-                match lookup.tryFindIt u.Unit with
+                match lookup.TryFindIt u.Unit with
                 | Some u' -> (Units.toUnitQuantityValue u' u |> fmt) + space () + u'.AltUnit
                 | _ -> Units.simplifyUnitDesc u
 

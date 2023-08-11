@@ -553,7 +553,7 @@ module Vector =
     let toScalar (v:Vector<_>) = v.AsList |> List.head
 
     let inline ofScalar (s:'a) = Vector [s]
-    
+
 
 module Matrix =
     open MathNet.Numerics.Distributions
@@ -797,4 +797,4 @@ module MatrixExtensions =
         /// <param name="r">The number of rows in the generated matrix.</param>
         /// <param name="cols">The number of columns in the generated matrix.</param>
         /// <returns>A new matrix of variables.</returns>
-        member __.Next(r, cols) = Matrix.ofVars (chars.Pop(), r, cols)
+        member __.Next(r, cols) = Matrix.ofVars (chars.Pop(), r, cols)         

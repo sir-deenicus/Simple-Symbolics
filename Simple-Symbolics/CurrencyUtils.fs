@@ -46,7 +46,7 @@ let mutable currencyMap = Dict()
 let rebuildCurrencyMap(dir) = currencyMap <- buildCurrencyMap dir
   
 let checkCurrency eps c = 
-    match currencyMap.tryFind c with 
+    match currencyMap.TryFind c with 
     | None -> nan
     | Some v -> v + eps
 

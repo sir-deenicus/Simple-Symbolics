@@ -352,9 +352,9 @@ let unitsmap = Dict.ofSeq (List.map swap units)
 let unitsName = Dict.ofSeq (List.map (fun (u:Units,s) -> u.Unit, s) units)
 
 let trylookupUnit e =
-    match unitsName.tryFind e with
+    match unitsName.TryFind e with
     | None ->
-        match unitsName.tryFind (1 / e) with
+        match unitsName.TryFind (1 / e) with
         | None -> "" | Some s -> "Inverse" + space() + s
     | Some s -> s
 

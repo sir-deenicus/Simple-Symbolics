@@ -5,7 +5,8 @@
     <Authors>Deen Abiola</Authors>
     <Version>0.6</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild> 
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	<LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -47,11 +48,12 @@
     <Compile Include="Summation.fs" />
     <Compile Include="Complex.fs" />
     <Compile Include="Tropical.fs" />
+    <Compile Include="Limits.fs" />
     <Compile Include="Differentiation.fs" />
+    <Compile Include="Integration.fs" />
     <Compile Include="LinearAlgebra.fs" />
     <Compile Include="Solving.fs" />
     <Compile Include="Derivations.fs" />
-    <Compile Include="Integration.fs" />
     <Compile Include="DifferentialEquations.fs" />
     <Compile Include="Requirements.fs" />
     <Compile Include="ProbabilityDistributions.fs" />
@@ -59,14 +61,12 @@
     <Compile Include="KnowledgeBase.fs" />
   </ItemGroup>
 
-  <ItemGroup />
-
   <ItemGroup>
     <PackageReference Include="FSharp.Data" Version="6.2.0" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
-    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.6" />
+    <PackageReference Include="MathNet.Symbolic.Ext" Version="0.35.9" />
     <PackageReference Include="PeterO.Numbers" Version="1.8.2" />
-    <PackageReference Include="Prelude" Version="1.9.5" />
+    <PackageReference Include="Prelude" Version="1.9.9" />
   </ItemGroup>
 
   <ItemGroup>

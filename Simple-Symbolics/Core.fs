@@ -263,6 +263,26 @@ module Structure =
 
     let size e = width e + depth e
 
+    ///isolate "extracts" exprToIsolate from expr by dividing expr by exprToIsolate
+    ///applying hold to that result and multiplying the result by exprToIsolate
+    ///This is useful for keeping vector type variables from mixing with exressions
+    let isolate (exprToIsolate) expr = isolate exprToIsolate expr
+
+    ///isolate "extracts" exprToIsolate from expr by dividing expr by exprToIsolate
+    ///applying hold to that result and multiplying the result by exprToIsolate
+    ///This is useful for keeping vector type variables from mixing with exressions
+    ///This version adds a tag to the sealed variable. Tagged variables aren't simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+    let isolateTagged (exprToIsolate) tag expr = isolateTagged tag exprToIsolate expr
+
+    ///holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+    ///it take a binary function f, (such as multiplication) and apply it as f a (hold b) |> isolate (hold b)
+    let holdAndIsolate f a b = holdAndIsolate f a b
+
+    ///holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+    ///it take a binary function f, (such as multiplication) and apply it as f a (hold b) |> isolate (hold b)
+    ///This version adds a tag to the sealed variable. Tagged variables aren't simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+    let holdAndIsolateTagged f tag a b = holdAndIsolateTagged f tag a b
+
     let averageDepth =
         function
         | Sum l | Product l | FunctionN(_, l) -> List.averageBy (depth >> float) l
@@ -333,8 +353,10 @@ module Structure =
         | Power(a, b) as expr ->
             if func expr then Some expr
             else List.tryPick (first func) [ a; b ]
-        | Generic(fx, _)
-        | Id fx
+        | Id (fx, _) as f -> 
+            if func f then Some f
+            else first func fx
+        | Generic(fx, _) 
         | Function(_, fx) as f ->
             if func f then Some f
             else first func fx
@@ -357,9 +379,9 @@ module Structure =
         | Number _ as n -> Some n
         | Identifier _ as var when not (filter var) -> None
         | Identifier _ as var -> Some var
-        | Id x as e ->
+        | Id (x,strtag) as e ->
             if filter e then Some e
-            else Option.map Id (recursiveFilter filter x)
+            else Option.map (fun f -> Id(f,strtag)) (recursiveFilter filter x) 
         | Generic(x,ty) as e ->
             if filter e then Some e
             else Option.map (fun f -> Generic(f,ty)) (recursiveFilter filter x)
@@ -430,8 +452,8 @@ module Structure =
     let rec recursiveMapFilter filter fx =
         function
         | Identifier _ as var when filter var -> fx var
-        | Id x ->
-            Id(recursiveMapFilter filter fx x)
+        | Id (x,strtag) ->
+            Id(recursiveMapFilter filter fx x, strtag)
             |> filterApply fx filter
         | Generic(x,ty) ->
             Generic(recursiveMapFilter filter fx x, ty)
@@ -525,7 +547,7 @@ module Structure =
         | Power(x, y) -> walk 0 (cv + 1) x |> Option.orElse (walk (ch + 1) (cv + 1) y)
         | Sum l -> horizontal 0 (cv+1) l
         | FunctionN(_,l) -> horizontal 0 (cv + 1) l
-        | Id x -> walk 0 (cv + 1) x
+        | Id (x,_) -> walk 0 (cv + 1) x
         | _ -> None
         and horizontal ch cv = function
             | [] -> None
@@ -550,11 +572,11 @@ module Structure =
             (sum, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
         | FunctionN(_, l) as fn -> 
             (fn, (ch, cv))::List.concat (List.mapi (walk (cv + 1)) l)
-        | Id x as idx -> 
+        | Id (x,_) as idx -> 
             (idx, (ch, cv))::walk (cv + 1) ch x
         | x -> [ (x, (ch, cv)) ]
         walk 0 0 expr
-
+          
     let getAtDepthFilter filter v expr =
         let rec walk cv =  
             function 
@@ -564,12 +586,13 @@ module Structure =
             | Product l -> List.tryPick (walk (cv + 1)) l
             | Sum l -> List.tryPick (walk (cv + 1)) l
             | FunctionN(f, l) -> List.tryPick (walk (cv + 1)) l
-            | Id x -> walk (cv + 1) x
+            | Id (x, _) -> walk (cv + 1) x
             | _ -> None
         walk 0 expr
 
     let getAtDepth v expr = getAtDepthFilter (konst true) v expr
 
+    ///Tags are ignored during maps so if you want to change the tag make sure you map on Id _.
     let mapAtDepth v f (expr, substs) =
         let rec walk cv = function
             | x when cv = v ->
@@ -591,12 +614,13 @@ module Structure =
             | FunctionN(f, l) ->
                 let (l', r) = List.unzip (List.map (walk (cv + 1)) l)
                 (FunctionN(f, l'), List.concat r)
-            | Id x ->
+            | Id (x, strtag) ->
                 let (x', r) = walk (cv + 1) x
-                (Id x', r)
+                (Id (x',strtag), r)
             | x -> (x, substs)
         walk 0 expr
-
+    
+    ///Tags are ignored during maps so if you want to change the tag make sure you map on Id _.
     let mapAtLoc h v f (expr, substs) =
         let rec walk cv ch = function
             | x when ch = h && cv = v ->
@@ -618,9 +642,9 @@ module Structure =
             | FunctionN(f, l) ->
                 let (l', r) = List.unzip (List.mapi (walk (cv + 1)) l)
                 (FunctionN(f, l'), List.concat r)
-            | Id x ->
+            | Id (x,strtag) ->
                 let (x', r) = walk (cv + 1) ch x
-                (Id x', r)
+                (Id (x',strtag), r)
             | x -> (x, substs)
         let res, substs' = walk 0 0 expr
         (res, List.removeDuplicates(substs @ substs'))
@@ -760,7 +784,7 @@ module Expression =
         | Function(fn, f) -> Function(fn, simplifyLite f)
         | x -> x
 
-    let internal simplifyaux simplifysqrt fx =
+    let internal simplifyaux removeseals simplifysqrt fx =
         let rec simplifyLoop =
             function
             | Power(_, Number n) when n = 0N -> 1Q
@@ -837,21 +861,23 @@ module Expression =
             | Sum [ x ] | Product [ x ] -> simplifyLoop x
             | Product (n::rest) when n = 1Q -> simplifyLoop (Product rest)
             | Product l -> List.map simplifyLoop l |> List.fold (*) 1Q
-            | Id x -> simplifyLoop x
+            | Id (x,strtag) when strtag = "" || removeseals -> simplifyLoop x
             | Sum l -> List.map simplifyLoop l |> List.sum
             | IntervalF i when i.Infimum = i.Supremum -> ofFloat i.Infimum
             | Interval(a,b) when a = b -> a
             | x -> x
         simplifyLoop fx |> Rational.reduce
     
-    let simplify e = simplifyaux true e
+    let simplify e = simplifyaux false true e
     
     let fullSimplify e =
         e
         |> simplifyLite
-        |> repeat 2 simplify
+        |> repeat 2 (simplifyaux true true)
         |> Rational.rationalize
         |> Algebraic.expand
+
+    let fullsimplify e = fullSimplify e
 
     let fullerSimplify e =
         Trigonometry.simplify e
@@ -874,7 +900,7 @@ module Expression =
             | FunctionN _ | Power _ | Function _ | Number _ | Approximation _ | Constant _ as expr
                 when expr = expressionToFind ->
                     replacement
-            | Id x -> Id (iterReplaceIn x)
+            | Id (x,strtag) -> Id (iterReplaceIn x,strtag)
             | Definition(a,b, _) -> Definition(iterReplaceIn a, iterReplaceIn b, "")
             | Generic(a,ty) -> Generic(iterReplaceIn a, ty)
             | Power(p, n) -> Power(iterReplaceIn p, iterReplaceIn n)
@@ -904,6 +930,13 @@ module Expression =
             function
             | [] -> f
             | (x,replacement)::xs -> loop (replaceWith replacement x f) xs
+        loop formula expressionsToFind  
+
+    let replaceNoSimplify expressionsToFind formula =
+        let rec loop f =
+            function
+            | [] -> f
+            | (x,replacement)::xs -> loop (replaceWithAux false replacement x f) xs
         loop formula expressionsToFind
 
     let contains expressionToFind formula =
@@ -921,7 +954,7 @@ module Expression =
             | Power(a, b) as expr ->
                 expr = expressionToFind || iterFindIn a || iterFindIn b
             | Generic(fx,_)
-            | Id fx
+            | Id (fx, _)
             | Function(_, fx) as fn -> fn = expressionToFind || iterFindIn fx
             | Product l as prod ->
                 prod = expressionToFind
@@ -941,7 +974,7 @@ module Expression =
     let rec removeSymbol x =
         function
         | Identifier _ as var when var = x -> None
-        | Id e -> removeSymbol x e |> Option.map Id
+        | Id (e,strtag) -> removeSymbol x e |> Option.map (fun f -> Id(f,strtag))
         | Generic(e, ty) -> removeSymbol x e |> Option.map (fun f -> Generic(f,ty))
         | Definition(a,b, _) ->
             maybe {
@@ -985,7 +1018,7 @@ module Expression =
         | Product l | Sum l | FunctionN(_, l) | Tupled l ->
             Hashset(Seq.collect findVariables l)
         | Generic(x,_)
-        | Id x
+        | Id (x, _)
         | Function(_, x) -> findVariables x
         | _ -> Hashset []
 
@@ -1004,7 +1037,7 @@ module Expression =
                 counts.ExpandElseAdd (x, (+) 1, 1)
             | Product l | Sum l | FunctionN(_, l) | Tupled l ->
                 l |> Seq.iter docount
-            | Generic(x,_)  | Id x | Function(_, x) -> 
+            | Generic(x,_)  | Id (x,_) | Function(_, x) -> 
                 docount x
             | _ -> ()
 
@@ -1112,6 +1145,14 @@ module Expression =
     let coarsen (var:Expression) depth e =
         let mutable i = -1
         Structure.mapAtDepth depth (fun _ -> i <- i + 1; sub var (ofInteger i)) e
+
+    ///this is just a function that holds a and b and multiplies them. hold keeps them from being simplified 
+    let dot a b = Utils.dot a b
+
+    //A cosmetic function that given a^(n/2) rewrite it as sqrt(a)^n. It uses hold to stop the automatic simplification
+    let rewritePowerSqrt = function 
+        | Power(x, Number n) when n.Denominator = 2I -> hold(sqrt x) ** Expression.FromInteger(n.Numerator)
+        | x -> x
 
     let substituteUntilDone (expr: Expression, substs: (Expression * Expression) list) : Expression =
         let rec substitute acc =

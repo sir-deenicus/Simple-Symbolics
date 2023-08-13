@@ -187,7 +187,7 @@ module Polynomial =
 
                 if Array.forall Expression.isInteger coeffs then //Ensure integer coefficients
                     let numfactors =
-                        Array.collect (abs >> factorsExpr >> List.toArray) coeffs |> Hashset
+                        Array.collect (abs >> factorsExpr >> Option.defaultValue [] >> List.toArray) coeffs |> Hashset
 
                     //evaluate each candidate and its negation, collecting all inputs
                     //which evaluate to zero.

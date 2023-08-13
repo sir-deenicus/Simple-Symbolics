@@ -124,7 +124,7 @@ module Exponents =
         | Power(b, r) ->
              (b ** n * hold(Power(b, r - n)))
         | f -> f
-
+         
     let splitPower =
         function
         | Function(Exp, Sum l) ->
@@ -223,7 +223,7 @@ module Exponents =
             let qualify, rest =
                 ls
                 |> List.partition (function
-                    | Id (Power _)
+                    | Id (Power _, _)
                     | Power _ -> true
                     | _ -> false)
 
@@ -231,7 +231,7 @@ module Exponents =
             let grouped =
                 qualify
                 |> List.groupBy (function
-                    | Id (Power (_,x))
+                    | Id (Power (_,x), _)
                     | Power(_,x) -> abs(x) |> Expression.cancelAbs
                     | y -> y)
 
@@ -242,7 +242,7 @@ module Exponents =
                         exprs
                         |> List.map (function
                             | Power(x, p) -> x ** (p / exponent)
-                            | Id(Power(x, p)) -> Id(x ** (p / exponent))
+                            | Id(Power(x, p), strtag) -> Id(x ** (p / exponent), strtag)
                             | _ -> Operators.undefined) //unreachable by partition def
                         |> Product
                     yield v ** exponent] 

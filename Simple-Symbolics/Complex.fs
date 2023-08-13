@@ -1,5 +1,7 @@
 namespace MathNet.Symbolics
 
+open MathNet.Symbolics
+
 open Core
 open Core.Vars
 open Utils.Constants
@@ -127,11 +129,11 @@ type Complex(r : Expression, i : Expression) =
             let r = Expression.simplify c.Magnitude
             let angle = c.Phase
             r ** n * Complex(cos (n * angle)
-                        |> Expression.simplifyaux false 
+                        |> Expression.simplifyaux true false 
                         |> Trigonometric.simplify
                         |> Trigonometry.simplifyWithTable,
                         sin (n * angle)
-                        |> Expression.simplifyaux false 
+                        |> Expression.simplifyaux true false 
                         |> Trigonometric.simplify
                         |> Trigonometry.simplifyWithTable)
 

@@ -178,8 +178,8 @@ type Expression with
     member t.ToComplex() = (Evaluate.evaluate (Map.empty) t).ComplexValue
     member t.ToBigInt() =
         match t with
-        | Number n when n.IsInteger -> n
-        | _ -> failwith "not an integer"
+        | Number n -> Some (BigRational.floor n)
+        | _ -> None 
 
     member t.ToInt() =
         match t with
@@ -501,13 +501,13 @@ let factorial (n : BigInteger) = List.fold (*) 1I [ 2I..n ]
 let inline primefactors factor x =
     let rec loop x =
         match factor x with
-        | [ one ] -> [ one ]
-        | [ x; _ ] -> [ x ]
-        | _ :: (nextfactor :: _) -> //first number is the largest, = input
+        | Some [one] -> Some ([one])
+        | Some [x; _] -> Some [x]
+        | Some (_ :: (nextfactor :: _)) -> //first number is the largest, = input
             let r = x / nextfactor
-            let f1, f2 = loop r, loop nextfactor
-            f1 @ f2
-        | _ -> failwith "unexpected error"
+            let f1, f2 = loop r, loop nextfactor 
+            Option.map2 (@) f1 f2 
+        | _ -> None 
     loop x
 
 let inline factors toint f x =
@@ -520,29 +520,34 @@ let inline factors toint f x =
               if m <> n then yield f m ]
     |> List.sortByDescending toint
 
-let factorsExpr = abs >> factors Expression.toInt Expression.FromInt32
+let factorsExpr (e:Expression) =
+    match e.ToBigInt() with 
+    | None -> None 
+    | Some n -> 
+        if n > BigInteger(Int32.MaxValue) then None
+        else e |> abs |> factors Expression.toInt Expression.FromInt32 |> Some
 
-let internal groupPowers singletonLift pl =
+let internal groupPowers seal pl =
     List.groupBy id pl
     |> List.map (fun (x, l) ->
-           if l.Length = 1 then singletonLift x
+           if l.Length = 1 then seal x
            else Power(x, Expression.FromInt32(List.length l)))
 
 let primefactorsPartial x =
     match Structure.productToIntConstantsAndVars x with
-    | Some(ns, vs) -> Some(vs @ primefactors factorsExpr (abs ns), ns)
+    | Some(ns, vs) -> 
+        Option.map (fun factors -> vs @ factors, ns) (primefactors factorsExpr (abs ns))
     | None -> None
 
 let primeFactorsExpr =
     abs
     >> primefactors factorsExpr
-    >> groupPowers (fun x -> Sum [ x ])
-    >> Product
+    >> Option.map (groupPowers hold >> Product)
 
 let primeFactorsPartialExpr =
     primefactorsPartial
     >> Option.map (fst
-                   >> groupPowers (fun x -> Sum [ x ])
+                   >> groupPowers hold
                    >> Product)
 
 let evalBigIntLog = function

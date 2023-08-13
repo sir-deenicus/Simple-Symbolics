@@ -269,6 +269,39 @@ checks if is derivative or nth derivative already, if nth make nth+1, if not wra
  If the input does not match this pattern, it returns None.
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Utils.dot(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+this is just a function that holds a and b and multiplies them. hold keeps them from being simplified 
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.holdAndIsolateTagged``1(Microsoft.FSharp.Core.FSharpFunc{``0,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},System.String,``0,MathNet.Symbolics.Expression)">
+<summary>
+holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+it take a binary function f, (such as multiplication) and apply it as f a (hold b) |&gt; isolate (hold b)
+This version adds a tag to the sealed variable. Tagged variables aren&apos;t simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.holdAndIsolate``1(Microsoft.FSharp.Core.FSharpFunc{``0,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},``0,MathNet.Symbolics.Expression)">
+<summary>
+holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+it take a binary function f, (such as multiplication) and apply it as f a (hold b) |&gt; isolate (hold b)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.isolateTagged(MathNet.Symbolics.Expression,System.String,MathNet.Symbolics.Expression)">
+<summary>
+isolate &quot;extracts&quot; exprToIsolate from expr by dividing expr by exprToIsolate
+applying hold to that result and multiplying the result by exprToIsolate
+This is useful for keeping vector type variables from mixing with exressions
+This version adds a tag to the sealed variable. Tagged variables aren&apos;t simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Utils.isolate(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+isolate &quot;extracts&quot; exprToIsolate from expr by dividing expr by exprToIsolate
+applying hold to that result and multiplying the result by exprToIsolate
+This is useful for keeping vector type variables from mixing with exressions
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Utils.defineStr(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression,System.String)">
 <summary>
 Define with left, right and description
@@ -458,6 +491,11 @@ given (a+b)/x, returns a/x + b/x
 Apply a function to the numerator of any rational whose denominator &lt;&gt; 1
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Core.Expression.dot(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+this is just a function that holds a and b and multiplies them. hold keeps them from being simplified 
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Core.Expression.evalToNumeric(System.Collections.Generic.IEnumerable{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},MathNet.Symbolics.Expression)">
 <summary>
 eval with numbers or vars with special physics concepts (see Core.Desc) in the symbol name are acceptable
@@ -494,12 +532,50 @@ Example: -a - b becomes -1 * (a + b) = -(a+b).
  rewrite x^2 as x*x
  </summary>
 </member>
+<member name="M:MathNet.Symbolics.Core.Structure.mapAtLoc(System.Int32,System.Int32,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression,Microsoft.FSharp.Collections.FSharpList{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}})">
+<summary>
+Tags are ignored during maps so if you want to change the tag make sure you map on Id _.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.mapAtDepth(System.Int32,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression},MathNet.Symbolics.Expression,Microsoft.FSharp.Collections.FSharpList{System.Tuple{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}})">
+<summary>
+Tags are ignored during maps so if you want to change the tag make sure you map on Id _.
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Core.Structure.applySuperpositionPrinciple(MathNet.Symbolics.Expression)">
  <summary>
  The superposition principle states that the net response at a given point in space caused by two or more stimuli is the sum of the responses that would have been caused by each stimulus individually.
  It can be seen as being about taking linear combinations of functions.
  So, if we have a function f(a + b + c) we can do f(a) + f(b) + f(c). This function checks if the given expression is a known linear function and extracts the function and applies it to each term of the sum.
  </summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.holdAndIsolateTagged``1(Microsoft.FSharp.Core.FSharpFunc{``0,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},System.String,``0,MathNet.Symbolics.Expression)">
+<summary>
+holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+it take a binary function f, (such as multiplication) and apply it as f a (hold b) |&gt; isolate (hold b)
+This version adds a tag to the sealed variable. Tagged variables aren&apos;t simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.holdAndIsolate``1(Microsoft.FSharp.Core.FSharpFunc{``0,Microsoft.FSharp.Core.FSharpFunc{MathNet.Symbolics.Expression,MathNet.Symbolics.Expression}},``0,MathNet.Symbolics.Expression)">
+<summary>
+holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+it take a binary function f, (such as multiplication) and apply it as f a (hold b) |&gt; isolate (hold b)
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.isolateTagged(System.String,MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+isolate &quot;extracts&quot; exprToIsolate from expr by dividing expr by exprToIsolate
+applying hold to that result and multiplying the result by exprToIsolate
+This is useful for keeping vector type variables from mixing with exressions
+This version adds a tag to the sealed variable. Tagged variables aren&apos;t simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.Core.Structure.isolate(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">
+<summary>
+isolate &quot;extracts&quot; exprToIsolate from expr by dividing expr by exprToIsolate
+applying hold to that result and multiplying the result by exprToIsolate
+This is useful for keeping vector type variables from mixing with exressions
+</summary>
 </member>
 <member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">
 <summary>
@@ -843,14 +919,14 @@ The module for computing entropy and related quantities, the N stands for Nested
 extract hadamard product matrix from kronecker product matrix
 </summary>
 </member>
-<member name="M:MathNet.Symbolics.LinearAlgebra.Vector.zeroVector``1(``0,System.Int32)">
-<summary>
-zero vector of dim n
-</summary>
-</member>
 <member name="M:MathNet.Symbolics.LinearAlgebra.Vector.random(System.Int32)">
 <summary>
 generate random vector 
+</summary>
+</member>
+<member name="M:MathNet.Symbolics.LinearAlgebra.Generic.Vector.zero``1(``0,System.Int32)">
+<summary>
+zero vector of dim n
 </summary>
 </member>
 <member name="M:MathNet.Symbolics.Solving.Polynomial.factor(MathNet.Symbolics.Expression,MathNet.Symbolics.Expression)">

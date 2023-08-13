@@ -350,14 +350,38 @@ let hold x = Id (x,"")
 
 let taghold s x = Id(x,s)
 
-let cage x = Id x
+let cage x = hold x
 
-let seal x = Id x
+let seal x = hold x
 
 let ceil x = Function(Ceil, x)
 
 let floor x = Function(Floor,x)
- 
+
+///isolate "extracts" exprToIsolate from expr by dividing expr by exprToIsolate
+///applying hold to that result and multiplying the result by exprToIsolate
+///This is useful for keeping vector type variables from mixing with exressions
+let isolate (exprToIsolate) expr =
+    hold(expr/exprToIsolate) * exprToIsolate
+
+///isolate "extracts" exprToIsolate from expr by dividing expr by exprToIsolate
+///applying hold to that result and multiplying the result by exprToIsolate
+///This is useful for keeping vector type variables from mixing with exressions
+///This version adds a tag to the sealed variable. Tagged variables aren't simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+let isolateTagged (exprToIsolate) tag expr =
+    taghold tag (expr/exprToIsolate) * exprToIsolate
+
+///holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+///it take a binary function f, (such as multiplication) and apply it as f a (hold b) |> isolate (hold b)
+let holdAndIsolate f a b = f a (hold b) |> isolate (hold b)
+
+///holdAndIsolate is a common pattern where we eg multiply by a quantity we want to keep isolated.
+///it take a binary function f, (such as multiplication) and apply it as f a (hold b) |> isolate (hold b)
+///This version adds a tag to the sealed variable. Tagged variables aren't simplified by default and require fullsimplify to be removed. They can allow more precise editing of expressions.
+let holdAndIsolateTagged f tag a b = f a (taghold tag b) |> isolate (taghold tag b)
+
+///this is just a function that holds a and b and multiplies them. hold keeps them from being simplified 
+let dot a b = hold a * (repeat 2 hold b) //repeat 2 for the case a = b
 
 module Hold =
     let extractLeadingNegative = function

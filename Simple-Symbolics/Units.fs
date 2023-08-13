@@ -51,7 +51,7 @@ type Units(q : Expression, u : Expression, ?altUnit, ?dispAltUnit) =
     static member (+) (a : Units, b : int) = a + Units(ofInteger b, 1Q, "")
     static member (+) (a : int, b:Units) = Units(ofInteger a, 1Q, "") + b
   
-    static member (~-) (a : Units) = (-a.Quantity, a.Unit, a.AltUnit)
+    static member (~-) (a : Units) = Units(-a.Quantity, a.Unit, a.AltUnit)
     static member (-) (a : Units, b : Units) = a + -1 * b
     static member (-) (a : Units, b : int) = a - Units(ofInteger b, 1Q, "")
     static member (-) (a : int, b:Units) = Units(ofInteger a, 1Q, "") - b

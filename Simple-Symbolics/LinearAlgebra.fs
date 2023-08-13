@@ -168,24 +168,45 @@ type Vector<'a when 'a: equality>(elems : 'a []) =
         Vector(List.map ((*) a) b.AsList)
     static member inline (*) (a : Vector<_>, b : Expression) =
         Vector(List.map ((*) b) a.AsList)
+
+    static member inline (*) (a : Vector<float>, b : float) =
+        Vector(List.map ((*) b) a.AsList) 
+    static member inline (*) (a : float, b : Vector<float>) =
+        Vector(List.map ((*) a) b.AsList)
+
     static member inline (*) (a : Vector<Expression>, b : float) =
         Vector(List.map ((*) b) a.AsList) 
-    static member inline (*) (a : Vector<Expression>, b : int) =
+
+    static member inline (*) (a : float, b : Vector<Expression>) =
+        Vector(List.map ((*) a) b.AsList)
+
+    static member inline (*) (a : Vector<float32>, b : float32) =
+        Vector(List.map ((*) b) a.AsList)
+    static member inline (*) (a : float32, b : Vector<float32>) =
+        Vector(List.map ((*) a) b.AsList)
+
+    static member inline (*) (a : Vector<Expression>, b : float32) =
+        Vector(List.map ((*) b) a.AsList)
+    static member inline (*) (a : float32, b : Vector<Expression>) =
+        Vector(List.map ((*) a) b.AsList)
+
+    static member inline (*) (a : Vector<int>, b : int) =
         Vector(List.map ((*) b) a.AsList) 
+    static member inline (*) (a : int, b : Vector<int>) =
+        Vector(List.map ((*) a) b.AsList)
+
     static member inline (*) (a : int, b : Vector<Units.Units>) =
         Vector(List.map ((*) a) b.AsList) 
     static member inline (*) (a : Vector<Units.Units>, b : int) =
         Vector(List.map ((*) b) a.AsList) 
     static member inline (*) (a : Vector<_>, b : Units.Units) =
         Vector(List.map ((*) b) a.AsList)
+
     static member inline (*) (a : Complex, b : Vector<_>) =
         Vector(List.map ((*) a) b.AsList)
     static member inline (*) (a : Vector<_>, b : Complex) =
         Vector(List.map ((*) b) a.AsList)
-    
-    static member (*) (a : Vector<Complex>, b : Vector<Complex>) =
-        List.map2 (fun z1 (z2:Complex) -> z1 * z2.Conjugate) a.AsList b.AsList
-        |> List.sum
+  
     static member inline (*) (a : Vector<_>, b : Vector<_>) =
         dot a.AsArray b.AsArray
         
@@ -194,8 +215,20 @@ type Vector<'a when 'a: equality>(elems : 'a []) =
 
     static member inline (/) (a : Expression, b : Vector<_>) =
         Vector(List.map (fun x -> a/x) b.AsList)
+
+    static member inline (/) (a : Vector<Expression>, b : float) =
+        Vector(List.map (fun x -> x/b) a.AsList)
+
+    static member inline (/) (a : Vector<float32>, b : float32) =
+        Vector(List.map (fun x -> x/b) a.AsList)
+    
+    static member inline (/) (a : Vector<float>, b : float) =
+        Vector(List.map (fun x -> x/b) a.AsList)
     
     static member inline (/) (a : Vector<_>, b : Complex) =
+        Vector(List.map (fun x -> x/b) a.AsList)
+
+    static member (/) (a : Vector<Units.Units>, b : Units.Units) =
         Vector(List.map (fun x -> x/b) a.AsList)
 
     static member inline (/) (a : Vector<_>, b : Vector<_>) = 
@@ -209,10 +242,22 @@ type Vector<'a when 'a: equality>(elems : 'a []) =
 
     static member inline (+) (a : Vector<_>, b : Expression) =
         Vector(Array.map (fun x -> x + b) a.AsArray)
+
+    static member inline (+) (a : Vector<float>, b : float) =
+        Vector(Array.map (fun x -> x + b) a.AsArray)
+
+    static member inline (+) (a : Vector<float32>, b : float32) =
+        Vector(Array.map (fun x -> x + b) a.AsArray)
         
     static member inline (<*>) (a : Vector<_>, b : Vector<_>) =
         Vector(List.map2 (*) a.AsList b.AsList)  
+    
+    member __.dot(a : Vector<Complex>, b : Vector<Complex>) =
+        List.map2 (fun z1 (z2:Complex) -> z1 * z2.Conjugate) a.AsList b.AsList
+        |> List.sum 
 
+    member inline __.dot(a : Vector<_>, b : Vector<_>) = dot a.AsArray b.AsArray
+      
     member v.formatAsColumnVector () =
         if Utils.expressionFormat = "Infix" then
             sprintf "\n%s"
@@ -252,7 +297,6 @@ type Vector<'a when 'a: equality>(elems : 'a []) =
         member v.GetEnumerator() = 
             (v.AsList :> seq<'a>).GetEnumerator()
          
-
      
 module BroadcastHelper =
     let broadcastOp1 op (opvec : Vector<_> -> Vector<_> -> Vector<_>) (a : 'a [] [], b : Vector<_>) =
@@ -428,7 +472,6 @@ type Matrix<'a when 'a: equality>(elems : 'a [] []) =
         Matrix(matrixmatrixmult a.AsArray b.AsArray)
 
     //equality
-
     override m.GetHashCode() =
         m.AsArray.GetHashCode()
 
@@ -450,6 +493,38 @@ type Matrix<'a when 'a: equality>(elems : 'a [] []) =
                           (Array.map (fun v -> sprintf "{%s}" (formatGeneric v))
                            >> String.concat " & ") t.AsArray))
 
+module Generic =
+    module Vector =
+        let inline magnitude (v:Vector<_>) =
+            v.AsArray |> Array.sumBy squared |> sqrt 
+
+        let map f (v : Vector<_>) = 
+            let v' = Vector(List.map f v.AsList)
+            v'.InternalFormat <- v.InternalFormat
+            v'
+
+        let reduce f (v : Vector<_>) = List.reduce f v.AsList
+
+        ///zero vector of dim n
+        let zero zeroElem n = Vector (List.replicate n zeroElem)
+
+        let ones oneElem n = Vector (List.replicate n oneElem)
+
+        let inline sum v = reduce (+) v
+
+        let inline mean ofInt (v:Vector<_>) = 
+            let n = ofInt v.Length 
+            sum v / n
+
+        let inline variance ofInt (v:Vector<_>) =  
+            let n = ofInt v.Length  
+            let m = mean ofInt v
+            sum (map (fun x -> (x - m) ** ofInt 2) v) / n 
+
+    module Matrix = 
+        let zero zeroElem (r,c) = Matrix [| for i in 1..r -> Vector.zero zeroElem c |]
+
+        let ones oneElem (r,c) = Matrix [| for i in 1..r -> Vector.ones oneElem c |]
 
 module Vector =
     let toList (v : Vector<_>) = v.AsList
@@ -487,6 +562,10 @@ module Vector =
     let inline lpNorm (p : Expression) (v : Vector<Expression>) =
         (v.AsArray |> Array.sumBy (fun x -> (abs x) ** p)) ** (1 / p) 
         |> Expression.simplify
+         
+    let magnitude (v:Vector<_>) = lpNorm 2 v
+
+    let norm (v:Vector<_>) = magnitude v
 
     let cosineSimilarity (v:Vector<Expression>) (v2 : Vector<Expression>) =
         (v * v2) / ((sqrt (v * v)) * (sqrt (v2 * v2)))
@@ -514,33 +593,15 @@ module Vector =
         |> Vector
          
     ///generate random vector 
-    let random n = Vector [for _ in 0..n-1 -> random.NextDouble() |> round 1 |> ofFloat] 
+    let random n = Vector [for _ in 0..n-1 -> random.NextDouble() |> ofFloat] 
 
-    let randn n = Vector [for _ in 0..n-1 -> MathNet.Numerics.Distributions.Normal.Sample(0.0, 1.0) |> round 1 |> ofFloat]
+    let randn n = Vector [for _ in 0..n-1 -> MathNet.Numerics.Distributions.Normal.Sample(0.0, 1.0) |> ofFloat]
 
     let toTupled (v:Vector<_>) = Tupled v.AsList
+     
+    let mean (v:Vector<Expression>) = Generic.Vector.mean Expression.FromInt32 v
 
-    ///zero vector of dim n
-    let zeroVector zeroElem n = Vector (List.replicate n zeroElem)
-
-    let onesVector oneElem n = Vector (List.replicate n oneElem)
-
-    let inline meanGeneric ofInt (v:Vector<_>) = 
-        let n = ofInt v.Length 
-        sum v / n
-
-    let inline varianceGeneric ofInt (v:Vector<_>) =  
-        let n = ofInt v.Length  
-        let m = meanGeneric ofInt v
-        sum (map (fun x -> (x - m) ** ofInt 2) v) / n 
-
-    let mean (v:Vector<Expression>) = meanGeneric Expression.FromInt32 v
-
-    let variance (v:Vector<Expression>) = varianceGeneric Expression.FromInt32 v
-    
-    let meanFloat v = meanGeneric float v
-
-    let varianceFloat v = varianceGeneric float v
+    let variance (v:Vector<Expression>) = Generic.Vector.variance Expression.FromInt32 v
 
     let ones d = Vector [ for i in 1..d -> 1Q ]
 
@@ -553,7 +614,6 @@ module Vector =
     let toScalar (v:Vector<_>) = v.AsList |> List.head
 
     let inline ofScalar (s:'a) = Vector [s]
-
 
 module Matrix =
     open MathNet.Numerics.Distributions
@@ -634,15 +694,11 @@ module Matrix =
             for j in start2..stop2 ->
                 subs (Vars.ofChar letter) [(ofInteger i); ofInteger j] ]
         |> reshape (stop1 - start1 + 1, stop2 - start2 + 1)
+          
 
+    let zerosLike (m:Matrix<_>) = Generic.Matrix.zero 0Q (m.RowsLen, m.ColumnsLen)
 
-    let zeroMatrix zeroElem (r,c) = Matrix [| for i in 1..r -> Vector.zeroVector zeroElem c |]
-
-    let onesMatrix oneElem (r,c) = Matrix [| for i in 1..r -> Vector.onesVector oneElem c |]
-
-    let zerosLike (m:Matrix<_>) = zeroMatrix 0Q (m.RowsLen, m.ColumnsLen)
-
-    let onesLike (m:Matrix<_>) = onesMatrix 1Q (m.RowsLen, m.ColumnsLen) 
+    let onesLike (m:Matrix<_>) = Generic.Matrix.ones 1Q (m.RowsLen, m.ColumnsLen) 
     
     //generate random matrix
     let random (r,c) = [for _ in 0..c-1 do for _ in 0..r-1 -> random.NextDouble() |> ofFloat] |> reshape (r,c)
@@ -654,6 +710,8 @@ module Matrix =
     let randn (r,c) = randomNormal (r,c)
 
     let randomSquareNormal n = randomNormal (n,n)
+
+    let randnSq n = randomSquareNormal n
          
     //generate random square matrix
     let randomSquare n = [for _ in 0..n-1 do for _ in 0..n-1 -> Math.random.NextDouble() |> ofFloat] |> reshape (n,n)
@@ -798,3 +856,44 @@ module MatrixExtensions =
         /// <param name="cols">The number of columns in the generated matrix.</param>
         /// <returns>A new matrix of variables.</returns>
         member __.Next(r, cols) = Matrix.ofVars (chars.Pop(), r, cols)         
+
+
+module Float =
+    module Vector =
+        let randn n = Vector [for _ in 0..n-1 -> MathNet.Numerics.Distributions.Normal.Sample(0.0, 1.0)]
+
+        let random n = Vector [for _ in 0..n-1 -> random.NextDouble() ] 
+          
+        let mean v = Generic.Vector.mean float v
+            
+        let variance v = Generic.Vector.variance float v
+
+        let ones d = Vector [ for i in 1..d -> 1. ]
+
+        let zeros d = Vector [ for i in 1..d -> 0. ]
+
+        let onesLike (v:Vector<_>) = ones v.Length
+
+        let zerosLike (v:Vector<_>) = zeros v.Length
+
+        let magnitude (v:Vector<float>) = Generic.Vector.magnitude v
+
+module Float32 = 
+    module Vector =
+        let randn n = Vector [for _ in 0..n-1 -> MathNet.Numerics.Distributions.Normal.Sample(0.0, 1.0) |> float32] 
+
+        let random n = Vector [for _ in 0..n-1 -> random.NextDouble() |> float32 ] 
+          
+        let mean v = Generic.Vector.mean float32 v
+            
+        let variance v = Generic.Vector.variance float32 v
+
+        let ones d = Vector [ for i in 1..d -> 1f ]
+
+        let zeros d = Vector [ for i in 1..d -> 0f ]
+
+        let onesLike (v:Vector<_>) = ones v.Length
+
+        let zerosLike (v:Vector<_>) = zeros v.Length
+
+        let magnitude (v:Vector<float32>) = Generic.Vector.magnitude v

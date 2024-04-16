@@ -278,37 +278,33 @@ module Expression =
         function
         | Number n when n.IsInteger -> true
         | _ -> false
-
+ 
     let isNegativeOrZeroNumber n =
         if isNumber n then
-            match n.ToFloat() with
-            | Some x -> x <= 0.
-            | None -> false
-        else false
+            n.ToFloat() |> Option.map (fun x -> x <= 0.)
+        else None 
 
     let isNegativeNumber n =
         if isNumber n then
-            match n.ToFloat() with
-            | Some x -> x < 0.
-            | None -> false
-        else false
+            n.ToFloat() |> Option.map (fun x -> x < 0.)
+        else None
 
     let hasNegative = function
-        | Product (Number n::_) -> n < 0N
+        | Product (Number n::_) -> Some(n < 0N)
         | x -> isNegativeNumber x
 
     let isPositiveNumber n =
         if isNumber n then
             match n.ToFloat() with
-            | Some x -> x >= 0.
-            | None -> false
-        else false
+            | Some x -> Some(x >= 0.)
+            | None -> None
+        else None
 
     let rec isPositive = function
-        | Function(Abs,_) -> true
-        | Power(_,Number n) when (int n)%2 = 0 -> true
+        | Function(Abs,_) -> Some true
+        | Power(_,Number n) when (int n)%2 = 0 -> Some true
         | Sum l
-        | Product l -> List.forall isPositive l
+        | Product l -> List.forall (fun x -> isPositive x = Some true) l |> Some
         | x -> isPositiveNumber x
 
 
@@ -421,7 +417,7 @@ let (|SquareRoot|_|) = function
       | _ -> None
 
 let (|IsNegativeNumber|_|) = function
-      | e when Expression.isNegativeNumber e -> Some e
+      | e when Expression.isNegativeNumber e = Some true -> Some e
       | _ -> None
 
 

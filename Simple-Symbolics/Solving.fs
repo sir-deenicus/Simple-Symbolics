@@ -238,8 +238,8 @@ let internal reArrangeExprInequality silent focusVar (left, right) =
             let matched, novar = List.partition (containsVar focusVar) l
 
             match novar with
-            | [ v ] when Expression.isNumber v || Expression.isPositive v ->
-                let doflip = Expression.isNegativeNumber v
+            | [ v ] when Expression.isNumber v || Expression.isPositive v = Some true ->
+                let doflip = if Expression.isNegativeNumber v = Some true then not doflip else doflip
 
                 let ops' =
                     match novar with
@@ -354,6 +354,63 @@ let internal reArrangeExprEquation previnstr prevops focusVar (left, right) =
 
      let f, instrs, ops = iter left previnstr prevops
      (f, ops |> List.rev |> List.fold (fun e f -> f e) right |> Expression.simplify), (instrs, ops, (left, right))
+
+let reArrangeExprUnits silent focusVar (left, right) =
+    let rec iter fx ops =
+        match fx with
+        | f when f = focusVar -> f, ops 
+        | Pow(_, x) when UnitsExpr.containsVar focusVar x -> failwith "Not implemented"
+        | Units.UnitsExpr.Mul(a,b) ->
+            if not silent then
+                printfn "divide"
+
+            let matched, novar = List.partition (UnitsExpr.containsVar focusVar) [a;b]
+
+            let ops' =
+                match novar with
+                | [] -> ops 
+                | _ -> (fun x -> x / (UnitsExpr.product novar)) :: ops
+
+            match matched with
+            | [] -> fx, ops'
+            | [ h ] -> iter h ops'
+            | hs -> UnitsExpr.product hs, ops'
+
+        | Add(a,b) -> 
+            if not silent then
+                printfn "subtract"
+
+            let matched, novar = List.partition (UnitsExpr.containsVar focusVar) [a;b]
+
+            let ops' =
+                match novar with
+                | [] -> ops 
+                | _ -> (fun x -> x - (UnitsExpr.sum novar)) :: ops
+
+            match matched with
+            | [] -> fx, ops'
+            | [ h ] -> iter h ops'
+            | hs -> UnitsExpr.sum hs, ops' 
+
+        | Const _ as expr ->  
+            expr, (fun x -> x / expr) :: ops
+
+        | Neg a ->
+            let contains = UnitsExpr.containsVar focusVar a
+
+            if contains then
+                if not silent then
+                    printfn "negate"
+
+                iter a ((fun x -> x / Const -1) :: ops)
+            else
+                fx, ops
+
+         | Pow(f, Const p) -> iter f ((fun x -> Pow(x, Const (1 / p))) :: ops)
+
+    let f, ops = iter left []
+    let res = ops |> List.rev |> List.fold (fun e f -> f e) right
+    (f, res)  
 
 let reArrangeEquation focusVar (e: Equation) =
      reArrangeExprEquation [] [] focusVar e.Definition |> fst |> Equation

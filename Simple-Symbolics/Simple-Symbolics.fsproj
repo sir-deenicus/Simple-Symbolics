@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net5</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.6</Version>
+    <Version>0.7</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	<LangVersion>preview</LangVersion>
@@ -47,6 +47,7 @@
     <Compile Include="CurrencyUtils.fs" />
     <Compile Include="Summation.fs" />
     <Compile Include="Complex.fs" />
+    <Compile Include="Quaternion.fs" />
     <Compile Include="Tropical.fs" />
     <Compile Include="Limits.fs" />
     <Compile Include="Differentiation.fs" />

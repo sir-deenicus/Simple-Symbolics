@@ -163,7 +163,7 @@ type InEquality(comparer: InEquality.Comparer,
             | InEquality.Geq
             | InEquality.Greater -> Some(InEquality.Positive)
             | _ -> None
-        | x when Expression.isPositive x ->
+        | x when Expression.isPositive x = Some true ->
             match comparer with
             | InEquality.Geq
             | InEquality.Greater -> Some(InEquality.Positive)
@@ -171,7 +171,8 @@ type InEquality(comparer: InEquality.Comparer,
         | IsRealNumber n ->
             let isNegativeOrZero = Expression.isNegativeOrZeroNumber n
 
-            if isNegativeOrZero then
+            match isNegativeOrZero with 
+            | Some true ->
                 let num = n.ToFloat().Value
 
                 match comparer with
@@ -180,11 +181,12 @@ type InEquality(comparer: InEquality.Comparer,
                 | InEquality.Geq
                 | InEquality.Greater when num = 0. -> Some(InEquality.Positive)
                 | _ -> None
-            else
+            | Some false ->
                 match comparer with //is positive
                 | InEquality.Geq
                 | InEquality.Greater -> Some(InEquality.Positive)
                 | _ -> None
+            | None -> None
         | _ -> None
 
     override __.ToString() =
@@ -225,9 +227,9 @@ type InEquality(comparer: InEquality.Comparer,
 
         let c, safe =
             match Expression.isNegativeNumber expr, eq.VarSigns.TryFind expr with
-            | false, Some InEquality.Negative
-            | true, _ -> InEquality.flipComparer eq.Comparer, true
-            | false, Some InEquality.Positive
+            | Some false, Some InEquality.Negative
+            | Some true, _ -> InEquality.flipComparer eq.Comparer, true
+            | Some false, Some InEquality.Positive
             | _ when isnum -> eq.Comparer, true
             | _ -> eq.Comparer, false
 

@@ -1,4 +1,4 @@
-﻿namespace MathNet.Symbolics
+namespace MathNet.Symbolics
 open Core
 open Utils 
 open NumberProperties 
@@ -216,6 +216,7 @@ module Exponents =
         | x -> x
 
     //sometimes it's necessary to gather exponents back into parentheses.
+    ///This process is essentially the reverse of applying the **Power of a Product Rule** (which states that `(a * b)^n = a^n * b^n`).
     let gatherProductPowers x = 
         match Expression.simplifyLite x with //collapse any nested products
         | Product ls -> //only for products

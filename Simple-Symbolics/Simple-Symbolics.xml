@@ -203,7 +203,7 @@
  <param name="r">The real part of the complex number.</param>
 </member>
 <member name="T:MathNet.Symbolics.Complex">
- <summary> 
+ <summary>
  Represents a complex number.
  </summary>
  <param name="r">The real part of the complex number.</param>
@@ -577,6 +577,11 @@ applying hold to that result and multiplying the result by exprToIsolate
 This is useful for keeping vector type variables from mixing with exressions
 </summary>
 </member>
+<member name="M:MathNet.Symbolics.Exponents.gatherProductPowers(MathNet.Symbolics.Expression)">
+<summary>
+This process is essentially the reverse of applying the **Power of a Product Rule** (which states that `(a * b)^n = a^n * b^n`).
+</summary>
+</member>
 <member name="M:MathNet.Symbolics.Logarithm.powerRuleReverse(MathNet.Symbolics.Expression)">
 <summary>
 a * log x -&gt; log(x^a)
@@ -724,7 +729,7 @@ Adjusts summation to have a start, stop or var if it does not already
 <member name="M:MathNet.Symbolics.ComplexModule.simplifyExpression(MathNet.Symbolics.Expression)">
  <summary>
  Simplifies the given expression with the assumption that it is a complex number.
- Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.   
+ Complex numbers are multiplied with FOIL. Expand it, replace i^2 with -1 and simplify.
  </summary>
  <param name="x"></param>
  <returns>The simplified expression.</returns>
@@ -775,7 +780,7 @@ Adjusts summation to have a start, stop or var if it does not already
 <member name="P:MathNet.Symbolics.ComplexModule.i">
  <summary>
  Imaginary unit.
- </summary> 
+ </summary>
 </member>
 <member name="T:MathNet.Symbolics.ComplexModule">
  <summary>

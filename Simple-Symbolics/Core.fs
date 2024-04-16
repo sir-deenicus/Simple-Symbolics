@@ -701,6 +701,10 @@ module Expression =
         | Identifier _ | Function _ | FunctionN(Probability, _) -> true
         | _ -> false
 
+    let isSealed = function
+        | Id _ -> true 
+        | _ -> false
+
     let isNegativePower =
         function
         | Power(_, Number n) -> n < 0N
@@ -1170,7 +1174,10 @@ module Expression =
         | Sum _ -> true
         | _ -> false
 
-
+module Trigonometric =
+    let fullsimplify (e:Expression) =
+        e |> Expression.simplifyaux true false |> Trigonometric.simplify |> Trigonometry.simplifyWithTable
+        
 type SimplificationLevel =
     | Low 
     | Default 

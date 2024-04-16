@@ -570,6 +570,11 @@ let (|IsLinearFn|_|) input =
     | Sum l as sums -> Some(sums, id)
     | _ -> None
 
+let (|IsSealed|_|) input =
+    match input with
+    | Id(x,_) -> Some(x)
+    | _ -> None
+
 //========================
   
 ///checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth

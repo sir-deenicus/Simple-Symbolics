@@ -857,6 +857,57 @@ module MatrixExtensions =
         /// <returns>A new matrix of variables.</returns>
         member __.Next(r, cols) = Matrix.ofVars (chars.Pop(), r, cols)         
 
+open System
+
+type Tensor<'a when 'a: equality>(dims, ?storage) =
+    let storage = defaultArg storage (Array.zeroCreate (Array.reduce (*) dims))
+
+    member __.Dims = dims 
+    member __.Storage = storage
+    member __.Length = storage.Length 
+    member __.Rank = dims.Length
+
+    //member x.Item 
+    //    with get(indices) = 
+    //        let index = Array.fold2 (fun acc dim index -> acc + index * dim) 0 dims indices
+    //        storage.[index]
+    //    and set(indices, value) =
+    //        let index = Array.fold2 (fun acc dim index -> acc + index * dim) 0 dims indices
+    //        storage.[index] <- value
+  
+    // member x.einsum (pattern:string, [<ParamArray>] args:Tensor<_> []) =
+    //     let pattern = pattern.Split("->")
+    //     let inputPattern = pattern.[0].Split(",")
+    //     let outputPattern = pattern.[1].Split(",") 
+
+    //     //check args
+    //     if inputPattern.Length <> args.Length then
+    //         failwith "Number of input patterns must match the number of input tensors"
+        
+    //     let inputDims = [for i in 0..args.Length - 1 -> args.[i].Dims]
+    //     let outputDims = [for i in 0..outputPattern.Length - 1 -> args.[i].Dims] 
+   
+    static member (+) (a:Tensor<_>, b:Tensor<_>) = 
+        if a.Length <> b.Length then
+            failwith "Tensors must have the same length"
+        let storage = Array.map2 (+) a.Storage b.Storage
+        Tensor(a.Dims, storage)
+
+    static member (-) (a:Tensor<_>, b:Tensor<_>) =
+        if a.Length <> b.Length then
+            failwith "Tensors must have the same length"
+        let storage = Array.map2 (-) a.Storage b.Storage
+        Tensor(a.Dims, storage)
+
+    //scalar multiplication
+    static member (*) (a:Expression, b:Tensor<_>) =
+        let storage = Array.map (fun x -> a * x) b.Storage
+        Tensor(b.Dims, storage)
+
+    static member (*) (a:Tensor<_>, b:Expression) =
+        let storage = Array.map (fun x -> x * b) a.Storage
+        Tensor(a.Dims, storage)
+
 
 module Float =
     module Vector =

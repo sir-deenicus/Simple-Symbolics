@@ -10,5 +10,5 @@ type Requirements =
         | IsInteger -> "Is Integer"
         | IsPositive -> "Positive"
     static member Run = function
-        | IsInteger -> Expression.isInteger
+        | IsInteger -> Expression.isInteger >> Some
         | IsPositive -> Expression.isPositive

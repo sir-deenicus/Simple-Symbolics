@@ -57,7 +57,7 @@ let atInfinity = function
         let d = Rational.denominator x
         match (n,d) with
         | IsNumber _, Power(Identifier _ as i, (Number _ as b)) when i = var ->
-            if isInfinity lim && Expression.isPositive b then 0Q
+            if isInfinity lim && Expression.isPositive b = Some true then 0Q
             else v
         | IsNumber _, (Identifier _ as i) when i = var ->
             if isInfinity lim then 0Q else v

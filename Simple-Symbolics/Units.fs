@@ -580,3 +580,77 @@ module Physics =
     let energyToMass (e:Energy) = e / speed_of_light ** 2 : Mass
 
     let thermoToInfoUnits (t: Units) = t * (bits/(boltzman_constant * ln 2Q))
+
+//a simple type system for setting up solveable equations with units
+
+type UnitsExpr =
+    | Val of Units
+    | Const of Expression
+    | Add of UnitsExpr * UnitsExpr 
+    | Mul of UnitsExpr * UnitsExpr
+    | Div of UnitsExpr * UnitsExpr
+    | Pow of UnitsExpr * UnitsExpr
+    | Neg of UnitsExpr
+    | Var of string
+
+    //add
+    static member (+) (a:UnitsExpr, b:UnitsExpr) = Add(a,b)
+    static member (-) (a:UnitsExpr, b:UnitsExpr) = Add(a,Neg b)
+    static member (*) (a:UnitsExpr, b:UnitsExpr) = Mul(a,b)
+    static member (/) (a:UnitsExpr, b:UnitsExpr) = Mul(a, Pow(b, Const(-1Q)))
+    static member ( ** ) (a:UnitsExpr, b:UnitsExpr) = Pow(a,b)
+    static member ( ** ) (a:UnitsExpr, b:Expression) = Pow(a,Const b) 
+    static member (~-) (a:UnitsExpr) = Neg a
+
+module UnitsExpr =
+    let rec eval (env:seq<string*Units>) (e:UnitsExpr) =
+        let env = dict env
+        let rec eval e =
+            match e with
+            | Val u -> u
+            | Const x -> Units(x, 1Q)
+            | Var v when env.ContainsKey v -> env.[v]
+            | Var x -> failwithf "Variable %s not found" x
+            | Add(a,b) -> eval a + eval b
+            | Mul(a,b) -> eval a * eval b
+            | Div(a,b) -> eval a / eval b
+            | Pow(a,Const b) -> Units.Pow(eval a, b)
+            | Pow(a,b) -> 
+                let b' = eval b
+                if b'.Unit = 1Q then
+                    Units.Pow(eval a, b'.Quantity)
+                else failwith "Exponent must be a number"
+            | Neg a -> - eval a
+        eval e
+
+    let rec containsVar (focusVar:UnitsExpr) (e:UnitsExpr) =
+        match e with
+        | Val _ -> false
+        | Const _ -> false
+        | Var _ as v -> v = focusVar
+        | Add(a, b) -> containsVar focusVar a || containsVar focusVar b
+        | Mul(a, b) -> containsVar focusVar a || containsVar focusVar b
+        | Div(a, b) -> containsVar focusVar a || containsVar focusVar b
+        | Pow(a, b) -> containsVar focusVar a || containsVar focusVar b
+        | Neg a -> containsVar focusVar a
+
+    let rec product = function
+    | [] -> Val(Units(1Q, 1Q))
+    | [x] -> x
+    | x :: xs -> Mul(x, product xs)
+
+    let rec divs = function
+    | [] -> Val(Units(1Q, 1Q))
+    | [x] -> x
+    | x :: xs -> Div(x, divs xs)
+
+    let rec sum = function
+    | [] -> Val(Units(0Q, 1Q))
+    | [x] -> x
+    | x :: xs -> Add(x, sum xs)
+
+ 
+
+        
+
+

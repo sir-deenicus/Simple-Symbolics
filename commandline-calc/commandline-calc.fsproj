@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>commandline_calc</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="calc.fsx" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FParsec" Version="1.1.1" />
+    <PackageReference Include="Prelude" Version="2.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Simple-Symbolics\Simple-Symbolics.fsproj" />
+  </ItemGroup>
+
+</Project>

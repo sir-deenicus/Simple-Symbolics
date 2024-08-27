@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28010.2016
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35208.52
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Simple-Symbolics", "Simple-Symbolics\Simple-Symbolics.fsproj", "{8E63DD48-99B0-4369-B912-F6368D8C18A4}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "commandline-calc", "commandline-calc\commandline-calc.fsproj", "{6C5EF9D0-FF9B-4AFB-9FFE-656AAFFF58AE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{8E63DD48-99B0-4369-B912-F6368D8C18A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8E63DD48-99B0-4369-B912-F6368D8C18A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8E63DD48-99B0-4369-B912-F6368D8C18A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C5EF9D0-FF9B-4AFB-9FFE-656AAFFF58AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C5EF9D0-FF9B-4AFB-9FFE-656AAFFF58AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C5EF9D0-FF9B-4AFB-9FFE-656AAFFF58AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C5EF9D0-FF9B-4AFB-9FFE-656AAFFF58AE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

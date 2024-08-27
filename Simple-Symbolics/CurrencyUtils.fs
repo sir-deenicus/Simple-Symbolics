@@ -50,19 +50,19 @@ let checkCurrency eps c =
     | None -> nan
     | Some v -> v + eps
 
-type WorldBankHelper() =
-    let data = WorldBankData.GetDataContext()
-    member t.Countries = data.Countries
+//type WorldBankHelper() =
+//    let data = WorldBankData.GetDataContext()
+//    member t.Countries = data.Countries
 
-let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
-    c.Indicators
-        .``GDP per capita, PPP (current international $)`` 
-        |> Seq.last
+//let getGDPperCapita (c:WorldBankData.ServiceTypes.Country) =
+//    c.Indicators
+//        .``GDP per capita, PPP (current international $)`` 
+//        |> Seq.last
 
-let getGDPperCapitaPP (c:WorldBankData.ServiceTypes.Country) =
-    c.Indicators
-        .``GDP per capita, PPP (current international $)`` 
-        |> Seq.last
+//let getGDPperCapitaPP (c:WorldBankData.ServiceTypes.Country) =
+//    c.Indicators
+//        .``GDP per capita, PPP (current international $)`` 
+//        |> Seq.last
 
 module Units =
     open Units
@@ -83,9 +83,9 @@ module Units =
         gbp <- setCurrency 8e-03 "GBP"
         eur <- setCurrency currencyFriction "EUR"
 
-    let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
-        if s.Unit = usd.Unit then 
-            let _, gdpsource = getGDPperCapitaPP sourcecountry  
-            let _, gdptarget = getGDPperCapitaPP targetcountry 
-            s.Quantity/gdpsource * gdptarget * usd
-        else failwith "Not a currency"
+    //let convertCurrencyWeightedByGDPPCPP (sourcecountry:WorldBankData.ServiceTypes.Country) (targetcountry:WorldBankData.ServiceTypes.Country) (s:Units) =
+    //    if s.Unit = usd.Unit then 
+    //        let _, gdpsource = getGDPperCapitaPP sourcecountry  
+    //        let _, gdptarget = getGDPperCapitaPP targetcountry 
+    //        s.Quantity/gdpsource * gdptarget * usd
+    //    else failwith "Not a currency"

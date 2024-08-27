@@ -220,7 +220,6 @@ let tbsp = 0.0625 * cups  |> setAlt "tablespoons"
 let gallon = 16 * cups |> setAlt "gallons"
 let ml = milli * liter |> setAlt "milli-liters"
 
-
 //----------Time
 let sec = Units(1Q, Operators.symbol "sec", "sec")
 let minute = 60Q * sec |> setAlt "minute"
@@ -306,6 +305,7 @@ let units =
         J, "Energy"
         kJ, "Energy"
         mega * J |> setAlt "megajoules", "Energy"
+        giga * J |> setAlt "gigajoules", "Energy"
         kWh, "Energy"
         amps * hr |> setAlt "amp hours", "Charge"
         terafloatops, "computation"
@@ -320,7 +320,11 @@ let units =
         K, "Temperature"
         W / meter ** 2, "Energy flux"
         W / cm ** 2, "Energy flux"
+        bits, "information"
+        kilo*bits, "information"
         bytes, "information"
+        kilo*bytes, "information"
+        mega * bytes, "information"
         gigabytes, "information"
         tera * bytes, "information"
         flops, "flop/s"
@@ -344,6 +348,11 @@ let units =
         sec, "Time"
         gram, "mass"
         kg, "mass"
+        ton, "mass"
+        kilo*ton, "mass"
+        mega * ton, "mass"
+        mm, "length"
+        cm, "length"
         meter, "length"
         km, "length" ]
 
@@ -591,6 +600,7 @@ type UnitsExpr =
     | Div of UnitsExpr * UnitsExpr
     | Pow of UnitsExpr * UnitsExpr
     | Neg of UnitsExpr
+    | ForcedUnit of (UnitsExpr * Units)
     | Var of string
 
     //add
@@ -609,7 +619,8 @@ module UnitsExpr =
             match e with
             | Val u -> u
             | Const x -> Units(x, 1Q)
-            | Var v when env.ContainsKey v -> env.[v]
+            | ForcedUnit _ -> failwith "Forced unit not allowed in eval"
+            | Var v when env.ContainsKey v -> env[v]
             | Var x -> failwithf "Variable %s not found" x
             | Add(a,b) -> eval a + eval b
             | Mul(a,b) -> eval a * eval b
@@ -627,6 +638,7 @@ module UnitsExpr =
         match e with
         | Val _ -> false
         | Const _ -> false
+        | ForcedUnit (a, _) -> containsVar focusVar a
         | Var _ as v -> v = focusVar
         | Add(a, b) -> containsVar focusVar a || containsVar focusVar b
         | Mul(a, b) -> containsVar focusVar a || containsVar focusVar b

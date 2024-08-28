@@ -74,7 +74,6 @@ let rec getInputWithHistory pos (prevMsg:string) =
     Console.WriteLine()
     currentInput
 
-
 let seenCustomUnits = HashSet<string>()
 
 let rec repl counter prevOutput =
@@ -85,8 +84,8 @@ let rec repl counter prevOutput =
     if input.ToLower() <> "q" then 
         match parse input with
         | Result.Ok ast -> 
-            let result = eval ast
-            let output = ExpressionChoice.PrettyPrint result
+            let result = eval seenCustomUnits ast
+            let output = ExpressionChoice.PrettyPrint(seenCustomUnits, "", result)
             printfn $"Out[{counter}]: {output}" 
             repl (counter + 1) (convertSuperscripts output)
         | Result.Error msg -> 

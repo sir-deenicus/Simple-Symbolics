@@ -1,4 +1,7 @@
-﻿module Parser
+#r "nuget: FParsec, 1.1.1"
+#I @"C:\Users\cybernetic\Jupyter-Notebooks"
+#load "maths-repl.fsx"
+
 open System
 open Prelude.Common
 open MathNet.Numerics
@@ -59,7 +62,8 @@ type UnitExpr =
             | u -> u
         simplify this
 
-let basicUnitTypeToUnit (seenCustomUnits: Hashset<_>) = function 
+let seenCustomUnits = Hashset()
+let basicUnitTypeToUnit = function 
     | UnitTypes.M -> Units.meter
     | UnitTypes.S -> Units.sec 
     | UnitTypes.G -> Units.gram
@@ -73,30 +77,30 @@ let basicUnitTypeToUnit (seenCustomUnits: Hashset<_>) = function
         seenCustomUnits.Add (depluralize s) |> ignore; Units.Units((depluralize s), s)
     | _ -> failwith "unit type not supported"
 
-let rec unitExprToUnits (seenCustomUnits: Hashset<_>) = function
-    | UnitExpr.BasicUnit u -> basicUnitTypeToUnit seenCustomUnits u
-    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> basicUnitTypeToUnit seenCustomUnits u * multiplier
-    | UnitExpr.Scale(multiplier, u) -> unitExprToUnits seenCustomUnits u * multiplier
-    | UnitExpr.Multiply(u1, u2) -> unitExprToUnits seenCustomUnits u1 * unitExprToUnits seenCustomUnits u2
-    | UnitExpr.Divide(u1, u2) -> unitExprToUnits seenCustomUnits u1 / unitExprToUnits seenCustomUnits u2
-    | UnitExpr.Power(u, n) -> unitExprToUnits seenCustomUnits u ** n  
+let rec unitExprToUnits = function
+    | UnitExpr.BasicUnit u -> basicUnitTypeToUnit u
+    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> basicUnitTypeToUnit u * multiplier
+    | UnitExpr.Scale(multiplier, u) -> unitExprToUnits u * multiplier
+    | UnitExpr.Multiply(u1, u2) -> unitExprToUnits u1 * unitExprToUnits u2
+    | UnitExpr.Divide(u1, u2) -> unitExprToUnits u1 / unitExprToUnits u2
+    | UnitExpr.Power(u, n) -> unitExprToUnits u ** n  
 
-let rec unitExprToSymbolicUnits (seenCustomUnits: Hashset<_>) = function 
-    | UnitExpr.BasicUnit u -> Units.UnitsExpr.Val (basicUnitTypeToUnit seenCustomUnits u)
+let rec unitExprToSymbolicUnits = function 
+    | UnitExpr.BasicUnit u -> Units.UnitsExpr.Val (basicUnitTypeToUnit u)
     | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> 
-        Units.UnitsExpr.Val (basicUnitTypeToUnit seenCustomUnits u * multiplier)
+        Units.UnitsExpr.Val (basicUnitTypeToUnit u * multiplier)
     | UnitExpr.Scale(multiplier, u) -> 
-        Units.UnitsExpr.Mul(Units.UnitsExpr.Const multiplier, unitExprToSymbolicUnits seenCustomUnits u)
+        Units.UnitsExpr.Mul(Units.UnitsExpr.Const multiplier, unitExprToSymbolicUnits u)
     | UnitExpr.Multiply(u1, u2) ->
-        let u1' = unitExprToSymbolicUnits seenCustomUnits u1
-        let u2' = unitExprToSymbolicUnits seenCustomUnits u2
+        let u1' = unitExprToSymbolicUnits u1
+        let u2' = unitExprToSymbolicUnits u2
         Units.UnitsExpr.Mul(u1', u2') 
     | UnitExpr.Divide(u1, u2) ->
-        let u1' = unitExprToSymbolicUnits seenCustomUnits u1
-        let u2' = unitExprToSymbolicUnits seenCustomUnits u2
+        let u1' = unitExprToSymbolicUnits u1
+        let u2' = unitExprToSymbolicUnits u2
         Units.UnitsExpr.Div(u1', u2')
     | UnitExpr.Power(u, n) ->
-        let u' = unitExprToSymbolicUnits seenCustomUnits u
+        let u' = unitExprToSymbolicUnits u
         Units.UnitsExpr.Pow(u', Units.UnitsExpr.Const n)
     
 let unitTypesToPhysicsUnits = function
@@ -292,6 +296,12 @@ let simpleNumberWithCustomUnit: Parser<_, unit> =
                 UnitExpr(num, knownUnits[depluralize unit])
             else UnitExpr(num, UnitExpr.BasicUnit (Custom (depluralize unit)))) // Combine the parsed number and unit into a tuple
 
+// let numberWithUnit = 
+//     pipe2 (simpleNumber .>> ws) (opt (unitExpr .>> ws))
+//         (fun num unit -> 
+//             match unit with
+//             | Some u -> UnitExpr(num, u)
+//             | None -> num)
 // Parser for variables
 let variableParser : Parser<Expr, unit> =
     many1Satisfy2L isLetter (fun c -> isLetter c || isDigit c || c = '_') "variable"
@@ -333,7 +343,7 @@ let functionParser =
             yield stringCIReturn name name >>. between (str_ws "(") (str_ws ")") expr
                 |>> fun arg -> FunctionCall(name, arg)
     ]
-
+run functionParser "expand(5)"
 let logParser =
     pstring "log" >>. str_ws "_" >>. (variableParser <|> simpleNumber) .>> str_ws "(" .>>. expr .>> str_ws ")"
     |>> fun (base_, arg) -> Log(base_, arg)
@@ -394,6 +404,9 @@ let opApply op a b = op(a,b)
 // Parse multiplication and division
 let factor = chainl1 term (mulOp <|> divOp |>> opApply)
 
+// Parse addition and subtraction
+//do exprRef := chainl1 factor (addOp <|> subOp |>> opApply)
+
 // Parse addition and subtraction, and optional unit output specification
 do exprRef := 
     pipe2
@@ -409,8 +422,8 @@ let mutilineExpr = sepBy expr newline
 // Parse the input
 let parse input =
     match run expr input with
-    | Success(result, _, _) -> Result.Ok result
-    | Failure(errorMsg, _, _) -> Result.Error errorMsg
+    | Success(result, _, _) -> result
+    | Failure(errorMsg, _, _) -> failwith errorMsg
 
 let pow10ToPrefix n = 
     let p = BigRational.floor (BigRational.log10 n)
@@ -439,14 +452,16 @@ type ExpressionChoice =
     | ForcedUnitExpression of Units.UnitsExpr * UnitExpr
     | PureExpression of MathNet.Symbolics.Expression
     with  
-    member this.PrettyPrint (seenCustomUnits: Hashset<_>, toconvstr:string) =
+    member this.PrettyPrint() =
         let prettifyUnits (u:Units.Units) = 
             match u.Quantity with
-            | Expression.Number n when toconvstr = "" ->
+            | Expression.Number n when n = 1N -> fmt u.Unit
+            | Expression.Number n when n = 1000N -> $"kilo{fmt u.Unit}"
+            | Expression.Number n when n.IsInteger && BigInteger.Remainder(BigRational.ToBigInt(n), 8I) = 0I && containsVar !"bits" u.Unit -> 
+                let rep = replaceSymbolWith !"bytes" !"bits" u.Unit
                 match pow10ToPrefix n with 
                 | None -> $"{Units.simplifyUnitDesc u}"
-                | Some s -> $"{s}{fmt u.Unit}"
-            | Expression.Number _ -> $"{toconvstr}"
+                | Some s -> $"{s}{fmt rep}"
             | _ -> $"{Units.simplifyUnitDesc u}"
 
         let basicUnitToPhysicsTerm = UnitExpr.BasicUnit >> unitTypesToPhysicsUnits
@@ -455,7 +470,7 @@ type ExpressionChoice =
         | UnitExpression u -> Units.UnitsExpr.eval [] u |> Units.simplifyUnitDesc
         | ForcedUnitExpression(unitexpr, tounitexpr) ->
             let e = Units.UnitsExpr.eval [] unitexpr
-            let asUnit = unitExprToUnits seenCustomUnits (tounitexpr.Simplify()) 
+            let asUnit = unitExprToUnits (tounitexpr.Simplify()) 
             match (Units.toUnitQuantity asUnit e, tounitexpr) with 
             | Some q, UnitExpr.BasicUnit u -> $"{fmt q} {u} ({unitTypesToPhysicsUnits (UnitExpr.BasicUnit u)})"
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit u) when n = 1/100Q -> $"{fmt q} c{u} ({basicUnitToPhysicsTerm u})"
@@ -463,22 +478,24 @@ type ExpressionChoice =
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit u) when n = 1/1000Q -> $"{fmt q} m{u} ({basicUnitToPhysicsTerm u})"
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit Ft) when n = 1/12Q -> $"{fmt q} in (length)"
             | Some q, _ -> 
+                printfn "%A" asUnit
+                printfn "%A" (prettifyUnits asUnit)
                 $"{fmt (Rational.simplifyNumbers 3 q)} {prettifyUnits asUnit}"
             | _ -> "invalid unit conversion"
         | PureExpression e -> fmt e
-    static member PrettyPrint (seenCustomUnits: Hashset<_>, convstr:string, e:ExpressionChoice) = e.PrettyPrint(seenCustomUnits, convstr)
+    static member PrettyPrint (e:ExpressionChoice) = e.PrettyPrint()
 
-let rec evalUnitExpr (seenCustomUnits: Hashset<_>) = function 
+let rec evalUnitExpr = function 
     | Number n -> Units.UnitsExpr.Const n
     | UnitExpr(Number (Expression.Number _ as n), unit) -> 
-        Units.UnitsExpr.Val(n * unitExprToUnits seenCustomUnits unit)
-    | UnitExpr(expr, unit) -> Units.UnitsExpr.Mul(evalUnitExpr seenCustomUnits expr, unitExprToSymbolicUnits seenCustomUnits unit)
-    | Add(a, b) -> Units.UnitsExpr.Add(evalUnitExpr seenCustomUnits a, evalUnitExpr seenCustomUnits b)
-    | Subtract(a, b) -> Units.UnitsExpr.Add(evalUnitExpr seenCustomUnits a, -evalUnitExpr seenCustomUnits b)
-    | Multiply(a, b) -> Units.UnitsExpr.Mul(evalUnitExpr seenCustomUnits a, evalUnitExpr seenCustomUnits b)
-    | Divide(a, b) -> Units.UnitsExpr.Div(evalUnitExpr seenCustomUnits a, evalUnitExpr seenCustomUnits b)
-    | Power(a, b) -> Units.UnitsExpr.Pow(evalUnitExpr seenCustomUnits a, evalUnitExpr seenCustomUnits b)
-    | Variable (Identifier (Symbol s)) when knownUnits.ContainsKey s -> unitExprToSymbolicUnits seenCustomUnits knownUnits.[s]
+        Units.UnitsExpr.Val(n * unitExprToUnits unit)
+    | UnitExpr(expr, unit) -> Units.UnitsExpr.Mul(evalUnitExpr expr, unitExprToSymbolicUnits unit)
+    | Add(a, b) -> Units.UnitsExpr.Add(evalUnitExpr a, evalUnitExpr b)
+    | Subtract(a, b) -> Units.UnitsExpr.Add(evalUnitExpr a, -evalUnitExpr b)
+    | Multiply(a, b) -> Units.UnitsExpr.Mul(evalUnitExpr a, evalUnitExpr b)
+    | Divide(a, b) -> Units.UnitsExpr.Div(evalUnitExpr a, evalUnitExpr b)
+    | Power(a, b) -> Units.UnitsExpr.Pow(evalUnitExpr a, evalUnitExpr b)
+    | Variable (Identifier (Symbol s)) when knownUnits.ContainsKey s -> unitExprToSymbolicUnits knownUnits.[s]
     | Variable (Identifier (Symbol s)) when seenCustomUnits.Contains s -> Units.UnitsExpr.Val (Units.Units (s)) 
     | Variable (Identifier (Symbol s)) -> Units.UnitsExpr.Var s
     | Variable v -> Units.UnitsExpr.Const v
@@ -489,7 +506,8 @@ let evalExpr e =
         match (a, b) with 
         | Some a', Some b' -> Some (op a' b')
         | _ -> None
-    let rec eval = function 
+    let rec eval = 
+        function 
         | Number n -> Some n 
         | UnitExpr _ -> None 
         | Add(a,b) -> opfun (+) (eval a) (eval b)
@@ -503,16 +521,150 @@ let evalExpr e =
         |  _ -> None 
     eval e 
 
-let eval (seenCustomUnits: Hashset<_>) = function 
+let eval = function 
     | DefineUnit s -> 
         seenCustomUnits.Add(s) |> ignore
         NoExpression
-    | ForcedUnitOutput(e, u) -> ForcedUnitExpression(evalUnitExpr seenCustomUnits e, u) 
+    | ForcedUnitOutput(e, u) -> ForcedUnitExpression(evalUnitExpr e, u) 
     | e -> match evalExpr e with
             | Some e -> PureExpression e
-            | None -> UnitExpression (evalUnitExpr seenCustomUnits e)
+            | None -> UnitExpression (evalUnitExpr e)
 
 let mparse input = 
     match run mutilineExpr input with
-    | Success(result, _, _) -> Result.Ok result  
-    | Failure(errorMsg, _, _) -> Result.Error errorMsg
+    | Success(result, _, _) -> result  
+    | Failure(errorMsg, _, _) -> failwith errorMsg
+
+mparse """20 chapters / 8 episodes"""
+|> List.nth 0 |> eval |> ExpressionChoice.PrettyPrint
+
+parse "1000 m^3 : L" |> eval |> ExpressionChoice.PrettyPrint
+parse "5 m^3 * 3 kg * 2"
+parse "5^3 * 2"
+parse "a^2 + b^2 + c^2"  
+parse "5kg*m/s^2 * 3"
+parse "expand(a + b^2)"
+parse "simplify(5 + 3 * 2)"
+parse "sqrt(9)"
+parse "16 * 6 s" |> eval |> ExpressionChoice.PrettyPrint
+parse "150 kg : lb" |> eval |> ExpressionChoice.PrettyPrint
+parse "5 + 3"
+parse "5^(3 + 2) * 2 + 3" 
+parse "2 bits" 
+parse "1.6e9 param * 32 bits/param" |> eval//|> ExpressionChoice.PrettyPrint
+parse "2.6 billion * 32" |> eval|> ExpressionChoice.PrettyPrint
+parse "2.6 billion params * 32 bits/param" |> eval |> ExpressionChoice.PrettyPrint
+parse "1.8 m : cm" |> eval |> ExpressionChoice.PrettyPrint
+parse "1 kg : lb" |> eval |> ExpressionChoice.PrettyPrint
+parse "1 m : ft" |> eval |> ExpressionChoice.PrettyPrint
+parse "5 ft + 9 in : in" |> eval |> ExpressionChoice.PrettyPrint
+parse "5 minutes / 2"
+parse "cos(x + y^2)"
+parse "(2 kilometer)"
+parse "(2 km)"
+parse "(2 kg)"
+parse "(2 byte)"
+parse "(2 bytes)"
+parse "5m^3"
+parse "log_e(c)"
+parse "(5kg*m/s^2) * 3"
+parse "(5 kg + 2kg) * 2"
+parse "(5 meter + 2 m) + (1 km)"
+parse "5 kg + 2kg * 2" |> eval |> ExpressionChoice.PrettyPrint
+parse "5+1*2"
+parse "5^3"
+parse "a^2*b*c"
+parse "a+2+c"
+parse "a+b"
+parse "a^b"
+parse "a kg+b kg+c"    
+parse "a byte+b byte+c"    
+parse "a kg + b kg * c" |> eval// |> ExpressionChoice.PrettyPrint   
+parse "a byte + b byte * c"  
+parse "a + b"
+parse "(2 megajoules)"
+parse "2 gigabytes + 1 kilobytes" |> eval |> ExpressionChoice.PrettyPrint
+
+parse "80 kilobytes/s : kilobits/s" |> eval |> ExpressionChoice.PrettyPrint
+ 
+//let choices2 = (attempt parens <|> attempt numberWithUnit <|> (attempt variableWithUnit <|> attempt variableParser) <|> (pfloat |>> Number)) 
+// let term =  
+//     pipe2   (attempt parens <|> attempt numberWithUnit <|> (pfloat |>> Number)) 
+//             (opt (powOp >>. (attempt parens <|> attempt numberWithUnit <|> (pfloat |>> Number)))) 
+//             (fun baseexpr exp -> 
+//                 match exp with
+//                 | Some e -> Power(baseexpr, e)
+//                 | None -> baseexpr)
+ 
+//type Operator = Add | Subtract | Multiply | Divide | Power
+
+// let factor =
+//     let unitFactor = chainl1 term (mulOp <|> divOp |>> fun op a b -> BinOp(a, op, b))
+//     let multFactor = pipe2 term (opt (mulOp >>. term)) (fun a op -> 
+//         match op with
+//         | Some b -> BinOp(a, Multiply, b)
+//         | None -> a)
+//     let divFactor = pipe2 term (opt (divOp >>. term)) (fun a op ->
+//         match op with
+//         | Some b -> BinOp(a, Divide, b)
+//         | None -> a)
+//     multFactor <|> divFactor <|> unitFactor
+
+//let parens = between (str_ws "(") (str_ws ")") expr
+// Parse a term (number with unit or parenthesized expression)
+//let term = attempt numberWithUnit <|> parens <|> (pfloat |>> Number)
+// Parse a term (number with unit, parenthesized expression, or plain number)
+//let term = attempt parens <|> attempt numberWithUnit <|> (pfloat |>> Number)
+
+// let unitParser : Parser<UnitOfMeasure, unit> =
+//     choice [
+//         stringCIReturn "kg" Kg
+//         stringCIReturn "g" G
+//         stringCIReturn "m" M
+//         stringCIReturn "ft" Ft
+//     ] .>> ws
+//    <|> preturn NoUnit
+
+// Create a forward reference for the expression parser
+// let expr, exprRef : Parser<Expr, unit> * Parser<Expr, unit>ref = createParserForwardedToRef() 
+
+// Parse a number with an optional unit
+// let numberWithUnit = 
+//     pipe2 (pfloat .>> ws) (opt unitParser)
+//         (fun num unit -> 
+//             match unit with
+//             | Some u -> UnitExpr(Number num, u)
+//             | None -> Number num)
+
+// Parse parentheses with an optional unit
+// let parens = 
+//     pipe2 (between (str_ws "(") (str_ws ")") expr) (opt unitParser)
+//         (fun expr unit -> 
+//             match unit with
+//             | Some u -> UnitExpr(expr, u)
+//             | None -> expr)
+
+// Parse parentheses with an optional compound unit
+// let parens = 
+//     pipe2 (between (str_ws "(") (str_ws ")") expr) (opt unitExpr)
+//         (fun expr unit -> 
+//             match expr, unit with
+//                | Number n, Some u -> UnitNumber(n, u)
+//          | _ -> expr)  // If it's not a simple number, we ignore the unit (this could be handled differently)
+
+// Parse parentheses
+// let parens : Parser<_, unit> = between (str_ws "(") (str_ws ")") expr
+
+// Parse a term (number or parenthesized expression)
+//let term : Parser<_, unit> = float_ws |>> Number <|> parens
+
+// let term : Parser<Expr, unit> = 
+//     (pipe2 float_ws (opt unitParser)
+//         (fun num unittype -> Number(num, defaultArg unittype NoUnit)))
+//     <|> parens
+
+// Parse multiplication and division
+// let factor = chainl1 term (mulOp <|> divOp |>> fun op a b -> BinOp(a, op, b))
+
+// Parse addition and subtraction
+// exprRef := chainl1 factor (addOp <|> subOp |>> fun op a b -> BinOp(a, op, b))

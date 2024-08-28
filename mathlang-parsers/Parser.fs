@@ -1,4 +1,4 @@
-﻿module Parser
+﻿module SimpleSymbolics.Parser
 open System
 open Prelude.Common
 open MathNet.Numerics

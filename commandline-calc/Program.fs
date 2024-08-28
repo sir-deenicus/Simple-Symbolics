@@ -1,5 +1,5 @@
 ﻿open System
-open Parser
+open SimpleSymbolics.Parser
 open System.Collections.Generic
 
 let previousMsgs = ResizeArray()
@@ -86,6 +86,25 @@ let rec repl counter prevOutput =
         | Result.Ok ast -> 
             let result = eval seenCustomUnits ast
             let output = ExpressionChoice.PrettyPrint(seenCustomUnits, "", result)
+            printfn $"Out[{counter}]: {output}" 
+            repl (counter + 1) (convertSuperscripts output)
+        | Result.Error msg -> 
+            printfn "Error: %s" msg
+            repl counter prevOutput
+    else 
+        printfn "Exiting REPL."
+
+
+let rec dicerepl counter prevOutput =
+    printf $"In [{counter}]: "
+    let input = getInputWithHistory (previousMsgs.Count - 1) prevOutput
+    previousMsgs.Add(input)
+    
+    if input.ToLower() <> "q" then 
+        match DiceRollerMathParser.runParser input with
+        | Result.Ok diceExpr ->  
+            let result = diceExpr.Eval()
+            let output = DiceRollerMathParser.DiceExpr.InfoString (result)
             printfn $"Out[{counter}]: {output}" 
             repl (counter + 1) (convertSuperscripts output)
         | Result.Error msg -> 

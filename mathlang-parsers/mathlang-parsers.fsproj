@@ -7,12 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="DiceRollerMathParser.fs" />
     <None Include="dndcalc.fsx" />
     <None Include="calc.fsx" />
     <Compile Include="Parser.fs" />
   </ItemGroup>
-
-  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.1.1" />

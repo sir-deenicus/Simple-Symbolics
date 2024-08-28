@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="dndcalc.fsx" />
     <None Include="calc.fsx" />
     <Compile Include="Parser.fs" />
     <Compile Include="Program.fs" />

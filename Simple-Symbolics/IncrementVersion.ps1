@@ -26,10 +26,10 @@ $patch = [int]$versionParts[2]
 
 # Increment the patch version
 $patch++
-if ($patch -gt 99) {
+if ($patch -gt 9) {
     $patch = 0
     $minor++
-    if ($minor -gt 99) {
+    if ($minor -gt 9) {
         $minor = 0
         $major++
     }

@@ -1,11 +1,88 @@
 #r "nuget: FParsec, 1.1.1"
+#I @"C:\Users\cybernetic\source\repos\" 
+#r @"DictionarySlim\bin\Release\netstandard2.1\DictionarySlim.dll"
+#r @"Prelude\Prelude\bin\Release\net5\Prelude.dll"
+#r @"Hansei\Hansei.Continuation\bin\Release\netstandard2.1\Hansei.Core.dll"
 
 open FParsec
+open Hansei.TreeSearch.LazyList 
+open Hansei.FSharpx.Collections
+
+let diceParams rollsUpper take nobonus
+    (lowerBound:int option, upperBound:int option, averageBound:int option) = 
+    let rollsupper = defaultArg rollsUpper 20
+    search {
+        let! dice = choices [2;3;4;6;8;10;12]
+        let! roll = choices [1..rollsupper]
+        let! bonus = if nobonus then exactly 0 else choices [0..rollsupper] 
+        
+        let lower, upper = roll + bonus, roll * dice + bonus
+        let average = (lower + upper) / 2
+        match (lowerBound, upperBound, averageBound) with
+        | Some lb, Some ub, _ -> 
+            do! guard (lower = lb && upper = ub)
+            return (dice, roll, bonus, average, $"{roll}d{dice}+{bonus}")
+        | _, Some ub, Some ab -> 
+            do! guard (upper = ub && average = ab)
+            return (dice, roll, bonus, average, $"{roll}d{dice}+{bonus}")
+        | Some lb, _, Some ab ->
+            do! guard (lower = lb && average = ab)
+            return (dice, roll, bonus, average, $"{roll}d{dice}+{bonus}")
+        | _, _, Some ab -> 
+            do! guard (average = ab)
+            return (dice, roll, bonus, average, $"{roll}d{dice}+{bonus}")
+        | _, _, _ -> return! fail()
+    }
+    |> LazyList.takeOrMax take
+    |> LazyList.toList
+
+open System.Text.RegularExpressions
+
+let (|RangePattern|_|) (input: string) =
+    let m = Regex.Match(input, @"^(\d+)-(\d+)$")
+    if m.Success then
+        Some (int m.Groups.[1].Value, int m.Groups.[2].Value)
+    else
+        None
+        
+let (|AveragePattern|_|) (input: string) =
+    let m = Regex.Match(input, @"^avg (\d+)$")
+    if m.Success then
+        Some (int m.Groups.[1].Value)
+    else
+        None
+
+let (|MinAveragePattern|_|) (input: string) =
+    let m = Regex.Match(input, @"^(?:min (\d+), avg (\d+))|(?:avg (\d+), min (\d+))$")
+    if m.Success then
+        let minVal = if m.Groups.[1].Success then int m.Groups.[1].Value else int m.Groups.[4].Value
+        let avgVal = if m.Groups.[2].Success then int m.Groups.[2].Value else int m.Groups.[3].Value
+        Some (minVal, avgVal)
+    else
+        None
+
+let (|MaxAveragePattern|_|) (input: string) =
+    let m = Regex.Match(input, @"^(?:max (\d+), avg (\d+))|(?:avg (\d+), max (\d+))$")
+    if m.Success then
+        let maxVal = if m.Groups.[1].Success then int m.Groups.[1].Value else int m.Groups.[4].Value
+        let avgVal = if m.Groups.[2].Success then int m.Groups.[2].Value else int m.Groups.[3].Value
+        Some (maxVal, avgVal)
+    else
+        None
+        
+let parseDiceParamsInput (input: string) =
+    match input with
+    | RangePattern (lb, ub) -> (Some lb, Some ub, None)
+    | AveragePattern avg -> (None, None, Some avg)
+    | MinAveragePattern (lb, avg) -> (Some lb, None, Some avg)
+    | MaxAveragePattern (ub, avg) -> (None, Some ub, Some avg)
+    | _ -> (None, None, None)
         
 type DiceExpr =
     | Dice of int * int * int
     | Mult of DiceExpr * int
     | Add of DiceExpr * DiceExpr 
+    | Sub of DiceExpr * int
     with 
         override this.ToString() = 
             let rec parseToString = function 
@@ -13,6 +90,7 @@ type DiceExpr =
                 | Dice(a,b, bonus) -> $"{a}d{b}+{bonus}"
                 | Mult(d,n) -> $"{parseToString d}*{n}"
                 | Add(d1,d2) -> $"{parseToString d1}+{parseToString d2}"
+                | Sub(d,n) -> $"{parseToString d}-{n}"
             parseToString this
         member this.ToPair = function 
             | Dice(a,b, _) -> (a,b)
@@ -27,6 +105,8 @@ type DiceExpr =
         static member EvalDiceExpr e = 
             let rec evalDiceExpr = function 
             | Dice _ as d -> d
+            | Add(Sub(d, n), d2) -> 
+                Add(Sub(evalDiceExpr d, n), evalDiceExpr d2) 
             | Add(d1, d2) -> 
                 match evalDiceExpr d1, evalDiceExpr d2 with
                 | Dice(0,0, bonus), Dice(a,b, bonus2) -> Dice(a,b, bonus + bonus2)
@@ -35,16 +115,36 @@ type DiceExpr =
                 | _ -> failwith "Invalid dice expression"
             | Mult(d, n) -> 
                 match evalDiceExpr d with
-                | Dice(a,b, bonus) -> Dice(a*n, b, bonus)
+                | Dice(a,b, bonus) -> Dice(a*n, b, n*bonus)
+                | _ -> failwith "Invalid dice expression"
+            | Sub(d, n) ->  // Add this case
+                match evalDiceExpr d with
+                | Dice(a,b, bonus) -> Dice(a, b, bonus - n)
                 | _ -> failwith "Invalid dice expression"
             evalDiceExpr e            
         static member InfoString = function
+            | Add(Sub(d, n), d2) -> 
+                let d1 = d.Eval()
+                let d2 = d2.Eval()
+                match d1, d2 with
+                | Dice(a,b, bonus), Dice(c,d, bonus2) -> 
+                    let lower1, upper1 = (a + bonus) - n, (a * b + bonus) - n
+                    let lower2, upper2 = c + bonus2, c * d + bonus2
+                    let lower, upper = lower1 + lower2, upper1 + upper2
+                    let average = (lower + upper) / 2
+                    $"({a}d{b}-{n}) + {c}d{d}: {max 0 lower}-{max 0 upper} (avg {max 0 average})"
+                | _ -> failwith "Invalid dice expression"
+                    
             | Dice(a,b, bonus) -> 
                 let lower, upper = a + bonus, a * b + bonus
                 let average = (lower + upper) / 2
                 let bonusstr = if bonus = 0 then "" else $"+{bonus}"
-                $"{a}d{b}{bonusstr}: {lower}-{upper} (avg {average})"
+                $"{a}d{b}{bonusstr}: {max 0 lower}-{max 0 upper} (avg {max 0 average})"
             | _ -> failwith "Invalid dice expression"
+
+let ws = spaces
+
+let str_ws s = pstring s >>. ws
 
 let dice : Parser<_,unit> = 
     pipe3 pint32 (pchar 'd') pint32 (fun a _ b -> Dice(a,b,0))
@@ -53,22 +153,44 @@ let number : Parser<_,unit> =
     pint32 |>> fun b -> Dice(0,0,b)
 
 let diceOrNumber : Parser<DiceExpr, unit> =
-    attempt dice <|> number
+    attempt (dice .>> ws) <|> (number .>> ws)
 
-let ws = spaces
+let multOp = ws >>. pchar '*' >>. ws >>. pint32 
 
-let multOp = ws >>. pchar '*' >>. ws >>. pint32
+let expr, exprRef = createParserForwardedToRef()
 
-let factor : Parser<DiceExpr, unit> =
-    diceOrNumber .>> ws .>>. (opt multOp)
+let parens = between (str_ws "(") (str_ws ")") expr
+
+// Add new parser for stats query
+let statsQuery = 
+    pstring "\\s" >>. restOfLine true 
+    |>> (fun s -> 
+        printfn "Parsing stats query: '%s'" s
+        let bounds = parseDiceParamsInput (s.Trim())
+        printfn "Bounds: %A" bounds
+        match diceParams None 20 false bounds with
+        | [] -> failwith "No dice combination found"
+        | (dice,rolls,bonus,_,_)::_ -> Dice(rolls,dice,bonus))
+
+// Modify factor to include statsQuery
+let factor = parens <|> statsQuery <|> diceOrNumber 
+//let factor = parens <|> diceOrNumber 
+
+let term = 
+    factor .>>. opt multOp
     |>> function
         | (d, Some n) -> Mult(d, n)
         | (d, None) -> d
 
-let addOp = ws >>. pchar '+' >>. ws
 
-let expr : Parser<DiceExpr, unit> =
-    chainl1 factor (addOp >>% fun a b -> Add(a, b))
+do exprRef := 
+    let addOp = ws >>. str_ws "+" >>% fun a b -> Add(a, b)
+    let subOp = ws >>. str_ws "-" >>% fun a b -> 
+        match b with
+        | Dice(0,0,n) -> Sub(a, n)
+        | _ -> failwith "Subtraction requires a number"
+    //chainl1 term (ws >>. str_ws "+" >>% fun a b -> Add(a, b))
+    chainl1 term (attempt addOp <|> subOp)
 
 let runParser input =
     match run expr input with
@@ -76,12 +198,27 @@ let runParser input =
     | Failure(errorMsg, _, _) -> Result.Error errorMsg
 
 
-runParser "2d6" //Ok (Dice (2, 6))
+runParser "2d6 + \\s min 3, avg 5"  // Finds dice combo with range 3-8
+|> Result.map (fun d -> d.Eval() |> DiceExpr.InfoString)
+
+runParser "6d6" //Ok (Dice (2, 6))
 runParser "2d6*3" // Ok (Mult (Dice (2, 6), 3))
 runParser "4d6 + 2d6*10" // Ok (Add (Dice (4, 6), Mult (Dice (2, 6), 10))
 runParser "4d6+2d6*10" // Ok (Add (Dice (4, 6), Mult (Dice (2, 6), 10))
 runParser "4d6 +2d6* 10"   
+runParser "1d5*2+1" //\|> Result.toList |> List.head |> fun d -> d.Eval()
+runParser "(1d5+1)*2" //|> Result.toList |> List.head |> fun d -> d.Eval()
 
-let testCases = ["2d6"; "2d6*3"; "4d6+2d6"; "4d6+2d6*9";"2d6*2+3"; "5d6"; "2d6*2+3+5d6"]
+runParser "(9d6-10) + 6d6" |> Result.map (fun d -> d.Eval() |> DiceExpr.InfoString)
+
+runParser "6d6" |> Result.toList |> List.head |> fun d -> d.Eval() |> DiceExpr.InfoString
+
+runParser "(1d5+1 + 1d5+1)*2" |> Result.toList |> List.head |> fun d -> d.Eval()
+
+let testCases = ["6d6"; "2d6"; "2d6*3"; "4d6+2d6"; "4d6+2d6*9";"2d6*2+3"; "5d6"; "2d6*2+3+5d6";"1d5*2+1";"(1d5+1)";"(1d5+1)*2";"(1d5+1 + 1d5+1)"]
 
 testCases |> List.map (runParser >> Result.map (_.Eval() >> DiceExpr.InfoString)) 
+
+" 3-6"
+|> parseDiceParamsInput
+|> diceParams None 20 false

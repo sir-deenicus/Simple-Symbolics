@@ -2,7 +2,7 @@
 open SimpleSymbolics.Parser
 open System.Collections.Generic
 
-let previousMsgs = ResizeArray()
+let previousMsgs = ResizeArray([""])
 
 let convertSuperscripts (input: string) =
     let superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹"
@@ -13,17 +13,17 @@ let convertSuperscripts (input: string) =
         | n -> "^" + n.ToString())
     |> String.concat ""
 
-let rec getInputWithHistory pos (prevMsg:string) =
+let rec getInputWithHistory prefillmsg pos (prevMsg:string) =
     let mutable currentPos = pos
-    let mutable currentInput = prevMsg
+    let mutable currentInput = if prefillmsg then prevMsg else ""
     let mutable cursorIndex = currentInput.Length
-    let promptLen = $"In [{pos+2}]: ".Length
+    let promptLen = $"In [{pos+1}]: ".Length
     
     let writeInput() =
         Console.SetCursorPosition(0, Console.CursorTop)
         Console.Write(new string(' ', Console.WindowWidth - 1))
         Console.SetCursorPosition(0, Console.CursorTop)
-        Console.Write($"In [{pos+2}]: " + currentInput)
+        Console.Write($"In [{pos+1}]: " + currentInput)
         Console.SetCursorPosition(cursorIndex + promptLen, Console.CursorTop)
 
     writeInput()
@@ -61,8 +61,7 @@ let rec getInputWithHistory pos (prevMsg:string) =
             Console.SetCursorPosition(promptLen, Console.CursorTop)
         | ConsoleKey.End ->
             cursorIndex <- currentInput.Length
-            Console.SetCursorPosition(cursorIndex + promptLen, Console.CursorTop)
-      
+            Console.SetCursorPosition(cursorIndex + promptLen, Console.CursorTop)      
         | _ ->
             if not (Char.IsControl(key.KeyChar)) then
                 currentInput <- currentInput.Insert(cursorIndex, key.KeyChar.ToString())
@@ -76,45 +75,55 @@ let rec getInputWithHistory pos (prevMsg:string) =
 
 let seenCustomUnits = HashSet<string>()
 
-let rec repl counter prevOutput =
+let rec generalRepl prefilloutput parseFunc evalFunc prettyPrintFunc counter prevOutput =
     printf $"In [{counter}]: "
-    let input = getInputWithHistory (previousMsgs.Count - 1) prevOutput
+    let input = getInputWithHistory prefilloutput (previousMsgs.Count - 1) prevOutput
     previousMsgs.Add(input)
     
     if input.ToLower() <> "q" then 
-        match parse input with
-        | Result.Ok ast -> 
-            let result = eval seenCustomUnits ast
-            let output = ExpressionChoice.PrettyPrint(seenCustomUnits, "", result)
+        match parseFunc input with
+        | Result.Ok parsedExpr ->  
+            let result = evalFunc parsedExpr
+            let output = prettyPrintFunc input result
             printfn $"Out[{counter}]: {output}" 
-            repl (counter + 1) (convertSuperscripts output)
+            generalRepl prefilloutput parseFunc evalFunc prettyPrintFunc (counter + 1) (convertSuperscripts output)
         | Result.Error msg -> 
             printfn "Error: %s" msg
-            repl counter prevOutput
+            generalRepl prefilloutput parseFunc evalFunc prettyPrintFunc counter prevOutput
     else 
         printfn "Exiting REPL."
 
+let repl = 
+    generalRepl 
+        true 
+        parse 
+        (eval seenCustomUnits) 
+        (fun s exprchoice -> 
+            let cstr = 
+                let split = s.Split(':')
+                if split.Length > 1 then split[1].Trim() else ""
+            ExpressionChoice.PrettyPrint(seenCustomUnits,cstr, exprchoice))
 
-let rec dicerepl counter prevOutput =
-    printf $"In [{counter}]: "
-    let input = getInputWithHistory (previousMsgs.Count - 1) prevOutput
-    previousMsgs.Add(input)
-    
-    if input.ToLower() <> "q" then 
-        match DiceRollerMathParser.runParser input with
-        | Result.Ok diceExpr ->  
-            let result = diceExpr.Eval()
-            let output = DiceRollerMathParser.DiceExpr.InfoString (result)
-            printfn $"Out[{counter}]: {output}" 
-            repl (counter + 1) (convertSuperscripts output)
-        | Result.Error msg -> 
-            printfn "Error: %s" msg
-            repl counter prevOutput
-    else 
-        printfn "Exiting REPL."
+let dicerepl = 
+    generalRepl 
+        false
+        DiceRollerMathParser.runParser 
+        (_.Eval()) 
+        (fun _ -> function Result.Ok dice -> DiceRollerMathParser.DiceExpr.InfoString dice | Result.Error s -> s)
 
 [<EntryPoint>]
 let main argv =
     printfn "Welcome to the mathlang REPL. Type 'q' to quit."
-    repl 1 ""
+
+    let replChoice =
+        if argv.Length > 0 then argv.[0]
+        else
+            printfn "Choose REPL mode: 0 for calc, 1 for dice"
+            Console.ReadLine()
+
+    match replChoice with
+    | "0" | "--calc" | "-c" -> printfn "Calculator mode selected."; repl 1 ""
+    | "1" | "--dice" | "-d" -> printfn "Dice calculator mode selected."; dicerepl 1 ""
+    | _ -> printfn "Invalid choice. Exiting."
+    
     0

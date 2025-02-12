@@ -167,9 +167,14 @@ let basicScaledUnit =
       "oz", (0.0625, LB) 
       "inches", (1/12Q, Ft)
       "in", (1/12Q, Ft) 
+      "mins", (60Q, S)
       "minutes", (60Q, S)
       "minute", (60Q, S) 
+      "hours", (3600Q, S) 
       "hour", (3600Q, S)
+      "hrs", (3600Q, S)
+      "hr", (3600Q, S)
+      "days", (86400Q, S)
       "mm", (1/1000Q, M)
     ]
 
@@ -442,11 +447,7 @@ type ExpressionChoice =
     member this.PrettyPrint (seenCustomUnits: Hashset<_>, toconvstr:string) =
         let prettifyUnits (u:Units.Units) = 
             match u.Quantity with
-            | Expression.Number n when toconvstr = "" ->
-                match pow10ToPrefix n with 
-                | None -> $"{Units.simplifyUnitDesc u}"
-                | Some s -> $"{s}{fmt u.Unit}"
-            | Expression.Number _ -> $"{toconvstr}"
+            | Expression.Number n when toconvstr <> "" -> $"{toconvstr}"
             | _ -> $"{Units.simplifyUnitDesc u}"
 
         let basicUnitToPhysicsTerm = UnitExpr.BasicUnit >> unitTypesToPhysicsUnits

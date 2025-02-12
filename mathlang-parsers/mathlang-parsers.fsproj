@@ -15,7 +15,8 @@
 
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.1.1" />
-    <PackageReference Include="Prelude" Version="2.0.5" />
+    <PackageReference Include="Hansei.Core" Version="0.6.9" />
+    <PackageReference Include="Prelude" Version="2.0.8" />
   </ItemGroup>
 
   <ItemGroup>

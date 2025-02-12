@@ -82,7 +82,7 @@ module Information =
     let H = probn "H"
     let Hc x y = probcn "H" x y
     let I x y = probparamn "I" x y
-    let relentropy p q = Func.fn "D_{KL}" (tuple [ p; q ])
+    let relentropy p q = Fn.fn "D_{KL}" (tuple [ p; q ])
 
     let ineqs = [leq (I X Y) (H X), "Mutual information bits are not greater than entropy, I(X;Y) <= H(X)"
                  geq (I X Y) (0Q), "Mutual information bits are non-negative, I(X;Y) >= 0"]

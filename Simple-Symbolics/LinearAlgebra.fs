@@ -528,7 +528,7 @@ module Generic =
 
 module Vector =
     let toList (v : Vector<_>) = v.AsList
-    
+     
     let head (v:Vector<_>) = List.head v.AsList
     
     let map f (v : Vector<_>) = 
@@ -563,9 +563,14 @@ module Vector =
         (v.AsArray |> Array.sumBy (fun x -> (abs x) ** p)) ** (1 / p) 
         |> Expression.simplify
          
-    let magnitude (v:Vector<_>) = lpNorm 2 v
+    let inline magnitude (v: Vector<'a>) = 
+        sqrtf (v |> map squared |> sum)
+     
+    let inline toUnit (v: Vector<'a>) = 
+        let norm = magnitude v
+        v / norm
 
-    let norm (v:Vector<_>) = magnitude v
+    let inline norm (v:Vector<_>) = magnitude v
 
     let cosineSimilarity (v:Vector<Expression>) (v2 : Vector<Expression>) =
         (v * v2) / ((sqrt (v * v)) * (sqrt (v2 * v2)))
@@ -585,12 +590,7 @@ module Vector =
             failwith "Must be a 3-vector"
         else
             crossproduct (List.toArray v1.AsList) (List.toArray v2.AsList)
-            |> Vector
-
-    let ofVars letter (start, stop) =
-        [for i in start..stop ->
-            sub (Vars.ofChar letter) (ofInteger i)]
-        |> Vector
+            |> Vector 
          
     ///generate random vector 
     let random n = Vector [for _ in 0..n-1 -> random.NextDouble() |> ofFloat] 
@@ -619,10 +619,6 @@ module Matrix =
     open MathNet.Numerics.Distributions
 
     let toList (m : Matrix<_>) = m.AsArray
-    
-    let toLookUpTable (offset1,offset2) v (m:Matrix<_>) =
-        [ for j in 0..m.ColumnsLen - 1 do 
-            for i in 0..m.RowsLen - 1 -> v + $"_{{{i+offset1},{j+offset2}}}", m.[i,j]]
     
     let inline transpose (m:Matrix<_>) = Matrix(Array.transpose m.AsArray)
 
@@ -803,7 +799,23 @@ module MatrixExtensions =
     
     open System.Collections.Generic
 
+    type Vector<'a when 'a: equality> with 
+        static member ofVars(letter, n, ?start) =
+            let start = defaultArg start 1
+            [for i in start..start+(n-1) -> subs (Vars.ofChar letter) [ofInteger i] ]
+            |> Vector
+        
+        static member toLookUpTable (varname, v:Vector<_>,?offset) =
+            let offset = defaultArg offset 1
+            [ for i in 0..v.Length - 1 -> varname + $"_{{{i+offset}}}", v.[i] ]
+
     type Matrix<'a when 'a: equality> with
+
+        static member toLookUpTable (varname, m:Matrix<_>,?offset1,?offset2) =
+            let offset1, offset2 = defaultArg offset1 1, defaultArg offset2 1 
+            [ for j in 0..m.ColumnsLen - 1 do 
+                for i in 0..m.RowsLen - 1 -> varname + $"_{{{i+offset1},{j+offset2}}}", m.[i,j]] 
+
         static member ofVars(letter, width, height,?start) =
             let start = defaultArg start 1
             [for r in start..start+(width-1)do
@@ -948,3 +960,4 @@ module Float32 =
         let zerosLike (v:Vector<_>) = zeros v.Length
 
         let magnitude (v:Vector<float32>) = Generic.Vector.magnitude v
+         

@@ -5,7 +5,7 @@ open MathNet.Symbolics
 open Utils
 open NumberProperties
 open Prelude.Common
-open MathNet.Symbolics.Core.Func
+open MathNet.Symbolics.Core
 
 [<RequireQualifiedAccess>]
 type EvalMethod = 
@@ -47,8 +47,8 @@ let newtonsMethodAux evalMethod symbol iters f x0 =
         | EvalMethod.Simplify -> Expression.fullSimplify
         | EvalMethod.Numeric -> Expression.toFloat >> Option.get >> ofFloat
          
-    let fx = toFn f 
-    let fx' = toFn (D symbol f) 
+    let fx = Fn.toFn f 
+    let fx' = Fn.toFn (D symbol f) 
 
     let rec loop n x =
         if n = 0 then x

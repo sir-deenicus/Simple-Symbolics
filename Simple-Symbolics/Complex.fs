@@ -5,6 +5,7 @@ open MathNet.Symbolics
 open Core
 open Core.Vars
 open Utils.Constants
+open System.Numerics
 open MathNet.Numerics
 open MathNet.Symbolics.NumberProperties
 
@@ -67,6 +68,13 @@ type Complex(r: Expression, i: Expression) =
         let theta = __.Phase
         r * Operators.cos theta + r * Constant Constant.I * Operators.sin theta
 
+    static member IsNaN (value: Complex): bool = value.Real.IsNaN || value.Imaginary.IsNaN
+
+    static member IsInfinity (value: Complex): bool =
+            Operators.isInfinity value.Real || Operators.isInfinity value.Imaginary
+    
+    static member IsZero (value: Complex): bool = value = Complex.Zero
+     
     /// <summary>
     /// Gets the absolute value of the complex number.
     /// </summary>
@@ -76,6 +84,8 @@ type Complex(r: Expression, i: Expression) =
     /// Gets the zero complex number.
     /// </summary>
     static member Zero = Complex(0Q, 0Q)
+     
+    static member One = Complex(1Q, 0Q)
 
     /// <summary>
     /// Negates the complex number.
@@ -325,6 +335,25 @@ type Complex(r: Expression, i: Expression) =
         | :? Complex as y -> (x.Real, x.Imaginary) = (y.Real, y.Imaginary)
         | _ -> false
 
+    interface IAdditiveIdentity<Complex, Complex> with
+        static member AdditiveIdentity = Complex(0Q, 0Q)
+    
+    interface IMultiplicativeIdentity<Complex, Complex> with
+        static member MultiplicativeIdentity = Complex(1Q, 0Q)
+
+    interface IUnaryNegationOperators<Complex, Complex> with
+        static member (~-) (a: Complex) = Complex(-a.Real, -a.Imaginary)
+    
+    interface IAdditionOperators<Complex, Complex, Complex> with
+        static member (+) (a: Complex, b: Complex) = a + b 
+
+    interface IMultiplyOperators<Complex, Complex, Complex> with
+        static member (*) (a: Complex, b: Complex) = a * b
+
+    interface IDivisionOperators<Complex, Complex, Complex> with
+        static member (/) (a: Complex, b: Complex) = a / b
+ 
+
 /// <summary>
 /// Contains utility functions for working with complex numbers.
 /// </summary>
@@ -346,8 +375,7 @@ module Complex =
     let ToNumericsComplex (c: Complex) =
         match Expression.toFloat c.Real, Expression.toFloat c.Imaginary with
         | Some r, Some i -> Some(Numerics.Complex(r, i))
-        | _ -> None
-
+        | _ -> None 
 
     let ofPolar r theta = Complex(r * cos theta, r * sin theta)
 

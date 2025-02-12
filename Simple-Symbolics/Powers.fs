@@ -1,5 +1,5 @@
 namespace MathNet.Symbolics
-open Core
+open MathNet.Symbolics.Core
 open Utils 
 open NumberProperties 
 open MathNet.Numerics

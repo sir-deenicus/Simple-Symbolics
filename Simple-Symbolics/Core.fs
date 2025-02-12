@@ -5,8 +5,7 @@ open MathNet.Numerics
 open System
 open MathNet.Symbolics.Utils
 open Prelude.Common
-open MathNet.Symbolics.NumberProperties
-open Utils.Func
+open MathNet.Symbolics.NumberProperties 
 
 let ln = Operators.ln
 let arctan = Operators.arctan
@@ -39,7 +38,8 @@ module Desc =
 
     let Names =
         set
-            [   "power"
+            [   
+                "power"
                 "energy"
                 "force"
                 "energyflux"
@@ -182,8 +182,8 @@ let rec replaceSymbolAux doall r x f =
         | FunctionN(Probability, h::t) -> FunctionN(Probability, h::(List.map loop t))
         | Summation(fx,var,start, stop) -> summation var (loop start) (loop stop) (loop fx)
             
-        | IsFunctionExpr(Identifier (Symbol _), x,ex) when doall -> fx2 (loop x) (loop ex)
-        | IsFunctionExpr(Identifier (Symbol _), x,ex) -> fx2 x (loop ex)
+        | IsFunctionExpr(Identifier (Symbol _), x,ex) when doall -> Fn.fx2 (loop x) (loop ex)
+        | IsFunctionExpr(Identifier (Symbol _), x,ex) -> Fn.fx2 x (loop ex)
         | FunctionN(fn, l) -> FunctionN(fn, List.map loop l)
         | IsDerivative(f, x, dx) -> FunctionN(f, [loop x; dx ])
         | x -> x
@@ -710,6 +710,10 @@ module Expression =
         | Power(_, Number n) -> n < 0N
         | _ -> false
 
+    let isNaN = function 
+        | Approximation (Real r) -> Double.IsNaN r
+        | _ -> false
+
     let containsLog =
         function
         | Function(Ln, _)
@@ -819,6 +823,7 @@ module Expression =
             | Function(Function.Acos, Function(Cos, x)) -> simplifyLoop x
             | Function(Ln, Power(Constant Constant.E, x))
             | Function(Ln, Function(Exp, x)) -> simplifyLoop x
+            | Function(Ln, Number n) -> Number (BigRational.log n) 
             | Function(Floor, Number n) -> ofBigInteger (n.Numerator / n.Denominator)
             | Function(Floor, Approximation (Real r)) -> ofFloat (floorf r)
             | Function(Ceil, Number n) -> ofBigInteger (BigRational.ceil n) 
@@ -829,8 +834,9 @@ module Expression =
             | Function(Floor, Interval (a,b)) -> interval (simplifyLoop (floor a)) (simplifyLoop (floor b))
             | Function(Ceil, Interval (a,b)) -> interval (simplifyLoop (ceil a)) (simplifyLoop (ceil b))
             | FunctionN(Log, [_;n]) when n = 1Q -> 0Q
-            | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x
+            | FunctionN(Log, [a;Power(b,x)]) when a = b -> simplifyLoop x 
             | FunctionN(Log, [a;b]) when a = b -> 1Q
+            | FunctionN(Log, [b;Number n]) -> Number (BigRational.log n) / (ln (simplifyLoop b))
             | Power(Constant Constant.E, Function(Ln,x))
             | Function(Exp, Function(Ln, x)) -> simplifyLoop x
             | Function(f,x) when Trigonometry.isTrigonometricFunction f ->
@@ -838,7 +844,7 @@ module Expression =
             | Function(f, x) -> Function(f, (simplifyLoop x))
             | IsFunctionExpr(_,_, (IsNumber _ as n)) -> simplifyLoop n
             | IsDerivative(_, IsFunctionExpr(Identifier(Symbol fname),x,e),dx) ->
-                fxn fname x (diff dx (simplifyLoop e))
+                Fn.fxn fname x (diff dx (simplifyLoop e))
             | FunctionN(Derivative, [FunctionN(SumOver,fx::exprs);dx]) ->
                 FunctionN(SumOver,FunctionN(Derivative, [fx;dx])::exprs)
             | FunctionN(f, [ fx; var; a; b ]) as expr ->
@@ -1203,6 +1209,11 @@ type Expression with
     member x.sub(i) = sub x i
 
     member x.sub(indices) = subs x indices 
+
+    member x.IsNaN = 
+        match x with 
+        | Approximation (Real r) -> Double.IsNaN r
+        | _ -> false
     
     member e.simplify(?simplificationLevel) =
         let simpllevel = defaultArg simplificationLevel SimplificationLevel.Default 
@@ -1388,9 +1399,9 @@ type Prob () =
             FunctionN(Probability, [symbol (defaultArg name "P");  x; conditional])
 
 
-module Func =
+module Fn =
     ///Given a function expression with a body, returns an F# function. See also
-    ///toFuncMV <see cref="M:MathNet.Symbolics.Core.toFuncMV"/>
+    ///toFnMV <see cref="M:MathNet.Symbolics.Core.toFnMV"/>
     let toFn f =
         match f with
         | IsFunctionExpr (_, xvar, fx) -> fun x -> Expression.replaceWith x xvar fx
@@ -1404,20 +1415,85 @@ module Func =
     let toFnMV f =
         match f with
         | IsFunctionExpr (_, Tupled vars, fx) ->
-            fun xs -> Expression.replace (List.zip vars xs) fx
-
+            fun xs -> Expression.replace (List.zip vars xs) fx 
         | _ -> failwith "Not a multivariate function with Tuple input, use makefunc instead"
 
     ///Returns an F# function given a formula expression
     let fnOfExpr xvar f =
         fun x -> Expression.replaceWith x xvar f
 
-    ///Returns an F# function pf type Expression list -> Expression given a formula expression
+    ///Returns an F# function of type Expression list -> Expression given a formula expression
     let fnOfExprMV vars f =
         fun xs -> Expression.replace (List.zip vars xs) f
 
     ///Given a function expression, creates a function and then applies parameter. Best for single use.
     let applyfn f x = toFn f x
+
+    let composeSonnet g f = 
+        match (f, g) with 
+        | IsFunctionExpr(Identifier (Symbol fn), Tupled xs, Tupled fx), IsFunctionExpr(Identifier (Symbol gn), Tupled ys, Tupled gexpr) -> 
+            if fx.Length <> ys.Length then
+                failwithf "Function arity mismatch: %s returns %d values but %s takes %d parameters" 
+                     fn fx.Length gn ys.Length
+            // Compose by substituting f's outputs into g's inputs
+            Fn.fxn (gn + " o " + fn) (Tupled xs) (Tupled (List.map (fun gx -> Expression.replace (List.zip ys fx) gx) gexpr))
+                    
+        | IsFunctionExpr(Identifier (Symbol fn), x, fx), IsFunctionExpr(Identifier (Symbol gn), y, gy) -> 
+            // Simple case - substitute f's output into g's input
+            Fn.fxn (gn + " o " + fn) x (Expression.replaceWith fx y gy)
+                
+        | _ -> failwith "Both arguments must be functions"
+
+    //let composeGPT4o g f = 
+    //    match (f, g) with 
+    //    | IsFunctionExpr(fn, Tupled xs, fx), IsFunctionExpr(gn, Tupled ys, gexpr) -> 
+    //        // Replace the variables in gexpr with the expressions from fx
+    //        let composedExpr = Expression.replace (List.zip ys (List.map (fun x -> Expression.replace (List.zip xs [x]) fx) ys)) gexpr
+    //        Fn.fxn (gn + " o " + fn) xs composedExpr
+    //    | IsFunctionExpr(fn, x, fx), IsFunctionExpr(gn, y, gy) -> 
+    //        Fn.fxn (gn + " o " + fn) x (Expression.replaceWith fx y gy)
+    //    | _ -> failwith "Invalid function expressions for composition"
+
+    //let composeO1mini g f = 
+    //    match (f, g) with 
+    //    // Handle composition where both functions take tuples as input
+    //    | IsFunctionExpr(fn, Tupled xs, Tupled fx), IsFunctionExpr(gn, Tupled ys, Tupled gexpr) -> 
+    //        if List.length ys <> List.length xs then
+    //            failwith "Variable count mismatch in composition."
+    //        else
+    //            // Create a substitution list by zipping f's variables with g's expressions
+    //            let substitution = List.zip xs gexpr
+    //            // Replace f's variables in its body with g's expressions
+    //            let composedBody = Expression.replace substitution (Tupled fx)
+    //            // Create a new function representing the composition
+    //            Fn.fxn (gn + " ∘ " + fn) ys composedBody
+
+        // Handle composition where both functions take single expressions as input
+        | IsFunctionExpr(fn, x, fx), IsFunctionExpr(gn, y, gy) -> 
+            Fn.fxn (gn + " ∘ " + fn) x (Expression.replaceWith fx y gy)
+   
+    //composition where 
+    let composeO1 g f =
+        match (f, g) with 
+        | IsFunctionExpr(Identifier (Symbol fnNameF), paramsF, bodyF), IsFunctionExpr(Identifier (Symbol fnNameG), paramsG, bodyG) ->
+            let substitution =
+                match paramsG, bodyF with
+                | Tupled ys, Tupled fs when List.length ys = List.length fs ->
+                    List.zip ys fs
+                | Tupled ys, _ when List.length ys = 1 ->
+                    [ (ys.Head, bodyF) ]
+                | _, _ ->
+                    [ (paramsG, bodyF) ]
+            let composedBody = Expression.replace substitution bodyG
+            Fn.fxn (fnNameG + " o " + fnNameF) paramsF composedBody
+        | _ -> failwith "Cannot compose the provided functions"
+
+    //let compose g f = 
+    //    match (f, g) with 
+    //    | IsFunctionExpr(fn, Tupled xs, Tupled fx), IsFunctionExpr(gn, Tupled ys, Tupled gexpr) ->  
+            
+    //    | IsFunctionExpr(fn, x, fx), IsFunctionExpr(gn, y, gy) -> 
+    //        Fn.fxn (gn + " o " + fn) x (Expression.replaceWith fx y gy)      
      
 module Ops =
     let max2 a b =
@@ -1483,8 +1559,7 @@ module Indices =
         let vs = Seq.toArray vals
         [for k in 0..vs.Length - 1 -> var.[(k+startIndex)], vs.[k]]
         |> Expression.replace
-
-//make a class that manages a freshvar state
+         
 ///FreshVar is a class that manages the generation of fresh variables which are strings of the form x_1, x_2, x_3, etc.
 /// Letter is the prefix of the variable name, e.g. x_1, x_2, x_3, etc.
 /// StartIndex is the number to start counting from, e.g. 0, 1, 2, etc.

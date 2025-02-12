@@ -1,0 +1,53 @@
+
+    interface INumberBase<Complex> with  
+        static member Zero = Complex(0Q, 0Q)
+        static member One = Complex(1Q, 0Q)
+        static member Radix = 10
+        static member Abs (value: Complex): Complex =  Complex.Abs value
+        static member IsComplexNumber (value: Complex): bool = true
+        static member IsInteger (value: Complex): bool = false
+        static member IsEvenInteger (value: Complex): bool = false
+        static member IsOddInteger (value: Complex): bool = false
+        static member IsNegative (value: Complex): bool = false
+        static member IsPositive (value: Complex): bool = false
+        
+        static member Parse (s: System.ReadOnlySpan<char>, style: System.Globalization.NumberStyles, provider: System.IFormatProvider): Complex = 
+            raise (System.NotImplementedException())
+        static member Parse (s: string, provider: System.IFormatProvider): Complex = 
+            raise (System.NotImplementedException()) 
+
+        static member TryParse (s: string, provider: System.IFormatProvider, result: byref<Complex>): bool = 
+                raise (System.NotImplementedException())
+
+        static member MaxMagnitude (x: Complex, y: Complex): Complex =
+             failwith "Cannot compare complex numbers by magnitude as expressions may contain variables."
+        static member MinMagnitude (x: Complex, y: Complex): Complex =
+            failwith "Cannot compare complex numbers by magnitude as expressions may contain variables."
+        static member MaxMagnitudeNumber (x: Complex, y: Complex): Complex = 
+            failwith "Cannot compare complex numbers by magnitude as expressions may contain variables."
+        static member MinMagnitudeNumber (x: Complex, y: Complex): Complex =
+            failwith "Cannot compare complex numbers by magnitude as expressions may contain variables."
+
+        static member IsNaN (value: Complex): bool = value.Real.IsNaN || value.Imaginary.IsNaN
+
+        static member IsInfinity (value: Complex): bool =
+            Operators.isInfinity value.Real || Operators.isInfinity value.Imaginary
+        static member IsZero (value: Complex): bool = value = Complex.Zero
+
+        static member IsCanonical (value: Complex): bool =
+            let simplified = value.Simplify()
+            simplified = value
+        static member IsNegativeInfinity (value: Complex): bool =
+            Operators.isNegativeInfinity value.Real || Operators.isNegativeInfinity value.Imaginary
+
+        static member IsPositiveInfinity (value: Complex): bool =
+            Operators.isPositiveInfinity value.Real || Operators.isPositiveInfinity value.Imaginary
+
+        static member IsFinite (value: Complex): bool =  
+            not(Operators.isInfinity value.Real || Operators.isInfinity value.Imaginary)
+        static member IsRealNumber (value: Complex): bool = value.Imaginary = 0Q
+        static member IsImaginaryNumber (value: Complex): bool = 
+            value.Real = 0Q 
+        static member IsNormal (value: Complex): bool =
+            not (Complex.IsZero value) && not (Complex.IsNaN value) && not (Complex.IsInfinity value)
+        static member IsSubnormal (value: Complex): bool = false

@@ -251,7 +251,8 @@ type FuncType =
         | Function f -> string f
         | Identity -> "id"
 
-module Func =
+[<RequireQualifiedAccess>]
+module Fn =
     ///Create a function symbol with name and parameter symbol `x`: fn "g" y = `g(y)`
     let fn name x = FunctionN(Function.Func, [Operators.symbol name;x])
     ///Create a function symbol with default name "f": fx y = `f(y)`
@@ -260,6 +261,21 @@ module Func =
     let fx2 x expr = FunctionN(Function.Func, [Operators.symbol "f";x; expr])
     ///Create a function with parameter, body and name : fxn "g" x x^2 = `x |-> x^2`
     let fxn name x expr = FunctionN(Function.Func, [Operators.symbol name;x; expr])
+
+ 
+type Fn() =
+    ///Create a function symbol with name and parameter symbol `x`: fn "g" y = `g(y)`
+    static member fx(name, x) = FunctionN(Function.Func, [Operators.symbol name;x])
+    static member fx(xs: Expression list, expr) = 
+        FunctionN(Function.Func, [Operators.symbol "f"; Tupled xs; expr]) 
+    static member fx(name, xs:Expression list, expr:Expression) = 
+        FunctionN(Function.Func, [Operators.symbol name; Tupled xs; expr]) 
+    ///Create a function symbol with default name "f": fx y = `f(y)`
+    static member fx x = FunctionN(Function.Func, [Operators.symbol "f";x])
+    ///Create a function with parameter, body and default name "f": fx x x^2 = `x |-> x^2`
+    static member fx(x, expr) = FunctionN(Function.Func, [Operators.symbol "f";x; expr])
+    ///Create a function with parameter, body and name : fx "g" x x^2 = `x |-> x^2`
+    static member fx(name, x, expr) = FunctionN(Function.Func, [Operators.symbol name;x; expr])
 
 let grad0 x = FunctionN(Gradient, [x])
 
@@ -337,6 +353,10 @@ let (^) a b = super a b
 
 let define a b = Definition(a,b, "")
 
+open type Fn
+let q = symbol "q"
+let qq = fx (tuple[q;q], q + q)
+
 ///Define with left, right and description
 let defineStr def = Definition def
 
@@ -393,14 +413,55 @@ module Hold =
         | x -> x
   
 module Tuples =
-    let cartesianProduct (a:Expression) (b:Expression) =
-        match a, b with
-        | Tupled l1, Tupled l2 ->
+    /// <summary>
+    /// Computes the Cartesian product of two expressions, handling both tupled and non-tupled inputs.
+    /// </summary>
+    /// <param name="a">First expression (can be a tuple or single value)</param>
+    /// <param name="b">Second expression (can be a tuple or single value)</param>
+    /// <returns>A tupled expression containing all possible pairs from inputs</returns>
+    /// <remarks>
+    /// Handles four cases:
+    /// 1. (a₁,a₂) × (b₁,b₂) → ((a₁,b₁),(a₁,b₂),(a₂,b₁),(a₂,b₂))
+    /// 2. (a₁,a₂) × b → ((a₁,b),(a₂,b))
+    /// 3. a × (b₁,b₂) → ((a,b₁),(a,b₂))
+    /// 4. a × b → (a,b)
+    /// 
+    /// Examples:
+    /// - cartesianProduct (tuple [x;y]) (tuple [1;2]) = tuple [(x,1);(x,2);(y,1);(y,2)]
+    /// - cartesianProduct (tuple [x;y]) z = tuple [(x,z);(y,z)]
+    /// - cartesianProduct x (tuple [1;2]) = tuple [(x,1);(x,2)]
+    /// - cartesianProduct x y = tuple [x;y]
+    /// </remarks> 
+    let cartesianProduct (a:Expression) (b:Expression) = 
+        let inline product l1 l2 = 
             List.product l1 l2
-            |> List.map (fun (a,b) -> a * b)
+            |> List.map (fun (a,b) -> tuple [a;b])
             |> tuple
-        | _ -> a*b
-
+        match a, b with
+        | Tupled l1, Tupled l2 -> product l1 l2
+        | Tupled l1, b -> product l1 [b]
+        | a, Tupled l2 -> product [a] l2
+        | _ -> tuple [a;b]
+                
+    /// <summary>
+    /// Combines two expressions into a single tupled expression, handling both tupled and non-tupled inputs.
+    /// </summary>
+    /// <param name="a">First expression (can be a tuple or single value)</param>
+    /// <param name="b">Second expression (can be a tuple or single value)</param>
+    /// <returns>A tupled expression containing all elements from both inputs in sequence</returns>
+    /// <remarks>
+    /// Handles four cases:
+    /// 1. (a₁,a₂) ⊕ (b₁,b₂) → (a₁,a₂,b₁,b₂)
+    /// 2. (a₁,a₂) ⊕ b → (a₁,a₂,b)
+    /// 3. a ⊕ (b₁,b₂) → (a,b₁,b₂)
+    /// 4. a ⊕ b → (a,b)
+    /// 
+    /// Examples:
+    /// - combine (tuple [x;y]) (tuple [1;2]) = tuple [x;y;1;2]
+    /// - combine (tuple [x;y]) z = tuple [x;y;z]
+    /// - combine x (tuple [1;2]) = tuple [x;1;2]
+    /// - combine x y = tuple [x;y]
+    /// </remarks>
     let combine (a:Expression) (b:Expression) =
         match a, b with
         | Tupled l1, Tupled l2 ->
@@ -408,14 +469,31 @@ module Tuples =
         | Tupled l1, b -> 
             Tupled (l1 @ [b])
         | a, Tupled l2 ->
-            Tupled (a::l2)
-        | _ -> Tupled [a;b] 
-    
-
-
-
+            Tupled (a::l2) 
+        | _ -> Tupled [a;b]
+         
 //========================
-let (|IsFunctionExpr|_|) = function
+
+/// <summary>
+/// Active pattern that matches function expressions and extracts the function and argument information.
+/// </summary>
+/// <remarks>
+/// This pattern matches expressions of the form:
+/// - FunctionN(Func, [f;x;fx]) where:
+///   f is the function name/identifier
+///   x is the parameter(s)
+///   fx is the function body
+/// 
+/// Returns:
+/// - Some(f,x,fx) when matched
+/// - None when not a function expression
+/// 
+/// Examples:
+/// - f(x) = x + 1 matches as Some(f, x, x+1)
+/// - f(x,y) = x*y matches as Some(f, (x,y), x*y) 
+/// - 2+2 returns None
+/// </remarks>
+let (|IsFunctionExpr|_|) = function 
     | FunctionN(Func, [ f;x; fx ]) -> Some(f,x,fx)
     | _ -> None
 
@@ -577,7 +655,25 @@ let (|IsSealed|_|) input =
 
 //========================
   
-///checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth
+//checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth
+
+/// <summary>
+/// Generalizes derivative operations by handling nested derivatives and combining them.
+/// </summary>
+/// <param name="D">The derivative operation function (either diff or pdiff)</param>
+/// <param name="expr">The expression to differentiate</param>
+/// <returns>The simplified derivative expression</returns>
+/// <remarks>
+/// This function handles three cases:
+/// 1. Simple derivatives: Applies the derivative operation directly
+/// 2. Nested derivatives with same variable: Combines into nth derivative
+/// 3. Nth derivatives with same variable: Increments the order
+/// 
+/// Examples:
+/// - d/dx(d/dx(f)) -> d²f/dx²
+/// - d/dx(d²f/dx²) -> d³f/dx³
+/// - ∂/∂x(∂f/∂x) -> ∂²f/∂x²
+/// </remarks>
 let gdiffn1 D expr =
     match D expr with 
     | IsDerivative(_, _, dxOuter) ->  

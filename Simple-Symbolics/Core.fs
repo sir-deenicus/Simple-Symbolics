@@ -899,17 +899,16 @@ module Expression =
             let expressionListSet = Hashset expressionList
             if expressionToFindContentSet.IsSubsetOf expressionListSet then
                 expressionListSet.SymmetricExceptWith expressionToFindContentSet
-                replacement :: List.ofSeq expressionListSet
+                replacement expressionToFind :: List.ofSeq expressionListSet
             else expressionList
 
         let expressionToFindContentSet = Hashset(Structure.toList expressionToFind)
 
         let rec iterReplaceIn =
             function
-            | Identifier _ as var when var = expressionToFind -> replacement
+            | Identifier _ as var when var = expressionToFind -> replacement var
             | FunctionN _ | Power _ | Function _ | Number _ | Approximation _ | Constant _ as expr
-                when expr = expressionToFind ->
-                    replacement
+                when expr = expressionToFind -> replacement expr
             | Id (x,strtag) -> Id (iterReplaceIn x,strtag)
             | Definition(a,b, _) -> Definition(iterReplaceIn a, iterReplaceIn b, "")
             | Generic(a,ty) -> Generic(iterReplaceIn a, ty)
@@ -932,15 +931,17 @@ module Expression =
         let newexpr = iterReplaceIn (simplifyLite formula)
         if autosimplify then simplify newexpr else newexpr
 
-    let replaceWith replacement expressionToFind formula =
-        replaceWithAux true replacement expressionToFind formula
+    let replaceWith replacement expressionToReplace formula =
+        replaceWithAux true replacement expressionToReplace formula
 
-    let replace expressionsToFind formula =
+    let replaceFn expressionsToReplace formula =
         let rec loop f =
             function
             | [] -> f
             | (x,replacement)::xs -> loop (replaceWith replacement x f) xs
-        loop formula expressionsToFind  
+        loop formula expressionsToReplace 
+
+    let replace expressionsToFind formula = replaceFn (List.map (fun (e, r) -> e, konst r) expressionsToFind) formula
 
     let replaceNoSimplify expressionsToFind formula =
         let rec loop f =
@@ -1014,8 +1015,9 @@ module Expression =
         | x -> Some x
 
     let remove x f =
-        let placeholder = Operators.symbol "__PLACE_HOLDER__"
-        let replaced = replaceWith placeholder x f
+        let placeholder = Operators.symbol "!__PLACE_HOLDER__!"
+        //let replaced = replaceWith placeholder x f
+        let replaced = replaceWith (konst placeholder) x f
         removeSymbol placeholder replaced
 
     let rec findVariables =
@@ -1404,7 +1406,7 @@ module Fn =
     ///toFnMV <see cref="M:MathNet.Symbolics.Core.toFnMV"/>
     let toFn f =
         match f with
-        | IsFunctionExpr (_, xvar, fx) -> fun x -> Expression.replaceWith x xvar fx
+        | IsFunctionExpr (_, xvar, fx) -> fun x -> Expression.replaceWith (konst x) xvar fx
         | IsFunctionExpr (_, Tupled vars, fx) ->
             function
             | (Tupled xs) -> Expression.replace (List.zip vars xs) fx
@@ -1440,7 +1442,7 @@ module Fn =
                     
         | IsFunctionExpr(Identifier (Symbol fn), x, fx), IsFunctionExpr(Identifier (Symbol gn), y, gy) -> 
             // Simple case - substitute f's output into g's input
-            Fn.fxn (gn + " o " + fn) x (Expression.replaceWith fx y gy)
+            Fn.fxn (gn + " o " + fn) x (Expression.replaceWith (konst fx) y gy)
                 
         | _ -> failwith "Both arguments must be functions"
 
@@ -1470,7 +1472,7 @@ module Fn =
 
         // Handle composition where both functions take single expressions as input
         | IsFunctionExpr(fn, x, fx), IsFunctionExpr(gn, y, gy) -> 
-            Fn.fxn (gn + " ∘ " + fn) x (Expression.replaceWith fx y gy)
+            Fn.fxn (gn + " ∘ " + fn) x (Expression.replaceWith (konst fx) y gy)
    
     //composition where 
     let composeO1 g f =

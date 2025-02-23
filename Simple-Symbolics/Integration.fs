@@ -196,14 +196,14 @@ let evalDefiniteIntegral =
     | IsDefiniteIntegral(f, dx,a,b) as fn -> 
         match integratePartialRes dx f with
         | (_, false) -> fn
-        | (e, true) -> Expression.replaceWith b dx e - Expression.replaceWith a dx e
+        | (e, true) -> Expression.replaceWith (konst b) dx e - Expression.replaceWith (konst a) dx e
     | f -> f 
  
 let evalDefiniteIntegralUsing integrator = function
     | IsDefiniteIntegral(f, dx,a,b) as fn ->
         match integrator f with
             | IsIntegral _ -> fn
-            | e -> Expression.replaceWith b dx e - Expression.replaceWith a dx e
+            | e -> Expression.replaceWith (konst b) dx e - Expression.replaceWith (konst a) dx e
     | f -> f
     
 let rec integrateByParts2 order expr = 
@@ -581,7 +581,7 @@ module Riemann =
             let deltax = (b - a) / n
             let x_i = a + deltax * i
 
-            summation i 1Q n (deltax * Expression.replaceWith x_i dx f)
+            summation i 1Q n (deltax * Expression.replaceWith (konst x_i) dx f)
             |> limit n Symbolics.Operators.infinity 
         | _ -> undefined
          

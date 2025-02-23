@@ -178,7 +178,10 @@ let statsQuery =
         | [] ->  
             printfn "No dice combination found"
             Dice(0,0,0)
-        | (dice,rolls,bonus,_,_)::_ -> Dice(rolls,dice,bonus))
+        | ((dice,rolls,bonus,_,_)::_) as diceresults -> 
+            List.iter (fun (dice,rolls,bonus,_,_) -> 
+                printfn $"Found: {rolls}d{dice}+{bonus}") diceresults
+            Dice(rolls,dice,bonus))
 
 // Modify factor to include statsQuery
 let factor = parens <|> statsQuery <|> diceOrNumber 

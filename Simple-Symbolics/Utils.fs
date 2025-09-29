@@ -653,6 +653,11 @@ let (|IsSealed|_|) input =
     | Id(x,_) -> Some(x)
     | _ -> None
 
+let (|IsPower|_|) input = 
+    match input with
+    | Power(x,n) -> Some(x,n)
+    | _ -> None
+
 //========================
   
 //checks if is derivative or nth derivative already, if nth make nth+1, if not wrap, if derivative make nth

@@ -447,6 +447,18 @@ module Structure =
             FunctionN(fn, List.map fx xs)
         | x -> x
 
+    let mapPower fx fe = function
+        | Power(x,n) -> Power(fx x, fe n)
+        | x -> x
+
+    let mapPowerExponent f = function 
+        | Power(x,n) -> Power(x, f n)
+        | x -> x
+    
+    let mapPowerBase f = function 
+        | Power(x,n) -> Power(f x, n)
+        | x -> x 
+
     let internal filterApply fx filter x = if filter x then fx x else x
 
     let rec recursiveMapFilter filter fx =
@@ -710,6 +722,21 @@ module Expression =
         | Power(_, Number n) -> n < 0N
         | _ -> false
 
+    let isPower =
+        function
+        | Power(_, _) -> true
+        | _ -> false
+
+    let isPowerWithBase f =
+        function
+        | Power(x, _) when f x -> true
+        | _ -> false
+
+    let isPowerWithExponent f =
+        function
+        | Power(_, y) when f y -> true
+        | _ -> false
+
     let isNaN = function 
         | Approximation (Real r) -> Double.IsNaN r
         | _ -> false
@@ -943,12 +970,14 @@ module Expression =
 
     let replace expressionsToFind formula = replaceFn (List.map (fun (e, r) -> e, konst r) expressionsToFind) formula
 
-    let replaceNoSimplify expressionsToFind formula =
+    let replaceNoSimplifyFn expressionsToFind formula =
         let rec loop f =
             function
             | [] -> f
             | (x,replacement)::xs -> loop (replaceWithAux false replacement x f) xs
         loop formula expressionsToFind
+
+    let replaceNoSimplify expressionsToFind formula = replaceNoSimplifyFn (List.map (fun (e, r) -> e, konst r) expressionsToFind) formula
 
     let contains expressionToFind formula =
         let tryFindCompoundExpression (expressionToFindContentSet : Hashset<_>)

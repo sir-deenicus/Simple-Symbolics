@@ -144,7 +144,6 @@ let quarticSolve (coeffs: Expression[]) =
         [| x1; x2; x3; x4 |] |> Array.map Complex.ofNumericsComplex
 
 
-
 module Polynomial =
     //Sometimes there might be rational coefficients. So multiply by denominators to get out integers.
     ///Returns Least Common multiple of denominator coefficients and polynomial with integer coefficients from multiplying by lcm

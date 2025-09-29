@@ -613,6 +613,15 @@ type UnitsExpr =
     static member (~-) (a:UnitsExpr) = Neg a
 
 module UnitsExpr =
+
+    module Vars =
+        let a = Var "a"
+        let b = Var "b"
+        let c = Var "c"
+        //...
+        let x = Var "x"
+        let y = Var "y"
+        let z = Var "z"
     let rec eval (env:seq<string*Units>) (e:UnitsExpr) =
         let env = dict env
         let rec eval e =

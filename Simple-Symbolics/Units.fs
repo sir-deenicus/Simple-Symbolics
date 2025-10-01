@@ -344,6 +344,7 @@ let units =
         hr, "Time"
         years, "Time"
         weeks, "Time"
+        months, "Time"
         days, "Time"
         sec, "Time"
         gram, "mass"
@@ -389,7 +390,7 @@ let toUnitQuantityValue (a : Units) (b : Units) =
 
 let getUnitQuantity (u:Units) = u.Quantity
 
-let tounits =  toUnitQuantityValue
+let tounits = toUnitQuantityValue
 
 let toUnitsN units x =
     let rec iterate x converted = function
@@ -406,7 +407,7 @@ let toUnitsN units x =
 
 let toUnits2 major minor x = toUnitsN [major;minor] x
 
-let simplifyUnitDescAux numsimplify (u : Units) =
+let simplifyUnitDescAux suppressDesc numsimplify (u : Units) =
     let dollar() = if expressionFormat = InfixFormat then "$" else " \\$"
     
     let fmtString n (e : Expression) =
@@ -417,7 +418,7 @@ let simplifyUnitDescAux numsimplify (u : Units) =
     let trysimplify (u : Units) = 
         let uop, adjustedunit, adjustingunit, shorterUnit, _ =
             mostSimilarUnit u |> List.head
-
+             
         let fixedunit =
             if uop.[0] = '*' then
                 toUnitQuantityValue (Units(1Q, adjustedunit) * adjustingunit) u
@@ -426,21 +427,21 @@ let simplifyUnitDescAux numsimplify (u : Units) =
         let adjdesc = trylookupUnit adjustedunit
 
         let desc =
-            if adjdesc = "" then ""
+            if adjdesc = "" || suppressDesc then ""
             else space() + "(" + adjdesc + space() + uop + ")"
         fmt (numsimplify (Expression.simplify fixedunit)), shorterUnit, desc    
     
     if u.Unit = usd.Unit then 
         let amount = tounits usd u   
         let stramnt = fmtString 2 amount
-        let r = dollar() + stramnt + " (Currency)" 
+        let r = dollar() + stramnt + if suppressDesc then "" else " (Currency)" 
         r.Replace(" ", space())
     else 
         let matched =
             List.filter (fun (um : Units, _) -> u.Unit = um.Unit) units
             |> List.map (fun (u', t) ->
                    let s, len = Units.To(u, u') |> Option.get
-                   len, s + space() + "(" + t + ")")
+                   len, s + if suppressDesc then "" else space() + "(" + t + ")")
 
         match matched with
         | [] ->
@@ -452,7 +453,7 @@ let simplifyUnitDescAux numsimplify (u : Units) =
             else u.ToString()
         | l -> l |> List.minBy fst |> snd
 
-let simplifyUnitDesc (u : Units) = simplifyUnitDescAux (Rational.simplifyNumbers 3) u
+let simplifyUnitDesc (u : Units) = simplifyUnitDescAux false (Rational.simplifyNumbers 3) u
 
 let rec replace (defs : seq<Expression * Units>) e =
     let map = dict defs

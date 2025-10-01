@@ -11,6 +11,28 @@ open MathNet.Symbolics.Core.Vars
 open MathNet.Symbolics.Utils
 open FParsec
 open MathNet.Symbolics.NumberProperties
+open System.Collections.Generic
+open System.Net.Http
+open System.Text.Json
+
+/// <summary>
+/// Synchronously fetches the latest exchange rates from USD and returns them
+/// as a Dictionary. This function blocks until the network request completes.
+/// </summary>
+let getUsdExchangeRates () : Dictionary<string, float> =
+    let url = "https://open.er-api.com/v6/latest/USD"
+    try
+        printfn "Downloading exchange rates. Please wait..."
+        use client = new HttpClient()
+        client.Timeout <- TimeSpan.FromSeconds(3.0) // Set timeout here
+        let jsonString = client.GetStringAsync(url).Result
+        use jsonDoc = JsonDocument.Parse(jsonString)
+        let ratesProperty = jsonDoc.RootElement.GetProperty("rates")
+        ratesProperty.Deserialize<Dictionary<string, float>>()
+    with
+    | ex ->
+        printfn "An error occurred: %s" ex.Message
+        new Dictionary<string, float>()
 
 let depluralize (s: string) : string =
     // Basic canonicalization: widgets -> widget, meters -> meter, bytes -> byte, parties -> party
@@ -36,6 +58,7 @@ type PhysicsUnits =
     | Energy
     | Volume
     | Information
+    | Currency
     | Unitless
 
 type UnitTypes =
@@ -47,6 +70,7 @@ type UnitTypes =
     | L
     | N
     | J
+    | USD
     | Bits
     | Unitless
     | Custom of string
@@ -61,6 +85,7 @@ type UnitTypes =
         | L -> "L"
         | N -> "N"
         | J -> "J"
+        | USD -> "usd"
         | Bits -> "bits"
         | Unitless -> "unitless"
         | Custom s -> s
@@ -88,6 +113,13 @@ type UnitExpr =
 
 let seenCustomUnits = Hashset()
 
+let usdExchangeRates = getUsdExchangeRates () 
+ 
+let tryGetCurrencyExchangeValue (target:string) =
+    match usdExchangeRates.TryGetValue(target.ToUpperInvariant()) with
+    | true, rate -> 1Q/Expression.fromDecimal(decimal rate)
+    | _ -> Operators.undefined
+
 let basicUnitTypeToUnit =
     function
     | UnitTypes.M -> Units.meter
@@ -98,6 +130,7 @@ let basicUnitTypeToUnit =
     | UnitTypes.L -> Units.liter
     | UnitTypes.N -> Units.N
     | UnitTypes.J -> Units.J
+    | UnitTypes.USD -> Units.usd
     | UnitTypes.Bits -> Units.bits
     | UnitTypes.Custom s ->
         seenCustomUnits.Add(depluralize s) |> ignore
@@ -142,6 +175,7 @@ let unitTypesToPhysicsUnits =
     | UnitExpr.BasicUnit J -> Energy
     | UnitExpr.BasicUnit Bits -> Information
     | UnitExpr.Power(UnitExpr.BasicUnit M, 3) -> Volume
+    | UnitExpr.BasicUnit USD -> Currency
     | UnitExpr.BasicUnit Unitless -> PhysicsUnits.Unitless
     | _ -> failwith "unit type not supported"
 
@@ -150,6 +184,7 @@ type Expr =
     | Number of Expression
     | UnitExpr of Expr * UnitExpr
     | ForcedUnitOutput of Expr * UnitExpr
+    | ForcedCompoundUnitOutput of Expr * UnitExpr list 
     | DefineUnit of string
     | Add of Expr * Expr
     | Subtract of Expr * Expr
@@ -182,6 +217,7 @@ let unitStrings =
       "liter", L
       "bits", Bits
       "joules", J
+      "usd", USD
       "lb", LB
       "ft", Ft
       "J", J
@@ -192,6 +228,13 @@ let unitStrings =
       "B", Bits
       "N", N ]
 
+let unitStringsLookUp =
+    unitStrings
+    |> List.rev
+    |> List.map (swap >> Pair.applyToLeft UnitExpr.BasicUnit)
+    |> dict
+    |> Dict
+
 let basicScaledUnit =
     [ "bytes", (8Q, Bits)
       "byte", (8Q, Bits)
@@ -201,7 +244,32 @@ let basicScaledUnit =
       "minutes", (60Q, S)
       "minute", (60Q, S)
       "hour", (3600Q, S)
+      "day", (3600Q * 24, S)
+      "week", (3600Q * 24 * 7, S)
+      "month", (30.436875 * 24Q * 3600, S)
+      "yr", (365.2425 * 24Q * 3600, S)
+      "year", (365.2425 * 24Q * 3600, S)
+      "ngn", (tryGetCurrencyExchangeValue "NGN", USD) 
+      "gbp", (tryGetCurrencyExchangeValue "GBP", USD)
+      "eur", (tryGetCurrencyExchangeValue "EUR", USD)
+      "jpy", (tryGetCurrencyExchangeValue "JPY", USD)
       "mm", (1 / 1000Q, M) ]
+
+let currencyCodeToSymbol = function 
+    | "usd" -> "$"
+    | "eur" -> "€"
+    | "gbp" -> "£"
+    | "jpy" -> "¥"
+    | "ngn" -> "₦"
+    | code -> code 
+
+let scaledUnitLookUp = 
+    basicScaledUnit 
+    |> List.map (fun (lbl, (scale, baseunit)) -> 
+        UnitExpr.Scale(scale, UnitExpr.BasicUnit baseunit), lbl) 
+    |> Dict.ofSeq
+
+scaledUnitLookUp.MergeWith(konst, unitStringsLookUp)
 
 let allUnits =
     let postfix =
@@ -214,11 +282,13 @@ let allUnits =
               yield prefix + depluralize s, UnitExpr.Scale(num, u).Simplify() ]
 
 let knownUnits = Dict.ofSeq allUnits
-
+ 
 // let defineUnitParser =
 //     pstring "defunit:" >>. ws >>. many1Satisfy isLetter |>> DefineUnit
 
 let ws = manySatisfy (fun c -> c = ' ' || c = '\t')
+
+let ws1 : Parser<string,unit> = many1Satisfy (fun c -> c = ' ' || c = '\t')
 
 let str_ws s = pstring s >>. ws
  
@@ -331,7 +401,8 @@ let numberWithUnit =
  
 let simpleNumberWithCustomUnit: Parser<_, unit> =
     pipe2
-        (simpleNumber .>> spaces) // Parse a floating-point number followed by optional spaces
+        //(simpleNumber .>> spaces) // Parse a floating-point number followed by optional spaces
+        (simpleNumber .>> ws)   // was .>> spaces (spaces eats newlines)
         (many1SatisfyL isLetter "custom unit") // Parse one or more letters
         (fun num unit ->
             let key = depluralize unit
@@ -472,9 +543,19 @@ let term =
 // Parser for unit output specification
 let unitOutputParser = str_ws ":" >>. unitExpr
 
+// let compoundUnitParser : Parser<UnitExpr list, unit> =
+//     sepBy1 unitExpr ws1 
+
+let compoundUnitParser : Parser<UnitExpr list, unit> =
+    pipe2 
+        (unitExpr .>> ws1)           // first unit followed by required whitespace
+        (sepBy1 unitExpr ws1)        // one or more additional units
+        (fun first rest -> first::rest)
+
 // OUTPUT MODIFIER (unit | float | eng [n])
 type OutputModifier =
     | UnitMod of UnitExpr
+    | CompoundUnitMod of UnitExpr list 
     | FloatMod
     | EngMod of int option
 
@@ -485,10 +566,17 @@ let engModifier =
     >>. opt (ws >>. pint32)
     |>> EngMod
 
+// let outputModifierParser : Parser<OutputModifier, unit> =
+//     str_ws ":" >>.
+//         (attempt floatModifier
+//          <|> attempt engModifier
+//          <|> (unitExpr |>> UnitMod))
+
 let outputModifierParser : Parser<OutputModifier, unit> =
     str_ws ":" >>.
         (attempt floatModifier
          <|> attempt engModifier
+         <|> attempt (compoundUnitParser |>> CompoundUnitMod)  // try compound first
          <|> (unitExpr |>> UnitMod))
 
 let opApply op a b = op (a, b)
@@ -512,6 +600,7 @@ do
         match modifierOpt with
         | None -> e
         | Some (UnitMod u) -> ForcedUnitOutput(e, u)
+        | Some (CompoundUnitMod units) -> ForcedCompoundUnitOutput(e, units) 
         | Some FloatMod -> FormatFloat e
         | Some (EngMod n) -> FormatToEnglish(e, n))
 //let mutilineExpr = sepBy expr newline
@@ -560,15 +649,74 @@ let pow10ToPrefix n =
     | i when i = -9I -> Some "nano"
     | i when i = -12I -> Some "pico"
     | _ -> None
+ 
+let toCompoundUnits (targetUnitExprs: UnitExpr list) (x: Units.Units) : (Expression * string) list =
+    let rec iterate x converted = function
+        | [] -> List.rev converted
+        | unitExpr:UnitExpr::rest ->
+            let targetUnit : Units.Units = unitExprToUnits (unitExpr.Simplify()) 
+            let label = 
+                match scaledUnitLookUp.TryGetValue(unitExpr.Simplify()) with
+                | true, lbl -> lbl
+                | false, _ -> 
+                    // Fallback: use the UnitExpr's string representation
+                    match unitExpr with
+                    | UnitExpr.BasicUnit ut -> ut.ToString()
+                    | UnitExpr.Scale(_, UnitExpr.BasicUnit ut) -> ut.ToString()
+                    | _ -> targetUnit.AltUnit
+            
+            printfn "%A" targetUnit
+            printfn "%A" label 
 
+            // Calculate how many of this unit fit
+            let qty = Units.tounits targetUnit x
+            printfn "%A" qty
+            match Expression.toRational qty with 
+            | Some qtyRat -> 
+                // Get the integer part (major component)
+                let majorQty = BigRational.FromBigInt (BigRational.floor qtyRat) 
+                let remainder = Expression.FromRational (qtyRat - majorQty) * targetUnit
+                
+                iterate remainder ((Expression.FromRational majorQty, label)::converted) rest
+            | None -> 
+                match qty with
+                | Approximation (Real r) ->
+                    let majorQty = Math.Floor r
+                    let remainder = ofFloat (r - majorQty) * targetUnit
+                    iterate remainder ((ofFloat majorQty, label)::converted) rest
+                | _ -> []
+    
+    iterate x [] targetUnitExprs
+
+      
 type ExpressionChoice =
     | NoExpression
     | UnitExpression of Units.UnitsExpr
     | ForcedUnitExpression of Units.UnitsExpr * UnitExpr
+    | ForcedUnitCompoundExpr of Units.UnitsExpr * UnitExpr list
     | PureExpression of MathNet.Symbolics.Expression
     | String of string
 
     member this.PrettyPrint() =
+        let prettifyCompoundUnits (values: (Expression * string) list) : string =
+            values
+            |> List.filter (fun (qty, _) ->          
+                match qty with
+                | Expression.Number n when n <> 0N -> true
+                | Approximation (Real r) when abs r > 1e-10 -> true
+                | _ -> false)
+            |> List.map (fun (qty, unitStr) ->
+                let qtyStr = 
+                    match qty with
+                    | Expression.Number n when n.IsInteger ->
+                        let i = BigRational.ToBigInt n
+                        i.ToString()
+                    | Expression.Number n -> fmt (Rational.round 3 n)
+                    | Approximation (Real r) -> sprintf "%.3f" r
+                    | _ -> fmt qty
+                sprintf "%s %s" qtyStr unitStr)
+            |> String.concat ", "
+            
         let prettifyUnits (u: Units.Units) =
             match u.Quantity with
             | Expression.Number n when n = 1N -> fmt u.Unit
@@ -590,12 +738,34 @@ type ExpressionChoice =
         match this with
         | NoExpression -> ""
         | UnitExpression u -> Units.UnitsExpr.eval [] u |> Units.simplifyUnitDesc
+        | ForcedUnitCompoundExpr(unitexpr, tounitexprs) -> 
+            let e = Units.UnitsExpr.eval [] unitexpr 
+            let results = toCompoundUnits tounitexprs e   
+            // Format as "X unit1, Y unit2, Z unit3" 
+            let formatted = prettifyCompoundUnits results  
+            if formatted = "" then "0"
+            else formatted
         | ForcedUnitExpression(unitexpr, tounitexpr) ->
             let e = Units.UnitsExpr.eval [] unitexpr
-            let asUnit = unitExprToUnits (tounitexpr.Simplify())
-
-            match (Units.toUnitQuantity asUnit e, tounitexpr) with
+            let asUnit = unitExprToUnits (tounitexpr.Simplify()) 
+            match Units.toUnitQuantity asUnit e, tounitexpr with
+            | Some q, UnitExpr.BasicUnit USD ->
+                let qf = Expression.forceToFloat q
+                let qfstr =  
+                    if absf qf <= 0.01 then Prelude.Math.significantFiguresStr 2 qf 
+                    else qf.ToString("N2", Globalization.CultureInfo.InvariantCulture)
+                "$" + qfstr 
             | Some q, UnitExpr.BasicUnit u -> $"{fmt q} {u} ({unitTypesToPhysicsUnits (UnitExpr.BasicUnit u)})"
+            | Some q, (UnitExpr.Scale(_, UnitExpr.BasicUnit USD) as currscale) -> 
+                let qfstr = 
+                    let qf = Expression.forceToFloat q 
+                    if absf qf <= 0.01 then Prelude.Math.significantFiguresStr 2 qf 
+                    else qf.ToString("N2", Globalization.CultureInfo.InvariantCulture)
+                let currlbl = 
+                    match scaledUnitLookUp.TryGetValue currscale with
+                    | true, lbl -> lbl
+                    | false, _ -> "usd" 
+                $"""{currencyCodeToSymbol currlbl}{qfstr}"""
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit u) when n = 1 / 100Q ->
                 $"{fmt q} c{u} ({basicUnitToPhysicsTerm u})"
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit u) when n = 1000Q ->
@@ -603,9 +773,7 @@ type ExpressionChoice =
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit u) when n = 1 / 1000Q ->
                 $"{fmt q} m{u} ({basicUnitToPhysicsTerm u})"
             | Some q, UnitExpr.Scale(n, UnitExpr.BasicUnit Ft) when n = 1 / 12Q -> $"{fmt q} in (length)"
-            | Some q, _ ->
-                printfn "%A" asUnit
-                printfn "%A" (prettifyUnits asUnit)
+            | Some q, _ -> 
                 $"{fmt (Rational.simplifyNumbers 3 q)} {prettifyUnits asUnit}"
             | _ -> "invalid unit conversion"
         | PureExpression e -> fmt e
@@ -664,6 +832,7 @@ let eval =
         seenCustomUnits.Add(depluralize s) |> ignore
         NoExpression
     | ForcedUnitOutput(e, u) -> ForcedUnitExpression(evalUnitExpr e, u)
+    | ForcedCompoundUnitOutput(e, us) -> ForcedUnitCompoundExpr(evalUnitExpr e, us)
     | FormatFloat _ as e -> 
         match evalExpr e with
         | Some v ->  
@@ -708,6 +877,7 @@ parse "1.8 m : cm" |> eval |> ExpressionChoice.PrettyPrint
 parse "1 kg : lb" |> eval |> ExpressionChoice.PrettyPrint
 parse "1 m : ft" |> eval |> ExpressionChoice.PrettyPrint
 parse "5 ft + 9 in : in" |> eval |> ExpressionChoice.PrettyPrint
+parse "5 ft + 9 in : m" |> eval |> ExpressionChoice.PrettyPrint
 parse "5 minutes / 2"
 parse "cos(x + y^2)"
 parse "(2 kilometer)"
@@ -744,6 +914,28 @@ parse "round(exp(5))" |> eval |> ExpressionChoice.PrettyPrint
 parse "round(exp(5), 3)" |> eval |> ExpressionChoice.PrettyPrint
 parse "1003303332345 : eng" |> eval |> ExpressionChoice.PrettyPrint
 parse "123433335 : eng 3" |> eval |> ExpressionChoice.PrettyPrint
+parse "27^(1/3):float" |> eval 
+
+parse "10 eur + 200 jpy : usd"
+|> eval
+|> ExpressionChoice.PrettyPrint
+
+
+parse "5 ft + 9 in : m" 
+|> eval 
+|> ExpressionChoice.PrettyPrint  
+
+parse "5 ft + 9 in : ft in" 
+|> eval 
+|> ExpressionChoice.PrettyPrint  
+
+parse "1.7 m : ft in" 
+|> eval 
+|> ExpressionChoice.PrettyPrint  
+
+parse "121312312 sec : yr month day" 
+|> eval 
+|> ExpressionChoice.PrettyPrint  
 
 // Simple assertion helpers
 let assertEqual name expected actual =
@@ -775,7 +967,7 @@ mparse """20 chapters / 8 episodes"""
 |> eval
 |> ExpressionChoice.PrettyPrint
 
-let exprs = mparse inputNL
+let exprs = mparse input
 
 let results = exprs |> List.map eval
 

@@ -146,7 +146,7 @@ let unitTypesToPhysicsUnits =
     | _ -> failwith "unit type not supported"
 
 // Define the expression type
-type Expr =
+type Expr = 
     | Number of Expression
     | UnitExpr of Expr * UnitExpr
     | ForcedUnitOutput of Expr * UnitExpr
@@ -159,10 +159,9 @@ type Expr =
     | Power of Expr * Expr
     | FunctionCall of string * Expr
     | Log of Expr * Expr
-
-let ws = manySatisfy (fun c -> c = ' ' || c = '\t')
-
-let str_ws s = pstring s >>. ws
+    | Round of Expr * int option              
+    | FormatFloat of Expr                     
+    | FormatToEnglish of Expr * int option   
 
 let unitPrefixes =
     [ "giga", Units.billion
@@ -216,9 +215,20 @@ let allUnits =
 
 let knownUnits = Dict.ofSeq allUnits
 
-let defineUnitParser =
-    pstring "defunit:" >>. ws >>. many1Satisfy isLetter |>> DefineUnit
+// let defineUnitParser =
+//     pstring "defunit:" >>. ws >>. many1Satisfy isLetter |>> DefineUnit
 
+let ws = manySatisfy (fun c -> c = ' ' || c = '\t')
+
+let str_ws s = pstring s >>. ws
+ 
+let defineUnitParser =
+    pstring "defunit:" >>. ws >>. many1Satisfy isLetter
+    |>> fun s ->
+        let key = depluralize s
+        seenCustomUnits.Add key |> ignore
+        DefineUnit key
+        
 // Parser for simple non-basic units
 let basicScaledUnitParser: Parser<UnitExpr, unit> =
     choice
@@ -318,17 +328,20 @@ let numberWithUnit =
         match unit with
         | Some u -> UnitExpr(num, u)
         | None -> num)
-
+ 
 let simpleNumberWithCustomUnit: Parser<_, unit> =
     pipe2
         (simpleNumber .>> spaces) // Parse a floating-point number followed by optional spaces
         (many1SatisfyL isLetter "custom unit") // Parse one or more letters
         (fun num unit ->
-            if knownUnits.ContainsKey(depluralize unit) then
-                UnitExpr(num, knownUnits[depluralize unit])
+            let key = depluralize unit
+            if knownUnits.ContainsKey key then
+                UnitExpr(num, knownUnits[key])
             else
-                UnitExpr(num, UnitExpr.BasicUnit(Custom(depluralize unit)))) // Combine the parsed number and unit into a tuple
-  
+                // register custom unit at parse time
+                seenCustomUnits.Add key |> ignore
+                UnitExpr(num, UnitExpr.BasicUnit(Custom key)))
+
 let standaloneUnitAsOne : Parser<Expr, unit> =
     // Try to interpret a bare word as an implicit 1 * unit.
     // If it isn't a known unit, fail normally so backtracking can occur.
@@ -393,13 +406,25 @@ let functionParser =
                   stringCIReturn name name >>. between (str_ws "(") (str_ws ")") expr
                   |>> fun arg -> FunctionCall(name, arg) ]
 
-///run functionParser "expand(5)"
+//run functionParser "expand(5)"
+
 let logParser =
     pstring "log" >>. str_ws "_" >>. (variableParser <|> simpleNumber)
     .>> str_ws "("
     .>>. expr
     .>> str_ws ")"
     |>> fun (base_, arg) -> Log(base_, arg)
+ 
+let roundParser : Parser<Expr, unit> =
+    let openParen  = str_ws "("
+    let closeParen = str_ws ")"
+    skipStringCI "round"
+    >>. openParen
+    >>. pipe2
+            (expr .>> ws)                                   // inner expression
+            (opt (pchar ',' >>. ws >>. pint32 .>> ws))      // optional , precision
+            (fun e precision -> Round(e, precision))
+    .>> closeParen
 
 // Parse parentheses with an optional unit
 let parens =
@@ -411,6 +436,7 @@ let parens =
 let choices: Parser<Expr, unit> =
     choice
         [ attempt defineUnitParser
+          attempt roundParser
           attempt functionParser
           attempt logParser
           attempt parens
@@ -446,6 +472,25 @@ let term =
 // Parser for unit output specification
 let unitOutputParser = str_ws ":" >>. unitExpr
 
+// OUTPUT MODIFIER (unit | float | eng [n])
+type OutputModifier =
+    | UnitMod of UnitExpr
+    | FloatMod
+    | EngMod of int option
+
+let floatModifier = skipStringCI "float" >>% FloatMod
+
+let engModifier =
+    skipStringCI "eng"
+    >>. opt (ws >>. pint32)
+    |>> EngMod
+
+let outputModifierParser : Parser<OutputModifier, unit> =
+    str_ws ":" >>.
+        (attempt floatModifier
+         <|> attempt engModifier
+         <|> (unitExpr |>> UnitMod))
+
 let opApply op a b = op (a, b)
 
 // Parse multiplication and division
@@ -455,24 +500,48 @@ let factor = chainl1 term (mulOp <|> divOp |>> opApply)
 //do exprRef := chainl1 factor (addOp <|> subOp |>> opApply)
 
 // Parse addition and subtraction, and optional unit output specification
+// do
+//     exprRef
+//     := pipe2 (chainl1 factor (addOp <|> subOp |>> opApply)) (opt unitOutputParser) (fun expr unitOutput ->
+//         match unitOutput with
+//         | Some unit -> ForcedUnitOutput(expr, unit)
+//         | None -> expr)
 do
     exprRef
-    := pipe2 (chainl1 factor (addOp <|> subOp |>> opApply)) (opt unitOutputParser) (fun expr unitOutput ->
-        match unitOutput with
-        | Some unit -> ForcedUnitOutput(expr, unit)
-        | None -> expr)
-
-let mutilineExpr = sepBy expr newline
-
+    := pipe2 (chainl1 factor (addOp <|> subOp |>> opApply)) (opt outputModifierParser) (fun e modifierOpt ->
+        match modifierOpt with
+        | None -> e
+        | Some (UnitMod u) -> ForcedUnitOutput(e, u)
+        | Some FloatMod -> FormatFloat e
+        | Some (EngMod n) -> FormatToEnglish(e, n))
+//let mutilineExpr = sepBy expr newline
+  
 // Parse the input
-let parse input =
-    match run expr input with
-    | Success(result, _, _) -> result
-    | Failure(errorMsg, _, _) -> failwith errorMsg
+let parse (input:string) =
+    if String.IsNullOrWhiteSpace (input.Trim()) then
+        failwith "input is empty"
+    else
+        match run expr input with
+        | Success(result, _, _) -> result
+        | Failure(errorMsg, _, _) -> failwith errorMsg
 
+// Simple line-based multi-parse: ignore blank/whitespace-only lines, parse each remaining line independently.
+let mparse (input:string) =
+    if String.IsNullOrWhiteSpace input then
+        []
+    else
+        // Normalize line endings, split, drop blanks
+        input.Replace("\r\n", "\n").Split('\n')
+        |> Array.map (fun l -> l.TrimEnd())          // keep leading spaces if meaningful for future, trim end only
+        |> Array.filter (fun l -> l.Trim() <> "")    // drop blank / whitespace-only lines
+        |> Array.map (fun line ->
+            match run expr line with
+            | Success(result, _, _) -> result
+            | Failure(msg, _, _) -> failwithf "Line parse error: %s\nLine: %s" msg line)
+        |> Array.toList
+          
 let pow10ToPrefix n =
     let p = BigRational.floor (BigRational.log10 n)
-
     match p with
     | i when i = 0I -> Some ""
     | i when i = 1I -> Some "deca"
@@ -497,6 +566,7 @@ type ExpressionChoice =
     | UnitExpression of Units.UnitsExpr
     | ForcedUnitExpression of Units.UnitsExpr * UnitExpr
     | PureExpression of MathNet.Symbolics.Expression
+    | String of string
 
     member this.PrettyPrint() =
         let prettifyUnits (u: Units.Units) =
@@ -539,11 +609,12 @@ type ExpressionChoice =
                 $"{fmt (Rational.simplifyNumbers 3 q)} {prettifyUnits asUnit}"
             | _ -> "invalid unit conversion"
         | PureExpression e -> fmt e
+        | String s -> s
 
     static member PrettyPrint(e: ExpressionChoice) = e.PrettyPrint()
 
 let rec evalUnitExpr =
-    function
+    function 
     | Number n -> Units.UnitsExpr.Const n
     | UnitExpr(Number(Expression.Number _ as n), unit) -> Units.UnitsExpr.Val(n * unitExprToUnits unit)
     | UnitExpr(expr, unit) -> Units.UnitsExpr.Mul(evalUnitExpr expr, unitExprToSymbolicUnits unit)
@@ -556,6 +627,8 @@ let rec evalUnitExpr =
     | Variable(Identifier(Symbol s)) when seenCustomUnits.Contains s -> Units.UnitsExpr.Val(Units.Units(s))
     | Variable(Identifier(Symbol s)) -> Units.UnitsExpr.Var s
     | Variable v -> Units.UnitsExpr.Const v
+    | Round _ | FormatFloat _ | FormatToEnglish _ ->
+        failwith "format/round not valid in unit expression context"
     | _ -> failwith "invalid unit expression"
 
 let evalExpr e =
@@ -565,7 +638,7 @@ let evalExpr e =
         | _ -> None
 
     let rec eval =
-        function
+        function 
         | Number n -> Some n
         | UnitExpr _ -> None
         | Add(a, b) -> opfun (+) (eval a) (eval b)
@@ -576,31 +649,41 @@ let evalExpr e =
         | Variable v -> Some v
         | Log(base_, arg) -> Option.map2 (fun b a -> Expression.Log(b, a)) (eval base_) (eval arg)
         | FunctionCall(f, e) -> Option.map (functionCallToExpressionFn f) (eval e)
-        | _ -> None
-
+        | Round(e, precisionOpt) -> 
+            Option.map (fun e ->
+                let p = defaultArg precisionOpt 0
+                Rational.round p e) (eval e) 
+        | FormatFloat e ->
+            Option.map (fun e -> Rational.round 0 e) (eval e)
+        | _ -> None 
     eval e
-
+    
 let eval =
-    function
+    function 
     | DefineUnit s ->
         seenCustomUnits.Add(depluralize s) |> ignore
         NoExpression
     | ForcedUnitOutput(e, u) -> ForcedUnitExpression(evalUnitExpr e, u)
+    | FormatFloat _ as e -> 
+        match evalExpr e with
+        | Some v ->  
+            PureExpression v
+        | None -> PureExpression (Expression.Symbol ("#float?"))
+    | FormatToEnglish(e, precisionOpt) -> 
+        match evalExpr e with
+        | Some expr ->
+            let p = defaultArg precisionOpt 0
+            String(Rational.toEnglish p expr)
+        | None -> String "#eng?"  
+    | Round(e, n) ->
+        match evalExpr (Round(e, n)) with
+        | Some v -> PureExpression v
+        | None -> PureExpression (Expression.Symbol ("#round?"))
     | e ->
         match evalExpr e with
         | Some e -> PureExpression e
         | None -> UnitExpression(evalUnitExpr e)
-
-let mparse input =
-    match run mutilineExpr input with
-    | Success(result, _, _) -> result
-    | Failure(errorMsg, _, _) -> failwith errorMsg
-
-mparse """20 chapters / 8 episodes"""
-|> List.nth 0
-|> eval
-|> ExpressionChoice.PrettyPrint
-
+ 
 parse "1000 m^3 : L" |> eval |> ExpressionChoice.PrettyPrint
 parse "5 m^3 * 3 kg * 2"
 parse "5^3 * 2"
@@ -614,7 +697,7 @@ parse "150 kg : lb" |> eval |> ExpressionChoice.PrettyPrint
 parse "5 + 3"
 parse "5^(3 + 2) * 2 + 3"
 parse "2 bits"
-parse "1.6e9 param * 32 bits/param" //|> eval|> ExpressionChoice.PrettyPrint
+parse "1.6e9 param * 32 bits/param" |> eval|> ExpressionChoice.PrettyPrint
 parse "2.6 billion * 32" |> eval |> ExpressionChoice.PrettyPrint
 
 parse "2.6 billion params * 32 bits/params"
@@ -655,6 +738,12 @@ parse "2 gigabytes + 1 kilobytes" |> eval |> ExpressionChoice.PrettyPrint
 parse "(80 kilobytes/s) : kilobits/s" |> eval |> ExpressionChoice.PrettyPrint
 parse "3 meters/second" //|> eval |> ExpressionChoice.PrettyPrint
 
+parse " "
+parse "exp(5) : float" |> eval |> ExpressionChoice.PrettyPrint
+parse "round(exp(5))" |> eval |> ExpressionChoice.PrettyPrint
+parse "round(exp(5), 3)" |> eval |> ExpressionChoice.PrettyPrint
+parse "1003303332345 : eng" |> eval |> ExpressionChoice.PrettyPrint
+parse "123433335 : eng 3" |> eval |> ExpressionChoice.PrettyPrint
 
 // Simple assertion helpers
 let assertEqual name expected actual =
@@ -666,11 +755,27 @@ let assertTrue name cond =
     if not cond then failwithf "Assertion failed: %s" name
     else printfn "Assertion passed: %s" name
 
+let inputNL = """
+defunit:widget
+
+2 widgets + 3 widget
+(5 widget + 7 widgets) : widget
+ 
+ """
+
 let input = """defunit:widget
 2 widgets + 3 widget
 (5 widget + 7 widgets) : widget"""
 
-let exprs = mparse input
+let input2 = """5 + 3
+6+1"""
+
+mparse """20 chapters / 8 episodes"""
+|> List.nth 0
+|> eval
+|> ExpressionChoice.PrettyPrint
+
+let exprs = mparse inputNL
 
 let results = exprs |> List.map eval
 

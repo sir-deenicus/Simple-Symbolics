@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8</TargetFrameworks>
     <Authors>Deen Abiola</Authors>
-    <Version>0.8.6</Version>
+    <Version>0.8.8</Version>
     <Description>Provides functionality over bare mathnet-symbolics, including basic integration, linear algebra, solving and other interesting capabilities (such as combining with probabilistic programming).</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <LangVersion>preview</LangVersion>
@@ -50,6 +50,7 @@
     <Compile Include="Tropical.fs" />
     <Compile Include="Limits.fs" />
     <Compile Include="Differentiation.fs" />
+    <Compile Include="AutoDiff.fs" />
     <Compile Include="Integration.fs" />
     <Compile Include="LinearAlgebra.fs" />
     <Compile Include="Solving.fs" />

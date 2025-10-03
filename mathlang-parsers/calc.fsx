@@ -195,7 +195,10 @@ type Expr =
     | FunctionCall of string * Expr
     | Log of Expr * Expr
     | Round of Expr * int option              
-    | FormatFloat of Expr                     
+    | FormatFloat of Expr  
+    | SolveFor of Expr * Expr          
+    | Differential of Expr * Expr 
+    | Equation of Expr * Expr        
     | FormatToEnglish of Expr * int option   
 
 let unitPrefixes =
@@ -371,13 +374,48 @@ do
 
 let expr, exprRef = createParserForwardedToRef ()
 
+// let simpleNumber: Parser<_, unit> =
+//     numberLiteral NumberLiteralOptions.DefaultFloat "number"
+//     |>> fun nl ->
+//         if nl.IsInteger then
+//             Expression.FromInteger(BigInteger.Parse nl.String) |> Number
+//         else
+//             Utils.ofFloat (Double.Parse nl.String) |> Number
+
 let simpleNumber: Parser<_, unit> =
-    numberLiteral NumberLiteralOptions.DefaultFloat "number"
-    |>> fun nl ->
-        if nl.IsInteger then
-            Expression.FromInteger(BigInteger.Parse nl.String) |> Number
-        else
-            Utils.ofFloat (Double.Parse nl.String) |> Number
+    let signParser = opt (pchar '+' <|> pchar '-')
+    let integerPartParser =
+        many1Satisfy isDigit
+        .>>. many (pchar '_' >>. many1Satisfy isDigit)
+        |>> fun (first, rest) -> first + String.concat "" rest
+    let fractionalPartParser =
+        opt (pchar '.' >>. many1Satisfy isDigit |>> fun digits -> "." + digits)
+    let exponentPartParser =
+        opt (
+            (pchar 'e' <|> pchar 'E')
+            >>. pipe2 (opt (pchar '+' <|> pchar '-')) (many1Satisfy isDigit)
+                    (fun signOpt digits ->
+                        let signStr = signOpt |> Option.map string |> Option.defaultValue ""
+                        "e" + signStr + digits))
+    let buildFloat (numberStr: string) =
+        Number(Utils.ofFloat (Double.Parse(numberStr, System.Globalization.CultureInfo.InvariantCulture)))
+    let integerNumber =
+        pipe4 signParser integerPartParser fractionalPartParser exponentPartParser (fun signOpt intPart fracOpt expOpt ->
+            let signStr = signOpt |> Option.map string |> Option.defaultValue ""
+            let fracStr = defaultArg fracOpt ""
+            let expStr = defaultArg expOpt ""
+            let numberStr = signStr + intPart + fracStr + expStr
+            if fracOpt.IsNone && expOpt.IsNone then
+                Number(Expression.FromInteger(BigInteger.Parse(numberStr)))
+            else
+                buildFloat numberStr)
+    let fractionalOnly =
+        pipe3 signParser (pchar '.' >>. many1Satisfy isDigit) exponentPartParser (fun signOpt fracDigits expOpt ->
+            let signStr = signOpt |> Option.map string |> Option.defaultValue ""
+            let expStr = defaultArg expOpt ""
+            let numberStr = signStr + "0." + fracDigits + expStr
+            buildFloat numberStr)
+    attempt fractionalOnly <|> integerNumber
 
 let scaleFactors =
     [ "million", 1_000_000Q
@@ -456,7 +494,7 @@ let numberWithCustomUnit: Parser<_, unit> =
                 UnitExpr(num, UnitExpr.BasicUnit(Custom(depluralize unit)))) // Combine the parsed number and unit into a tuple
 
 let functionNames =
-    [ "cos"; "sin"; "tan"; "ln"; "expand"; "exp"; "sqrt"; "simplify" ]
+    [ "cos"; "sin"; "tan"; "ln"; "expand"; "exp"; "sqrt"; "simplify"; "floor"; "ceil" ]
 
 let functionCallToExpressionFn =
     function
@@ -468,6 +506,8 @@ let functionCallToExpressionFn =
     | "sqrt" -> Expression.Sqrt
     | "simplify" -> Expression.simplify
     | "expand" -> Algebraic.expand
+    | "floor" -> floor
+    | "ceil" -> ceil
     | _ -> failwith "function not supported"
 
 let functionParser =
@@ -478,6 +518,18 @@ let functionParser =
                   |>> fun arg -> FunctionCall(name, arg) ]
 
 //run functionParser "expand(5)"
+
+let solveForParser: Parser<Expr, unit> =
+    skipStringCI "solve"
+    >>. ws1
+    >>. skipStringCI "for"
+    >>. ws1
+    >>. pipe2 variableParser (ws >>. skipStringCI "in" >>. ws >>. expr) (fun v e -> SolveFor(v, e))
+
+let solveForAltParser: Parser<Expr, unit> =
+    skipStringCI "solveFor"
+    >>. ws1
+    >>. pipe2 variableParser (ws1 >>. expr) (fun v e -> SolveFor(v, e))
 
 let logParser =
     pstring "log" >>. str_ws "_" >>. (variableParser <|> simpleNumber)
@@ -507,6 +559,8 @@ let parens =
 let choices: Parser<Expr, unit> =
     choice
         [ attempt defineUnitParser
+          attempt solveForParser
+          attempt solveForAltParser
           attempt roundParser
           attempt functionParser
           attempt logParser
@@ -594,15 +648,33 @@ let factor = chainl1 term (mulOp <|> divOp |>> opApply)
 //         match unitOutput with
 //         | Some unit -> ForcedUnitOutput(expr, unit)
 //         | None -> expr)
+// do
+//     exprRef
+//     := pipe2 (chainl1 factor (addOp <|> subOp |>> opApply)) (opt outputModifierParser) (fun e modifierOpt ->
+//         match modifierOpt with
+//         | None -> e
+//         | Some (UnitMod u) -> ForcedUnitOutput(e, u)
+//         | Some (CompoundUnitMod units) -> ForcedCompoundUnitOutput(e, units) 
+//         | Some FloatMod -> FormatFloat e
+//         | Some (EngMod n) -> FormatToEnglish(e, n))
+
 do
-    exprRef
-    := pipe2 (chainl1 factor (addOp <|> subOp |>> opApply)) (opt outputModifierParser) (fun e modifierOpt ->
+    let arithmetic = chainl1 factor (addOp <|> subOp |>> opApply)
+    let equationParser =
+        pipe2 arithmetic (opt (ws >>. pchar '=' >>. ws >>. arithmetic)) (fun left rightOpt ->
+            match rightOpt with
+            | Some right -> Equation(left, right)
+            | None -> left)
+
+    exprRef.Value <-
+        pipe2 equationParser (opt outputModifierParser) (fun e modifierOpt ->
         match modifierOpt with
         | None -> e
         | Some (UnitMod u) -> ForcedUnitOutput(e, u)
         | Some (CompoundUnitMod units) -> ForcedCompoundUnitOutput(e, units) 
         | Some FloatMod -> FormatFloat e
         | Some (EngMod n) -> FormatToEnglish(e, n))
+
 //let mutilineExpr = sepBy expr newline
   
 // Parse the input
@@ -695,6 +767,8 @@ type ExpressionChoice =
     | ForcedUnitExpression of Units.UnitsExpr * UnitExpr
     | ForcedUnitCompoundExpr of Units.UnitsExpr * UnitExpr list
     | PureExpression of MathNet.Symbolics.Expression
+    | EquationExpression of Equations.Equation
+    | EquationListExpression of Equations.Equation list
     | String of string
 
     member this.PrettyPrint() =
@@ -738,6 +812,13 @@ type ExpressionChoice =
         match this with
         | NoExpression -> ""
         | UnitExpression u -> Units.UnitsExpr.eval [] u |> Units.simplifyUnitDesc
+        | EquationListExpression [eq]
+        | EquationExpression eq -> $"{eq.ToString()}"
+        | EquationListExpression eql -> 
+            eql
+            |> List.map (fun eq -> eq.ToString())
+            |> String.concat "\n"
+
         | ForcedUnitCompoundExpr(unitexpr, tounitexprs) -> 
             let e = Units.UnitsExpr.eval [] unitexpr 
             let results = toCompoundUnits tounitexprs e   
@@ -814,7 +895,7 @@ let evalExpr e =
         | Multiply(a, b) -> opfun (*) (eval a) (eval b)
         | Divide(a, b) -> opfun (/) (eval a) (eval b)
         | Power(a, b) -> opfun (fun a b -> a ** b) (eval a) (eval b)
-        | Variable v -> Some v
+        | Variable v -> Some v 
         | Log(base_, arg) -> Option.map2 (fun b a -> Expression.Log(b, a)) (eval base_) (eval arg)
         | FunctionCall(f, e) -> Option.map (functionCallToExpressionFn f) (eval e)
         | Round(e, precisionOpt) -> 
@@ -837,17 +918,26 @@ let eval =
         match evalExpr e with
         | Some v ->  
             PureExpression v
-        | None -> PureExpression (Expression.Symbol ("#float?"))
+        | None -> PureExpression (Expression.Symbol ("Could not format as float."))
     | FormatToEnglish(e, precisionOpt) -> 
         match evalExpr e with
         | Some expr ->
             let p = defaultArg precisionOpt 0
             String(Rational.toEnglish p expr)
-        | None -> String "#eng?"  
+        | None -> String "Could not format to English."  
+    | Equation(l,r) ->
+        match evalExpr l, evalExpr r with 
+        | Some l', Some r' -> EquationExpression(Equations.Equation(l', r'))
+        | _ -> String "Error evaluating equation."
+    | SolveFor(t,Equation(eql,eqr)) -> 
+        match (evalExpr t, evalExpr eql, evalExpr eqr) with 
+        | Some t, Some l, Some r ->
+            EquationListExpression (Solving.solveFor t (Equations.Equation(l, r)))
+        | _ -> String "Error solving equation." 
     | Round(e, n) ->
         match evalExpr (Round(e, n)) with
         | Some v -> PureExpression v
-        | None -> PureExpression (Expression.Symbol ("#round?"))
+        | None -> PureExpression (Expression.Symbol ("Could not round expression."))
     | e ->
         match evalExpr e with
         | Some e -> PureExpression e
@@ -909,17 +999,31 @@ parse "(80 kilobytes/s) : kilobits/s" |> eval |> ExpressionChoice.PrettyPrint
 parse "3 meters/second" //|> eval |> ExpressionChoice.PrettyPrint
 
 parse " "
+parse ""
 parse "exp(5) : float" |> eval |> ExpressionChoice.PrettyPrint
 parse "round(exp(5))" |> eval |> ExpressionChoice.PrettyPrint
 parse "round(exp(5), 3)" |> eval |> ExpressionChoice.PrettyPrint
 parse "1003303332345 : eng" |> eval |> ExpressionChoice.PrettyPrint
-parse "123433335 : eng 3" |> eval |> ExpressionChoice.PrettyPrint
+parse "123_433_335 : eng 3" |> eval |> ExpressionChoice.PrettyPrint
 parse "27^(1/3):float" |> eval 
+
+parse "5*x = n" 
+|> eval
+|> ExpressionChoice.PrettyPrint
+
+parse "solve for x in ln(2*x)-2 = n+5"
+|> eval
+|> ExpressionChoice.PrettyPrint
+
+parse "-.13"
+parse "1e9"
+parse "-1_000_000"
 
 parse "10 eur + 200 jpy : usd"
 |> eval
 |> ExpressionChoice.PrettyPrint
 
+parse "solve for x in 2*x + 5 = 15" |> eval |> ExpressionChoice.PrettyPrint
 
 parse "5 ft + 9 in : m" 
 |> eval 

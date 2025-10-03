@@ -15,6 +15,87 @@ open System.Collections.Generic
 open System.Net.Http
 open System.Text.Json
 
+type PhysicsUnits =
+    | Mass
+    | Length
+    | Time
+    | Force
+    | Energy
+    | Volume
+    | Information
+    | Currency
+    | Unitless
+
+type UnitTypes =
+    | M
+    | S
+    | G
+    | LB
+    | Ft
+    | L
+    | N
+    | J
+    | USD
+    | Bits
+    | Unitless
+    | Custom of string 
+    override this.ToString() =
+        match this with
+        | M -> "m"
+        | S -> "s"
+        | G -> "g"
+        | LB -> "lb"
+        | Ft -> "ft"
+        | L -> "L"
+        | N -> "N"
+        | J -> "J"
+        | USD -> "usd"
+        | Bits -> "bits"
+        | Unitless -> "unitless"
+        | Custom s -> s
+
+// Compound unit expression
+[<RequireQualifiedAccess>]
+type UnitExpr =
+    | BasicUnit of UnitTypes
+    | Multiply of UnitExpr * UnitExpr
+    | Divide of UnitExpr * UnitExpr
+    | Power of UnitExpr * int
+    | Scale of Expression * UnitExpr 
+    member this.Simplify() =
+        let rec simplify =
+            function
+            | Scale(s1, Scale(s2, u)) -> Scale(s1 * s2, simplify u)
+            | Scale(s, u) -> Scale(s, simplify u)
+            | Multiply(u1, u2) -> Multiply(simplify u1, simplify u2)
+            | Divide(u1, u2) -> Divide(simplify u1, simplify u2)
+            | Power(u, n) -> Power(simplify u, n)
+            | u -> u
+
+        simplify this
+
+// Define the expression type
+type Expr = 
+    | Number of Expression
+    | UnitExpr of Expr * UnitExpr
+    | ForcedUnitOutput of Expr * UnitExpr
+    | ForcedCompoundUnitOutput of Expr * UnitExpr list 
+    | DefineUnit of string
+    | Add of Expr * Expr
+    | Subtract of Expr * Expr
+    | Variable of Expression
+    | Multiply of Expr * Expr
+    | Divide of Expr * Expr
+    | Power of Expr * Expr
+    | FunctionCall of string * Expr
+    | Log of Expr * Expr
+    | Round of Expr * int option              
+    | FormatFloat of Expr  
+    | SolveFor of Expr * Expr          
+    | Differential of Expr * Expr 
+    | Equation of Expr * Expr        
+    | FormatToEnglish of Expr * int option   
+    
 /// <summary>
 /// Synchronously fetches the latest exchange rates from USD and returns them
 /// as a Dictionary. This function blocks until the network request completes.
@@ -50,67 +131,6 @@ let depluralize (s: string) : string =
             s.Substring(0, s.Length - 1)
         else s
 
-type PhysicsUnits =
-    | Mass
-    | Length
-    | Time
-    | Force
-    | Energy
-    | Volume
-    | Information
-    | Currency
-    | Unitless
-
-type UnitTypes =
-    | M
-    | S
-    | G
-    | LB
-    | Ft
-    | L
-    | N
-    | J
-    | USD
-    | Bits
-    | Unitless
-    | Custom of string
-
-    override this.ToString() =
-        match this with
-        | M -> "m"
-        | S -> "s"
-        | G -> "g"
-        | LB -> "lb"
-        | Ft -> "ft"
-        | L -> "L"
-        | N -> "N"
-        | J -> "J"
-        | USD -> "usd"
-        | Bits -> "bits"
-        | Unitless -> "unitless"
-        | Custom s -> s
-
-// Compound unit expression
-[<RequireQualifiedAccess>]
-type UnitExpr =
-    | BasicUnit of UnitTypes
-    | Multiply of UnitExpr * UnitExpr
-    | Divide of UnitExpr * UnitExpr
-    | Power of UnitExpr * int
-    | Scale of Expression * UnitExpr
-
-    member this.Simplify() =
-        let rec simplify =
-            function
-            | Scale(s1, Scale(s2, u)) -> Scale(s1 * s2, simplify u)
-            | Scale(s, u) -> Scale(s, simplify u)
-            | Multiply(u1, u2) -> Multiply(simplify u1, simplify u2)
-            | Divide(u1, u2) -> Divide(simplify u1, simplify u2)
-            | Power(u, n) -> Power(simplify u, n)
-            | u -> u
-
-        simplify this
-
 let seenCustomUnits = Hashset()
 
 let usdExchangeRates = getUsdExchangeRates () 
@@ -118,88 +138,8 @@ let usdExchangeRates = getUsdExchangeRates ()
 let tryGetCurrencyExchangeValue (target:string) =
     match usdExchangeRates.TryGetValue(target.ToUpperInvariant()) with
     | true, rate -> 1Q/Expression.fromDecimal(decimal rate)
-    | _ -> Operators.undefined
+    | _ -> Operators.undefined 
 
-let basicUnitTypeToUnit =
-    function
-    | UnitTypes.M -> Units.meter
-    | UnitTypes.S -> Units.sec
-    | UnitTypes.G -> Units.gram
-    | UnitTypes.LB -> Units.lb
-    | UnitTypes.Ft -> Units.ft
-    | UnitTypes.L -> Units.liter
-    | UnitTypes.N -> Units.N
-    | UnitTypes.J -> Units.J
-    | UnitTypes.USD -> Units.usd
-    | UnitTypes.Bits -> Units.bits
-    | UnitTypes.Custom s ->
-        seenCustomUnits.Add(depluralize s) |> ignore
-        Units.Units(depluralize s, s)
-    | _ -> failwith "unit type not supported"
-
-let rec unitExprToUnits =
-    function
-    | UnitExpr.BasicUnit u -> basicUnitTypeToUnit u
-    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> basicUnitTypeToUnit u * multiplier
-    | UnitExpr.Scale(multiplier, u) -> unitExprToUnits u * multiplier
-    | UnitExpr.Multiply(u1, u2) -> unitExprToUnits u1 * unitExprToUnits u2
-    | UnitExpr.Divide(u1, u2) -> unitExprToUnits u1 / unitExprToUnits u2
-    | UnitExpr.Power(u, n) -> unitExprToUnits u ** n
-
-let rec unitExprToSymbolicUnits =
-    function
-    | UnitExpr.BasicUnit u -> Units.UnitsExpr.Val(basicUnitTypeToUnit u)
-    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> Units.UnitsExpr.Val(basicUnitTypeToUnit u * multiplier)
-    | UnitExpr.Scale(multiplier, u) -> Units.UnitsExpr.Mul(Units.UnitsExpr.Const multiplier, unitExprToSymbolicUnits u)
-    | UnitExpr.Multiply(u1, u2) ->
-        let u1' = unitExprToSymbolicUnits u1
-        let u2' = unitExprToSymbolicUnits u2
-        Units.UnitsExpr.Mul(u1', u2')
-    | UnitExpr.Divide(u1, u2) ->
-        let u1' = unitExprToSymbolicUnits u1
-        let u2' = unitExprToSymbolicUnits u2
-        Units.UnitsExpr.Div(u1', u2')
-    | UnitExpr.Power(u, n) ->
-        let u' = unitExprToSymbolicUnits u
-        Units.UnitsExpr.Pow(u', Units.UnitsExpr.Const n)
-
-let unitTypesToPhysicsUnits =
-    function
-    | UnitExpr.BasicUnit M -> Length
-    | UnitExpr.BasicUnit S -> Time
-    | UnitExpr.BasicUnit G -> Mass
-    | UnitExpr.BasicUnit L -> Length
-    | UnitExpr.BasicUnit LB -> Mass
-    | UnitExpr.BasicUnit Ft -> Length
-    | UnitExpr.BasicUnit N -> Force
-    | UnitExpr.BasicUnit J -> Energy
-    | UnitExpr.BasicUnit Bits -> Information
-    | UnitExpr.Power(UnitExpr.BasicUnit M, 3) -> Volume
-    | UnitExpr.BasicUnit USD -> Currency
-    | UnitExpr.BasicUnit Unitless -> PhysicsUnits.Unitless
-    | _ -> failwith "unit type not supported"
-
-// Define the expression type
-type Expr = 
-    | Number of Expression
-    | UnitExpr of Expr * UnitExpr
-    | ForcedUnitOutput of Expr * UnitExpr
-    | ForcedCompoundUnitOutput of Expr * UnitExpr list 
-    | DefineUnit of string
-    | Add of Expr * Expr
-    | Subtract of Expr * Expr
-    | Variable of Expression
-    | Multiply of Expr * Expr
-    | Divide of Expr * Expr
-    | Power of Expr * Expr
-    | FunctionCall of string * Expr
-    | Log of Expr * Expr
-    | Round of Expr * int option              
-    | FormatFloat of Expr  
-    | SolveFor of Expr * Expr          
-    | Differential of Expr * Expr 
-    | Equation of Expr * Expr        
-    | FormatToEnglish of Expr * int option   
 
 let unitPrefixes =
     [ "giga", Units.billion
@@ -256,23 +196,7 @@ let basicScaledUnit =
       "gbp", (tryGetCurrencyExchangeValue "GBP", USD)
       "eur", (tryGetCurrencyExchangeValue "EUR", USD)
       "jpy", (tryGetCurrencyExchangeValue "JPY", USD)
-      "mm", (1 / 1000Q, M) ]
-
-let currencyCodeToSymbol = function 
-    | "usd" -> "$"
-    | "eur" -> "€"
-    | "gbp" -> "£"
-    | "jpy" -> "¥"
-    | "ngn" -> "₦"
-    | code -> code 
-
-let scaledUnitLookUp = 
-    basicScaledUnit 
-    |> List.map (fun (lbl, (scale, baseunit)) -> 
-        UnitExpr.Scale(scale, UnitExpr.BasicUnit baseunit), lbl) 
-    |> Dict.ofSeq
-
-scaledUnitLookUp.MergeWith(konst, unitStringsLookUp)
+      "mm", (1 / 1000Q, M) ] 
 
 let allUnits =
     let postfix =
@@ -722,6 +646,82 @@ let pow10ToPrefix n =
     | i when i = -12I -> Some "pico"
     | _ -> None
  
+
+let basicUnitTypeToUnit =
+    function
+    | UnitTypes.M -> Units.meter
+    | UnitTypes.S -> Units.sec
+    | UnitTypes.G -> Units.gram
+    | UnitTypes.LB -> Units.lb
+    | UnitTypes.Ft -> Units.ft
+    | UnitTypes.L -> Units.liter
+    | UnitTypes.N -> Units.N
+    | UnitTypes.J -> Units.J
+    | UnitTypes.USD -> Units.usd
+    | UnitTypes.Bits -> Units.bits
+    | UnitTypes.Custom s ->
+        seenCustomUnits.Add(depluralize s) |> ignore
+        Units.Units(depluralize s, s)
+    | _ -> failwith "unit type not supported"
+
+let rec unitExprToUnits =
+    function
+    | UnitExpr.BasicUnit u -> basicUnitTypeToUnit u
+    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> basicUnitTypeToUnit u * multiplier
+    | UnitExpr.Scale(multiplier, u) -> unitExprToUnits u * multiplier
+    | UnitExpr.Multiply(u1, u2) -> unitExprToUnits u1 * unitExprToUnits u2
+    | UnitExpr.Divide(u1, u2) -> unitExprToUnits u1 / unitExprToUnits u2
+    | UnitExpr.Power(u, n) -> unitExprToUnits u ** n
+
+let rec unitExprToSymbolicUnits =
+    function
+    | UnitExpr.BasicUnit u -> Units.UnitsExpr.Val(basicUnitTypeToUnit u)
+    | UnitExpr.Scale(multiplier, UnitExpr.BasicUnit u) -> Units.UnitsExpr.Val(basicUnitTypeToUnit u * multiplier)
+    | UnitExpr.Scale(multiplier, u) -> Units.UnitsExpr.Mul(Units.UnitsExpr.Const multiplier, unitExprToSymbolicUnits u)
+    | UnitExpr.Multiply(u1, u2) ->
+        let u1' = unitExprToSymbolicUnits u1
+        let u2' = unitExprToSymbolicUnits u2
+        Units.UnitsExpr.Mul(u1', u2')
+    | UnitExpr.Divide(u1, u2) ->
+        let u1' = unitExprToSymbolicUnits u1
+        let u2' = unitExprToSymbolicUnits u2
+        Units.UnitsExpr.Div(u1', u2')
+    | UnitExpr.Power(u, n) ->
+        let u' = unitExprToSymbolicUnits u
+        Units.UnitsExpr.Pow(u', Units.UnitsExpr.Const n)
+
+let unitTypesToPhysicsUnits =
+    function
+    | UnitExpr.BasicUnit M -> Length
+    | UnitExpr.BasicUnit S -> Time
+    | UnitExpr.BasicUnit G -> Mass
+    | UnitExpr.BasicUnit L -> Length
+    | UnitExpr.BasicUnit LB -> Mass
+    | UnitExpr.BasicUnit Ft -> Length
+    | UnitExpr.BasicUnit N -> Force
+    | UnitExpr.BasicUnit J -> Energy
+    | UnitExpr.BasicUnit Bits -> Information
+    | UnitExpr.Power(UnitExpr.BasicUnit M, 3) -> Volume
+    | UnitExpr.BasicUnit USD -> Currency
+    | UnitExpr.BasicUnit Unitless -> PhysicsUnits.Unitless
+    | _ -> failwith "unit type not supported"
+
+let currencyCodeToSymbol = function 
+    | "usd" -> "$"
+    | "eur" -> "€"
+    | "gbp" -> "£"
+    | "jpy" -> "¥"
+    | "ngn" -> "₦"
+    | code -> code 
+
+let scaledUnitLookUp = 
+    basicScaledUnit 
+    |> List.map (fun (lbl, (scale, baseunit)) -> 
+        UnitExpr.Scale(scale, UnitExpr.BasicUnit baseunit), lbl) 
+    |> Dict.ofSeq
+
+scaledUnitLookUp.MergeWith(konst, unitStringsLookUp)
+     
 let toCompoundUnits (targetUnitExprs: UnitExpr list) (x: Units.Units) : (Expression * string) list =
     let rec iterate x converted = function
         | [] -> List.rev converted

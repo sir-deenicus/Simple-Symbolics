@@ -301,7 +301,7 @@ let simpleNumber: Parser<_, unit> =
         .>>. many (pchar '_' >>. many1Satisfy isDigit)
         |>> fun (first, rest) -> first + String.concat "" rest
     let fractionalPartParser =
-        opt (pchar '.' >>. many1Satisfy isDigit |>> fun digits -> "." + digits)
+        opt (pchar '.' >>. manySatisfy isDigit |>> fun digits -> "." + digits)
     let exponentPartParser =
         opt (
             (pchar 'e' <|> pchar 'E')
@@ -351,18 +351,30 @@ let numberWithUnit =
  
 let simpleNumberWithCustomUnit: Parser<_, unit> =
     pipe2
-        //(simpleNumber .>> spaces) // Parse a floating-point number followed by optional spaces
-        (simpleNumber .>> ws)   // was .>> spaces (spaces eats newlines)
-        (many1SatisfyL isLetter "custom unit") // Parse one or more letters
+        (simpleNumber .>> ws)
+        (many1SatisfyL isLetter "custom unit")
         (fun num unit ->
+            let raw = unit.ToLowerInvariant()
             let key = depluralize unit
-            if knownUnits.ContainsKey key then
-                UnitExpr(num, knownUnits[key])
-            else
-                // register custom unit at parse time
-                seenCustomUnits.Add key |> ignore
-                UnitExpr(num, UnitExpr.BasicUnit(Custom key)))
-
+            let keyLower = key.ToLowerInvariant()
+            let tryScale =
+                scaleFactors
+                |> List.tryPick (fun (label, factor) ->
+                    if label.Equals(raw, StringComparison.OrdinalIgnoreCase)
+                       || label.Equals(keyLower, StringComparison.OrdinalIgnoreCase) then
+                        Some factor
+                    else
+                        None)
+            match tryScale, num with
+            | Some factor, Number n -> Number(n * factor)
+            | Some _, _ -> num
+            | None, _ ->
+                if knownUnits.ContainsKey key then
+                    UnitExpr(num, knownUnits[key])
+                else
+                    seenCustomUnits.Add key |> ignore
+                    UnitExpr(num, UnitExpr.BasicUnit(Custom key)))
+                    
 let standaloneUnitAsOne : Parser<Expr, unit> =
     // Try to interpret a bare word as an implicit 1 * unit.
     // If it isn't a known unit, fail normally so backtracking can occur.

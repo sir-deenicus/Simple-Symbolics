@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prelude" Version="2.0.8" />
+    <PackageReference Include="Prelude" Version="2.0.10" />
   </ItemGroup>
 
   <ItemGroup>

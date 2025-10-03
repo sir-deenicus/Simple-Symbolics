@@ -73,7 +73,7 @@ let rec getInputWithHistory prefillmsg pos (prevMsg:string) =
     Console.WriteLine()
     currentInput
 
-let seenCustomUnits = HashSet<string>()
+seenCustomUnits.Clear()
 
 let rec generalRepl prefilloutput parseFunc evalFunc prettyPrintFunc counter prevOutput =
     printf $"In [{counter}]: "
@@ -97,12 +97,9 @@ let repl =
     generalRepl 
         true 
         parse 
-        (eval seenCustomUnits) 
+        eval 
         (fun s exprchoice -> 
-            let cstr = 
-                let split = s.Split(':')
-                if split.Length > 1 then split[1].Trim() else ""
-            ExpressionChoice.PrettyPrint(seenCustomUnits,cstr, exprchoice))
+            ExpressionChoice.PrettyPrint(exprchoice))
 
 let dicerepl = 
     generalRepl 
